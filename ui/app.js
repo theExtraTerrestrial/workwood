@@ -58,7 +58,8 @@ const V={sel:null,isNew:false,items:[],run:null,context:null,loading:false,     
   project:null,profile:null,model:'',effort:'',mk:false,find:'',
   shut:JSON.parse(localStorage.getItem('ww.shut')||'{}'),more:{},openTools:new Set(),
   q:{id:null,step:0,picks:{},typed:{}},dismissed:null,busy:false,
-  work:[],pv:null,full:false};                                                    // files the agent made; the one shown in the side panel
+  work:[],pv:null,full:false,
+  showArch:localStorage.getItem('ww.arch')==='1',menuFor:null,renaming:null,renameText:'',caret:0};  // session actions                                                    // files the agent made; the one shown in the side panel
 const MODELS=[['','Default','Whatever this project is set to use'],['claude-fable-5-2','Fable 5.2','Most capable'],['claude-opus-5-5','Opus 5.5','Strong, lighter on your limit'],['claude-sonnet-5-5','Sonnet 5.5','Fast, for everyday work'],['claude-haiku-5-5','Haiku 5.5','Fastest']];
 const EFFORTS=[['','Default','Whatever this project is set to use'],['low','Low','Quick answers, least of your limit'],['medium','Medium','A balance for routine work'],['high','High','Thinks longer on each step'],['xhigh','Extra','For hard problems'],['max','Max','Slowest, uses the most of your limit']];
 
@@ -96,17 +97,22 @@ function md(src){
 }
 
 /* ---------- sidebar ---------- */
-function renderList(){
+const shown=s=>V.showArch||!s.archived;
+let drawing=false;
+function renderList(){drawing=true;try{drawList()}finally{drawing=false}
+  const r=$('renIn');if(r){r.value=V.renameText;r.focus();r.setSelectionRange(V.caret,V.caret)}}
+function drawList(){
   $('prog').classList.toggle('on',!A.fresh);$('list').classList.toggle('stale',A.ready&&!A.fresh);
   if(!A.ready){$('list').innerHTML='<div class="none" style="padding:16px">Reading your sessions…</div>';return}
   $('list').innerHTML=A.profiles.map(p=>{
-    const all=A.sessions.filter(s=>s.profile===p.name),shut=!!V.shut[p.name],cap=V.more[p.name]?all.length:8;
+    const all=A.sessions.filter(s=>s.profile===p.name&&shown(s)),shut=!!V.shut[p.name],cap=V.more[p.name]?all.length:8;
     const full=p.d7>=100?`7d full${p.r7?' · clears '+until(p.r7):''}`:p.h5>=100?`5h full${p.r5?' · clears '+until(p.r5):''}<small>7d ${p.d7}%</small>`:'';
     const use=p.h5==null?'':`<span class="use ${p.h5>=80?'hot':''}"><span class="bar2"><i style="width:${Math.min(100,p.h5)}%"></i></span><b>${p.h5}%</b></span>`;
     return `<div class="grp ${shut?'shut':''}" data-grp="${esc(p.name)}">${svg('chev-d')}${esc(p.name)}${p.global?'<span class="pill">global</span>':''}${use}</div>`+
       (full?`<div class="sub"><span class="st">${full}</span></div>`:'')+(shut?'':
       (V.isNew&&p.name===V.profile?`<button class="sess sel"><span class="tile new">${svg('plus')}</span><span class="txt"><span class="l1"><b>New session</b></span><span class="l2"><span>Not started</span></span></span></button>`:'')+
-      all.slice(0,cap).map(s=>`<button class="sess ${s.status} ${!V.isNew&&s.id===V.sel?'sel':''}" data-id="${s.id}" style="--h:${hueOf(s.project)}" title="${esc(s.cwd)}">${tile(s.project)}${s.outside?`<em class="xb">${svg('term')}</em>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b><time>${ago(s.mts)}</time></span><span class="l2"><em>${esc(s.project)}</em><span>${esc(s.line)}</span></span></span></button>`).join('')+
+      all.slice(0,cap).map(s=>s.id===V.renaming?`<div class="sess ren ${!V.isNew&&s.id===V.sel?'sel':''}" data-id="${s.id}" style="--h:${hueOf(s.project)}">${tile(s.project)}</span><input id="renIn" maxlength="120" autocomplete="off" spellcheck="false" aria-label="Session name"></div>`
+        :`<button class="sess ${s.status} ${!V.isNew&&s.id===V.sel?'sel':''} ${s.archived?'arch':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}" style="--h:${hueOf(s.project)}" title="${esc(s.cwd)}">${tile(s.project)}${s.outside?`<em class="xb">${svg('term')}</em>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b><time>${ago(s.mts)}</time><span class="sact"><span data-arch title="${s.archived?'Unarchive':'Archive'}">${svg('archive')}</span><span data-dots title="More">${svg('dots')}</span></span></span><span class="l2"><em>${esc(s.project)}</em><span>${esc(s.line)}</span></span></span></button>`).join('')+
       (all.length>cap?`<button class="more" data-more="${esc(p.name)}">Show ${all.length-cap} older</button>`:'')+
       (!all.length&&!(V.isNew&&p.name===V.profile)?'<div class="none">No sessions yet</div>':''));
   }).join('');
@@ -115,7 +121,57 @@ $('list').onclick=e=>{
   const g=e.target.closest('[data-grp]'),m=e.target.closest('[data-more]'),b=e.target.closest('[data-id]');
   if(g){V.shut[g.dataset.grp]=!V.shut[g.dataset.grp];localStorage.setItem('ww.shut',JSON.stringify(V.shut));renderList()}
   else if(m){V.more[m.dataset.more]=true;renderList()}
-  else if(b)openSession(b.dataset.id);
+  else if(b&&!b.classList.contains('ren')){
+    const s=A.sessions.find(x=>x.id===b.dataset.id),d=e.target.closest('[data-dots]');
+    if(e.target.closest('[data-arch]')){e.stopPropagation();closePops();setArchived(s,!s.archived)}
+    else if(d){e.stopPropagation();const r=d.getBoundingClientRect();openMenu(s.id,r.left,r.bottom+4)}
+    else openSession(s.id);
+  }
+};
+
+/* ---------- session actions: rename, open elsewhere, archive, delete ---------- */
+function openMenu(id,x,y){
+  const s=A.sessions.find(z=>z.id===id);if(!s)return;
+  closePops();V.menuFor=id;
+  const m=$('smenu');
+  m.innerHTML=`<button data-do="rename">${svg('pencil')}Rename</button><button data-do="code">${svg('code')}Open in VS Code</button><button data-do="term">${svg('term')}Open in terminal</button><hr><button data-do="archive">${svg('archive')}${s.archived?'Unarchive':'Archive'}</button><button class="hot" data-do="delete">${svg('trash')}Delete</button>`;
+  m.hidden=false;m.style.left=Math.max(4,Math.min(x,innerWidth-210))+'px';m.style.top=Math.max(4,Math.min(y,innerHeight-m.offsetHeight-8))+'px';
+  document.querySelector(`.sess[data-id="${id}"]`)?.classList.add('mopen');
+}
+$('list').oncontextmenu=e=>{const b=e.target.closest('.sess[data-id]');if(!b||b.classList.contains('ren'))return;e.preventDefault();openMenu(b.dataset.id,e.clientX,e.clientY)};
+$('smenu').onclick=e=>{
+  e.stopPropagation();const b=e.target.closest('[data-do]'),s=A.sessions.find(x=>x.id===V.menuFor);closePops();if(!b||!s)return;
+  const d=b.dataset.do,fail=err=>oops(err.message);
+  if(d==='rename'){V.renaming=s.id;V.renameText=s.title;V.caret=s.title.length;renderList();$('renIn')?.select()}
+  else if(d==='code')api('open-editor',{sessionId:s.id}).catch(fail);
+  else if(d==='term')api(`sessions/${s.id}/terminal`,{}).catch(fail);
+  else if(d==='archive')setArchived(s,!s.archived);
+  else askDelete(s);
+};
+// When the session you are looking at goes away, show the next one.
+function leave(id){if(V.isNew||V.sel!==id)return render();const n=A.sessions.find(s=>s.id!==id&&shown(s));n?openSession(n.id):newSession()}
+async function setArchived(s,on){
+  try{await api(`sessions/${s.id}/archive`,{on})}catch(e){return oops(e.message)}
+  s.archived=on;on&&!V.showArch?leave(s.id):render();
+}
+function endRename(save){
+  const s=A.sessions.find(x=>x.id===V.renaming),name=V.renameText.replace(/\s+/g,' ').trim();V.renaming=null;
+  if(save&&s&&name&&name!==s.title){s.title=name;api(`sessions/${s.id}/rename`,{title:name}).catch(e=>oops(e.message))}
+  render();
+}
+$('list').addEventListener('input',e=>{if(e.target.id==='renIn'){V.renameText=e.target.value;V.caret=e.target.selectionStart}});
+$('list').addEventListener('keydown',e=>{if(e.target.id!=='renIn')return;if(e.key==='Enter'){e.preventDefault();endRename(true)}else if(e.key==='Escape'){e.stopPropagation();endRename(false)}});
+$('list').addEventListener('focusout',e=>{if(e.target.id==='renIn'&&!drawing&&V.renaming)endRename(true)});
+function askDelete(s){
+  $('ask').innerHTML=`<h3>Delete this session?</h3><p><b>${esc(s.title)}</b> and its whole history will be removed from this computer, for every profile. This cannot be undone.</p><div class="qrow"><button class="qbtn" data-no>Cancel</button><button class="qbtn danger" data-yes="${s.id}">Delete</button></div>`;
+  $('dim').hidden=false;$('ask').querySelector('[data-no]').focus();
+}
+$('dim').onclick=async e=>{
+  const y=e.target.closest('[data-yes]');
+  if(!y){if(e.target===$('dim')||e.target.closest('[data-no]'))$('dim').hidden=true;return}
+  const id=y.dataset.yes;y.disabled=true;
+  try{await api(`sessions/${id}/delete`,{});A.sessions=A.sessions.filter(s=>s.id!==id);$('dim').hidden=true;leave(id)}
+  catch(err){$('dim').hidden=true;oops(err.message)}
 };
 $('newBtn').onclick=()=>newSession();
 
@@ -349,14 +405,14 @@ function renderMenus(){
   const opts=(arr,cur,label)=>`<div class="lab">${label}</div>`+arr.map(([v,n,d])=>`<button class="item" data-v="${v}"><span class="nm"><b>${n}</b><span>${d}</span></span>${v===cur?svg('check','ck'):''}</button>`).join('')+`<div class="cap2" style="padding-top:8px">Applies from your next message.</div>`;
   $('mModel').innerHTML=opts(MODELS,V.model,'Model');$('mEffort').innerHTML=opts(EFFORTS,V.effort,'Effort');
 }
-function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('gmenu').hidden=true;$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
+function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('gmenu').hidden=true;$('smenu').hidden=true;V.menuFor=null;document.querySelectorAll('.sess.mopen').forEach(b=>b.classList.remove('mopen'));$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
 const toggle=(btn,pop,then)=>e=>{e.stopPropagation();const was=$(pop).hidden;closePops();if(was){V.mk=false;V.find='';renderMenus();$(pop).hidden=false;$(btn).classList.add('open');then?.()}};
 $('pProject').onclick=toggle('pProject','mProject',()=>$('pFind').focus());
 $('pProfile').onclick=toggle('pProfile','mProfile');
 $('pModel').onclick=toggle('pModel','mModel');
 $('pEffort').onclick=toggle('pEffort','mEffort');
 document.addEventListener('click',closePops);
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closePops()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePops();$('dim').hidden=true}});
 $('mProject').addEventListener('input',e=>{if(e.target.id==='pFind'){V.find=e.target.value;const at=e.target.selectionStart;renderMenus();const i=$('pFind');i.focus();i.setSelectionRange(at,at)}});
 $('mProject').addEventListener('keydown',e=>{if(e.target.id==='mkName'&&e.key==='Enter')$('mProject').querySelector('[data-create]').click()});
 $('mProject').onclick=async e=>{
@@ -413,6 +469,8 @@ const setTheme=t=>{root.dataset.theme=t;localStorage.setItem('ww.theme',t);$('gT
 $('bGear').onclick=e=>{e.stopPropagation();const was=$('gmenu').hidden;closePops();if(was){const r=$('bGear').getBoundingClientRect(),m=$('gmenu');m.hidden=false;m.style.left=r.left+'px';m.style.top='auto';m.style.bottom=(innerHeight-r.top+6)+'px';$('bGear').classList.add('on')}};
 $('gmenu').onclick=e=>e.stopPropagation();
 $('gTheme').onclick=()=>setTheme(root.dataset.theme==='dark'?'light':'dark');
+const setArch=on=>{V.showArch=on;localStorage.setItem('ww.arch',on?'1':'0');$('gArchV').textContent=on?'Shown':'Hidden'};
+$('gArch').onclick=()=>{setArch(!V.showArch);const s=selSession();!V.showArch&&s?.archived?leave(s.id):render()};
 
 /* ---------- live updates from the service ---------- */
 let first=true;
@@ -420,7 +478,8 @@ function connect(){
   const es=new EventSource('/api/events?token='+TOKEN);
   es.addEventListener('state',e=>{
     Object.assign(A,JSON.parse(e.data));
-    if(first&&A.ready){first=false;const s=A.sessions.find(x=>x.id===location.hash.slice(1))||A.sessions[0];if(s&&location.hash!=='#new')openSession(s.id);else newSession();return}
+    if(first&&A.ready){first=false;const s=A.sessions.find(x=>x.id===location.hash.slice(1))||A.sessions.find(shown);if(s&&location.hash!=='#new')openSession(s.id);else newSession();return}
+    if(!V.isNew&&V.sel&&A.fresh&&!V.loading&&!A.sessions.some(x=>x.id===V.sel)){leave(V.sel);return} // deleted somewhere else
     if(V.isNew){if(!V.profile)V.profile=globalProfile()?.name;if(!V.project)V.project=A.projects[0]?.cwd||null}
     render();
   });
@@ -428,4 +487,4 @@ function connect(){
   es.addEventListener('item',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const i=V.items.findIndex(x=>x.n===d.item.n);if(i>=0)V.items[i]=d.item;else V.items.push(d.item);if(d.item.kind==='work'){addWork(d.item.files);renderPanel()}checkSoon();renderThread();toBottom()});
   es.onerror=()=>{};
 }
-hydrate();setTheme(localStorage.getItem('ww.theme')||'dark');render();connect();
+hydrate();setTheme(localStorage.getItem('ww.theme')||'dark');setArch(V.showArch);render();connect();

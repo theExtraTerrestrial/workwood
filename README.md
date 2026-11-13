@@ -32,10 +32,21 @@ On a fresh WSL install the Electron window needs GTK once:
 - Previews: pages, images, videos and PDFs the agent wrote appear as cards under
   its reply. A card opens the file in a side panel, where you can step through
   everything the session made, go full width, or open it in your browser.
-- Open the session's folder in VS Code. Dark and light theme (gear, bottom left).
+- Session actions, from the "…" on a session or a right-click:
+  - Rename: saved in the session's history the way Claude Code's `/rename` does,
+    so the name also shows in `claude --resume`.
+  - Open in VS Code, and Open in terminal (resumes the session under its own
+    profile in a new Windows Terminal tab; set `WORKWOOD_TERMINAL` to a command
+    of your own, which is called with the folder and then the command to run).
+  - Archive: hides the session in Workwood only (kept in
+    `~/.config/workwood/state.json`). Gear, "Archived sessions" shows them again.
+  - Delete: after a confirmation, removes the session's transcript and its
+    subagents' transcripts from `~/.claude/projects`. This cannot be undone.
+    A session that is working, or open in a terminal, cannot be deleted.
+- Dark and light theme (gear, bottom left).
 
 Not built yet: terminal view, changes view, skills menu and panel,
-attachments, voice, session actions (rename, archive, delete), settings dialog,
+attachments, voice, settings dialog,
 sign-in from the app, the Windows-side project list, the Mac build.
 
 ## Tests

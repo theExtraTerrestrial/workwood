@@ -1,6 +1,6 @@
 // Reads what already exists on this machine: Claudius profiles and their usage,
 // the shared pool of Claude Code sessions, and which sessions are live right now.
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import fss from 'node:fs';
@@ -65,12 +65,15 @@ export async function loadNext() {
   return (await read('claudius', ['next'], 15000))?.trim().split('\n').pop() || null;
 }
 
-// Which account last ran a session: the newest "session-owner" record in its transcript.
-const ownerCache = new Map(); // id -> {mts, account}
-async function ownerOf(file, mts) {
-  const hit = ownerCache.get(file);
-  if (hit && hit.mts === mts) return hit.account;
-  let account = null;
+// What a transcript says about its session: which account last ran it (the newest "session-owner" record)
+// and the name it was given by hand, if any (the newest "custom-title" record, as Claude Code's /rename writes).
+const metaCache = new Map(); // file -> {mts, account, title}
+const OWNER = /"type":"session-owner","accountUuid":"([0-9a-f-]+)"/g;
+const TITLE = /"type":"custom-title","customTitle":("(?:[^"\\]|\\.)*")/g;
+async function metaOf(file, mts) {
+  const hit = metaCache.get(file);
+  if (hit && hit.mts === mts) return hit;
+  let account = null, title = null;
   try {
     const fh = await fs.open(file, 'r');
     try {
@@ -78,16 +81,36 @@ async function ownerOf(file, mts) {
       const find = async (pos, len) => {
         const buf = Buffer.alloc(len);
         const { bytesRead } = await fh.read(buf, 0, len, pos);
-        const all = [...buf.toString('utf8', 0, bytesRead).matchAll(/"type":"session-owner","accountUuid":"([0-9a-f-]+)"/g)];
-        return all.length ? all[all.length - 1][1] : null;
+        const text = buf.toString('utf8', 0, bytesRead), last = re => { const all = [...text.matchAll(re)]; return all.length ? all[all.length - 1][1] : null; };
+        return [last(OWNER), last(TITLE)];
       };
       const tail = Math.min(size, 512 * 1024);
-      account = await find(size - tail, tail);
-      if (!account && size > tail) account = await find(0, Math.min(size, 256 * 1024));
+      [account, title] = await find(size - tail, tail);
+      if ((!account || !title) && size > tail) { const [a, t] = await find(0, Math.min(size, 256 * 1024)); account ||= a; title ||= t; }
     } finally { await fh.close(); }
   } catch {}
-  ownerCache.set(file, { mts, account });
-  return account;
+  try { title = title && (JSON.parse(title).trim() || null); } catch { title = null; }
+  const meta = { mts, account, title };
+  metaCache.set(file, meta);
+  return meta;
+}
+
+/** Names a session the way Claude Code's own /rename does, so the name shows everywhere the session does. */
+export async function renameSession(file, id, title) {
+  const st = await fs.stat(file);
+  await fs.appendFile(file, JSON.stringify({ type: 'custom-title', customTitle: title, sessionId: id }) + '\n');
+  await fs.utimes(file, st.atime, st.mtime).catch(() => {}); // a new name is not new activity: keep its place in the list
+  metaCache.delete(file);
+}
+
+/** Removes a session's history from this machine: its transcript and the folder of its subagents' transcripts. */
+export async function deleteSession(file, id) {
+  if (!/^[0-9a-f-]{36}$/.test(id) || path.basename(file) !== id + '.jsonl') throw new Error('That is not a session file.');
+  const root = await fs.realpath(PROJECTS_ROOT), dir = await fs.realpath(path.dirname(file));
+  if (path.dirname(dir) !== root) throw new Error('That session is not in the shared history.');
+  await fs.rm(path.join(dir, id + '.jsonl'));
+  await fs.rm(path.join(dir, id), { recursive: true, force: true });
+  metaCache.delete(file);
 }
 
 /** The shared session pool as Claudius reports it, newest first. Slow part of loading; needs nothing else. */
@@ -101,17 +124,39 @@ export async function tagSessions(list, profiles) {
   const keep = list.filter(s => s.exists && !s.cwd.includes('/scratchpad/')); // folders that are gone, and throwaway test runs
   return Promise.all(keep.map(async s => {
     const file = path.join(PROJECTS_ROOT, s.dirkey, s.id + '.jsonl');
-    const account = await ownerOf(file, s.mts);
-    return { id: s.id, title: s.label || 'Untitled session', cwd: s.cwd, project: path.basename(s.cwd),
+    const { account, title } = await metaOf(file, s.mts);
+    return { id: s.id, title: title || s.label || 'Untitled session', cwd: s.cwd, project: path.basename(s.cwd),
       branch: s.branch && s.branch !== 'HEAD' ? s.branch : null, mts: s.mts, file, profile: byAccount.get(account) || fallback };
   }));
 }
 
 // The last list we showed, kept on disk so the next launch has something to draw at once.
 const CACHE = path.join(HOME, '.cache', 'workwood', 'state.json');
-export function readCache() { try { return JSON.parse(fss.readFileSync(CACHE, 'utf8')); } catch { return null; } }
-export async function writeCache(data) {
-  try { await fs.mkdir(path.dirname(CACHE), { recursive: true }); await fs.writeFile(CACHE + '.tmp', JSON.stringify(data)); await fs.rename(CACHE + '.tmp', CACHE); } catch {}
+const readJson = file => { try { return JSON.parse(fss.readFileSync(file, 'utf8')); } catch { return null; } };
+async function writeJson(file, data) {
+  try { await fs.mkdir(path.dirname(file), { recursive: true }); await fs.writeFile(file + '.tmp', JSON.stringify(data)); await fs.rename(file + '.tmp', file); } catch {}
+}
+export const readCache = () => readJson(CACHE);
+export const writeCache = data => writeJson(CACHE, data);
+
+// What only Workwood knows and must not lose: which sessions you archived.
+const KEPT = path.join(HOME, '.config', 'workwood', 'state.json');
+export const readKept = () => readJson(KEPT) || {};
+export const writeKept = data => writeJson(KEPT, data);
+
+/** Opens a terminal window in `cwd` running `argv`. Resolves once the terminal has been started. */
+export function openTerminal(cwd, argv) {
+  const line = argv.map(a => /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`).join(' ');
+  let cmd, args;
+  if (process.env.WORKWOOD_TERMINAL) { cmd = process.env.WORKWOOD_TERMINAL; args = [cwd, ...argv]; }             // your own launcher
+  else if (process.env.WSL_DISTRO_NAME) { cmd = 'wt.exe'; args = ['-w', '0', 'nt', 'wsl.exe', '-d', process.env.WSL_DISTRO_NAME, '--cd', cwd, '--', 'bash', '-lic', line]; } // a new Windows Terminal tab
+  else if (process.platform === 'darwin') { cmd = 'osascript'; args = ['-e', `tell application "Terminal" to do script ${JSON.stringify(`cd ${JSON.stringify(cwd)} && ${line}`)}`, '-e', 'tell application "Terminal" to activate']; }
+  else { cmd = 'x-terminal-emulator'; args = ['-e', 'bash', '-lic', `cd ${JSON.stringify(cwd)} && ${line}`]; }
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { detached: true, stdio: 'ignore', env: cleanEnv(), cwd: HOME });
+    child.on('error', () => reject(new Error(`Could not open a terminal (${cmd} did not start).`)));
+    child.on('spawn', () => { child.unref(); resolve(); });
+  });
 }
 
 /** Sessions that are running somewhere right now, in this app or in any terminal. */

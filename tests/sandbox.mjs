@@ -56,9 +56,12 @@ export function makeSandbox() {
   // The real claudius does the listing. `refresh` would call the real token endpoint, so it is only recorded.
   w(path.join(bin, 'claudius'), `#!/usr/bin/env bash\nif [[ "\${1:-}" == "refresh" ]]; then echo "claudius refresh \${2:-}" >> ${JSON.stringify(sb.log)}; exit 0; fi\nexec ${JSON.stringify(REAL_CLAUDIUS)} "$@"\n`, 0o755);
 
+  // Opening an editor or a terminal is only recorded.
+  for (const name of ['code', 'terminal']) w(path.join(bin, name), `#!/usr/bin/env bash\necho "${name} $*" >> ${JSON.stringify(sb.log)}\n`, 0o755);
+
   sb.env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^CLAUDE|^ANTHROPIC|^WORKWOOD|^NODE_|^npm_/.test(k))),
     HOME: home, PATH: `${bin}:${process.env.PATH}`, ASDF_DATA_DIR: process.env.ASDF_DATA_DIR || path.join(REAL_HOME, '.asdf'),
-    FAKE_CLAUDE_LOG: sb.log, FAKE_CLAUDE_AGENTS: sb.agents, WORKWOOD_TOKEN: 'test-token' };
+    FAKE_CLAUDE_LOG: sb.log, FAKE_CLAUDE_AGENTS: sb.agents, WORKWOOD_TOKEN: 'test-token', WORKWOOD_TERMINAL: path.join(bin, 'terminal') };
   return sb;
 }
 

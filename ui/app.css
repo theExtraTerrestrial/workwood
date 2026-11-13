@@ -443,7 +443,7 @@
   .sess:hover .l1 time,.sess.mopen .l1 time{display:none}
   .sess:hover .sact,.sess.mopen .sact{display:flex}
   .sact span{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--dim)}
-  .sact span:hover,.sess.mopen .sact [data-more]{background:rgba(128,128,128,.22);color:var(--text)}
+  .sact span:hover,.sess.mopen .sact [data-dots]{background:rgba(128,128,128,.22);color:var(--text)}
   .sact svg{width:13px;height:13px}
   .xb{position:absolute;right:-5px;bottom:-5px;width:16px;height:16px;border-radius:50%;background:var(--surface2);color:var(--text);display:grid;place-items:center;box-shadow:0 0 0 2px rgba(0,0,0,.22);z-index:1}
   [data-theme=light] .xb{box-shadow:0 0 0 2px rgba(255,255,255,.8)}
@@ -542,3 +542,14 @@
   ::-webkit-scrollbar-thumb{background:rgba(128,128,128,.28);border-radius:5px;border:2px solid transparent;background-clip:content-box}
   ::-webkit-scrollbar-thumb:hover{background:rgba(128,128,128,.5);border:2px solid transparent;background-clip:content-box}
   ::-webkit-scrollbar-button{display:none}
+  /* session actions */
+  .sess.arch{opacity:.5}.sess.arch:hover,.sess.arch.sel{opacity:.8}
+  .sess.ren{cursor:default}
+  .sess.ren input{flex:1;min-width:0;height:28px;padding:0 8px;border-radius:7px;border:1px solid var(--line2);background:rgba(128,128,128,.10);color:var(--text);font:inherit;font-size:13px;outline:none}
+  .sess.ren input:focus{border-color:hsl(var(--hue) 45% 55%)}
+  .ask{width:380px;max-width:92vw;background:var(--pop);border:1px solid var(--line2);border-radius:14px;box-shadow:var(--shadow);padding:18px 18px 14px}
+  .ask h3{font-size:14px;font-weight:600;margin:0 0 8px}
+  .ask p{font-size:12.5px;line-height:1.5;color:var(--dim);margin:0 0 16px}
+  .ask p b{color:var(--text);font-weight:600}
+  .ask .qrow{justify-content:flex-end;margin:0}
+  .qbtn.danger{background:var(--hot);border-color:transparent;color:#fff}

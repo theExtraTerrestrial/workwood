@@ -25,6 +25,9 @@ let previewBase = null;
 const state = { profiles: [], sessions: [], projects: [], live: new Map(), next: null, claude: undefined, ready: false, fresh: false };
 const cached = src.readCache();
 if (cached?.profiles?.length) Object.assign(state, { profiles: cached.profiles, sessions: cached.sessions || [], projects: cached.projects || [], next: cached.next || null, ready: true });
+const archived = new Set(src.readKept().archived || []);
+const renamed = new Map();   // session -> [when, name], for a list that was being read while you renamed
+const deleted = new Set();   // gone, but a list read a moment earlier may still name them
 const clients = new Set();
 const workPaths = new Map(); // session -> every previewable file it is known to have made
 function knownWork(id) { let w = workPaths.get(id); if (!w) workPaths.set(id, w = new Set()); return w; }
@@ -52,7 +55,7 @@ function decorate(s) {
     line = 'In a terminal · ' + (live.status === 'busy' ? 'working' : live.status === 'waiting' ? 'waiting for you' : 'idle');
   }
   return { id: s.id, title: s.title, project: s.project, cwd: s.cwd, branch: s.branch, mts: s.mts,
-    profile: run?.profile || s.profile, status, line, outside, locked: outside && live.status !== 'idle' };
+    profile: run?.profile || s.profile, status, line, outside, locked: outside && live.status !== 'idle', archived: archived.has(s.id) };
 }
 const waitingLine = p => !p ? 'Waiting for you'
   : p.kind === 'question' ? (p.input.questions.length === 1 ? '1 question for you' : `${p.input.questions.length} questions for you`)
@@ -73,6 +76,7 @@ function pushState() { const s = JSON.stringify(snapshot()); if (s !== lastSent)
 let refreshing = null;
 function refreshAll() { return refreshing ||= doRefresh().finally(() => { refreshing = null; }); }
 async function doRefresh() {
+  const began = Date.now();
   // Profiles first and alone: any Claudius command may tidy a profile's files when it lists them, and two
   // doing that at once collide. After one has run there is nothing left to tidy, so the rest can run side by side.
   const profiles = await src.loadProfiles();
@@ -81,8 +85,10 @@ async function doRefresh() {
   if (profiles) state.profiles = profiles;
   const sessions = await src.tagSessions(list, state.profiles);
   if (sessions) {
+    for (let i = sessions.length - 1; i >= 0; i--) if (deleted.has(sessions[i].id)) sessions.splice(i, 1);
+    for (const s of sessions) { const r = renamed.get(s.id); if (r && r[0] >= began) s.title = r[1]; else if (r) renamed.delete(s.id); }
     // A session started here appears in the pool a moment later; keep it listed meanwhile.
-    for (const [id, run] of runs) if (!sessions.some(s => s.id === id)) {
+    for (const [id, run] of runs) if (!deleted.has(id) && !sessions.some(s => s.id === id)) {
       const old = state.sessions.find(s => s.id === id);
       sessions.unshift(old || { id, title: run.title || 'New session', cwd: run.cwd, project: path.basename(run.cwd), branch: null, mts: Math.floor(run.startedAt / 1000), profile: run.profile, file: transcriptFile(run.cwd, id) });
     }
@@ -160,6 +166,37 @@ async function api(req, res, url) {
   }
   if (parts[0] === 'sessions' && parts[2] === 'answer') { answer(parts[1], b); pushState(); return send(res, 200, { ok: true }); }
   if (parts[0] === 'sessions' && parts[2] === 'stop') { await stop(parts[1]); return send(res, 200, { ok: true }); }
+  if (parts[0] === 'sessions' && ['rename', 'archive', 'delete', 'terminal'].includes(parts[2])) {
+    const s = state.sessions.find(x => x.id === parts[1]);
+    if (!s) return send(res, 404, { error: 'No such session.' });
+    const run = runs.get(s.id), busy = run && (run.status === 'working' || run.status === 'waiting'), live = state.live.get(s.id);
+    if (parts[2] === 'archive') {                         // only hidden here; the history is untouched
+      b.on === false ? archived.delete(s.id) : archived.add(s.id);
+      await src.writeKept({ archived: [...archived] });
+    } else if (parts[2] === 'rename') {
+      const title = String(b.title || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      if (!title) return send(res, 400, { error: 'Type a name first.' });
+      try { await src.renameSession(s.file, s.id, title); } catch { return send(res, 409, { error: 'This session has no saved history yet. Try again in a moment.' }); }
+      s.title = title; if (run) run.title = title; renamed.set(s.id, [Date.now(), title]);
+    } else if (parts[2] === 'terminal') {
+      if (busy) return send(res, 409, { error: 'This session is working here. Stop it or let it finish, then open it in a terminal.' });
+      if (live) return send(res, 409, { error: 'This session is already open in a terminal.' });
+      const profile = run?.profile || s.profile, p = state.profiles.find(x => x.name === profile);
+      await src.openTerminal(s.cwd, !p || p.global ? ['claude', '--resume', s.id] : ['claudius', 'run', profile, '--resume', s.id]);
+      setTimeout(refreshLive, 2500);
+    } else {
+      if (busy) return send(res, 409, { error: 'This session is working. Stop it before deleting it.' });
+      if (live) return send(res, 409, { error: 'This session is open in a terminal. Close it there before deleting it.' });
+      await src.deleteSession(s.file, s.id);
+      deleted.add(s.id); runs.delete(s.id); workPaths.delete(s.id); dirsBySession.delete(s.id);
+      if (archived.delete(s.id)) await src.writeKept({ archived: [...archived] });
+      state.sessions = state.sessions.filter(x => x.id !== s.id);
+      state.projects = await src.loadProjects(state.sessions);
+      src.writeCache({ profiles: state.profiles, sessions: state.sessions, projects: state.projects, next: state.next });
+    }
+    pushState();
+    return send(res, 200, { ok: true });
+  }
   if (parts[0] === 'projects') {
     const p = await src.createProject(String(b.name || '').trim());
     state.projects.push(p); pushState();

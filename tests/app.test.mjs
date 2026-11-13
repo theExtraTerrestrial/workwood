@@ -215,6 +215,65 @@ test('previews: cards are there by the time the agent asks about them', async ()
   await svc.call(`sessions/${id}/stop`, {}); await idle(id);
 });
 
+const fileOf = id => path.join(sb.home, '.claude', 'projects', sb.projects.alpha.replace(/[^A-Za-z0-9]/g, '-'), id + '.jsonl');
+const listed = async id => (await state()).sessions.find(x => x.id === id);
+
+test('rename: the name is saved the way Claude Code saves it, and survives a re-read', async () => {
+  const id = await newSession('hello'); await idle(id);
+  const before = fs.statSync(fileOf(id)).mtimeMs;
+  assert.equal((await svc.call(`sessions/${id}/rename`, { title: '   ' })).status, 400);
+  assert.equal((await svc.call(`sessions/${id}/rename`, { title: '  Parser  "clean-up"\n notes ' })).status, 200);
+  assert.equal((await listed(id)).title, 'Parser "clean-up" notes');
+  const last = JSON.parse(fs.readFileSync(fileOf(id), 'utf8').trim().split('\n').pop());
+  assert.deepEqual(last, { type: 'custom-title', customTitle: 'Parser "clean-up" notes', sessionId: id });
+  assert.ok(Math.abs(fs.statSync(fileOf(id)).mtimeMs - before) < 5, 'renaming must not move the session to the top');
+  await svc.call(`sessions/${id}/send`, { text: 'again' }); await idle(id); await sleep(2500); // the pool is re-read after a turn
+  assert.equal((await listed(id)).title, 'Parser "clean-up" notes');
+});
+
+test('archive: hides a session in Workwood only, and remembers it', async () => {
+  const id = sb.sessions.betaOther, kept = path.join(sb.home, '.config', 'workwood', 'state.json');
+  assert.equal((await svc.call(`sessions/${id}/archive`, {})).status, 200);
+  assert.equal((await listed(id)).archived, true);
+  assert.deepEqual(JSON.parse(fs.readFileSync(kept, 'utf8')).archived, [id]);
+  assert.equal((await session(id)).items[0].text, 'Add a beta changelog'); // still readable
+  await svc.call(`sessions/${id}/archive`, { on: false });
+  assert.equal((await listed(id)).archived, false);
+  assert.deepEqual(JSON.parse(fs.readFileSync(kept, 'utf8')).archived, []);
+});
+
+test('open in terminal: resumes under the session\'s own profile, and not while it is in use', async () => {
+  assert.equal((await svc.call(`sessions/${sb.sessions.alphaLive}/terminal`, {})).status, 200);
+  assert.equal((await svc.call(`sessions/${sb.sessions.betaOther}/terminal`, {})).status, 200);
+  await until(() => readLog(sb).filter(l => l.startsWith('terminal ')).length === 2, 'both terminals');
+  const lines = readLog(sb).filter(l => l.startsWith('terminal '));
+  assert.equal(lines[0], `terminal ${sb.projects.alpha} claude --resume ${sb.sessions.alphaLive}`);
+  assert.equal(lines[1], `terminal ${sb.projects.beta} claudius run other --resume ${sb.sessions.betaOther}`);
+  const r = await svc.call(`sessions/${sb.sessions.alphaOutside}/terminal`, {});
+  assert.equal(r.status, 409); assert.match(r.body.error, /already open in a terminal/);
+  const id = await newSession('SLOW job'); await until(async () => (await session(id)).run?.status === 'working', 'a working turn');
+  assert.equal((await svc.call(`sessions/${id}/terminal`, {})).status, 409);
+  await svc.call(`sessions/${id}/stop`, {}); await idle(id);
+});
+
+test('delete: removes the history for good, but never a session that is in use', async () => {
+  const busy = await svc.call(`sessions/${sb.sessions.alphaOutside}/delete`, {});
+  assert.equal(busy.status, 409); assert.match(busy.body.error, /open in a terminal/);
+  const id = await newSession('SLOW job'); await until(async () => (await session(id)).run?.status === 'working', 'a working turn');
+  assert.equal((await svc.call(`sessions/${id}/delete`, {})).status, 409);
+  await svc.call(`sessions/${id}/stop`, {}); await idle(id);
+  const sub = path.join(path.dirname(fileOf(id)), id, 'subagents', 'agent-1.jsonl');
+  fs.mkdirSync(path.dirname(sub), { recursive: true }); fs.writeFileSync(sub, '{}\n');
+  const others = fs.readdirSync(path.dirname(fileOf(id))).filter(f => !f.startsWith(id)).sort();
+  assert.equal((await svc.call(`sessions/${id}/delete`, {})).status, 200);
+  assert.equal(fs.existsSync(fileOf(id)), false); assert.equal(fs.existsSync(path.dirname(path.dirname(sub))), false);
+  assert.deepEqual(fs.readdirSync(path.dirname(fileOf(id))).sort(), others, 'nothing else may go');
+  assert.equal(await listed(id), undefined);
+  assert.equal((await svc.call(`sessions/${id}`)).status, 404);
+  assert.equal((await svc.call(`sessions/${id}/delete`, {})).status, 404);
+  await sleep(2500); assert.equal(await listed(id), undefined); // and it does not come back with the next re-read
+});
+
 test('creates a project folder, and refuses odd names', async () => {
   const ok = await svc.call('projects', { name: 'gamma' });
   assert.equal(ok.status, 200); assert.ok(fs.statSync(path.join(sb.home, 'workspace', 'gamma')).isDirectory());
@@ -418,6 +477,55 @@ ui('window: a session that starts in a terminal elsewhere shows up without a rel
   await svc.call(`sessions/${sb.sessions.alphaLive}/send`, { text: 'nudge a refresh' }); // a finished turn re-reads the pool
   await page.waitForSelector(`.sess[data-id="${id}"] .xb`, { timeout: 15000 });
   assert.match(await page.locator(`.sess[data-id="${id}"]`).innerText(), /In a terminal · waiting for you/);
+});
+
+ui('window: session menu: rename in place, open in a terminal', async () => {
+  const id = sb.sessions.alphaLive, row = `.sess[data-id="${id}"]`;
+  await page.click(row); await page.waitForSelector('.me:has-text("Tidy the alpha readme")');
+  await page.hover(row); await page.click(`${row} [data-dots]`);
+  assert.deepEqual(await page.locator('#smenu button').allInnerTexts(), ['Rename', 'Open in VS Code', 'Open in terminal', 'Archive', 'Delete']);
+  await page.click('#smenu [data-do=rename]');
+  assert.equal(await page.inputValue('#renIn'), 'Tidy the alpha readme');
+  await page.keyboard.press('Escape');                                   // Escape leaves the name alone
+  assert.match(await page.locator(`${row} .l1 b`).innerText(), /Tidy the alpha readme/);
+  await page.click(row, { button: 'right' }); await page.click('#smenu [data-do=rename]');
+  await page.fill('#renIn', 'Readme tidy-up'); await page.press('#renIn', 'Enter');
+  await page.waitForFunction(() => document.querySelector('#title').innerText === 'Readme tidy-up');
+  assert.equal(await page.locator(`${row} .l1 b`).innerText(), 'Readme tidy-up');
+  await until(async () => (await listed(id)).title === 'Readme tidy-up', 'the saved name');
+  await page.click(row, { button: 'right' }); await page.click('#smenu [data-do=term]');
+  await until(() => readLog(sb).includes(`terminal ${sb.projects.alpha} claude --resume ${id}`), 'the terminal');
+  await page.click(row, { button: 'right' }); await page.click('#smenu [data-do=code]');
+  await until(() => readLog(sb).includes(`code ${sb.projects.alpha}`), 'the editor');
+});
+
+ui('window: archive hides a session until archived ones are shown', async () => {
+  const id = sb.sessions.alphaLive, row = `.sess[data-id="${id}"]`;
+  await page.click(row); await page.hover(row); await page.click(`${row} [data-arch]`);
+  await page.waitForFunction(r => !document.querySelector(r), row);
+  assert.notEqual(await page.locator('#title').innerText(), 'Readme tidy-up'); // moved on to another session
+  await page.click('#bGear'); assert.match(await page.locator('#gArch').innerText(), /Hidden/);
+  await page.click('#gArch'); await page.keyboard.press('Escape');
+  await page.waitForSelector(row + '.arch');
+  await page.reload(); await page.waitForSelector(row + '.arch');              // the choice to show them is remembered
+  await page.hover(row); await page.click(`${row} [data-arch]`);
+  await page.waitForFunction(r => !document.querySelector(r).classList.contains('arch'), row);
+  await page.click('#bGear'); await page.click('#gArch'); await page.keyboard.press('Escape');
+  await page.waitForSelector(row);
+});
+
+ui('window: delete asks first', async () => {
+  const id = await newSession('throwaway'); await idle(id);
+  const row = `.sess[data-id="${id}"]`;
+  await page.waitForSelector(row); await page.click(row); await page.waitForSelector('.me:has-text("throwaway")');
+  await page.click(row, { button: 'right' }); await page.click('#smenu [data-do=delete]');
+  assert.match(await page.locator('#ask').innerText(), /Delete this session\?[\s\S]*throwaway[\s\S]*cannot be undone/);
+  await page.click('#ask [data-no]');
+  assert.equal(await page.locator('#dim').isHidden(), true); assert.ok(fs.existsSync(fileOf(id)));
+  await page.click(row, { button: 'right' }); await page.click('#smenu [data-do=delete]'); await page.click('#ask [data-yes]');
+  await page.waitForFunction(r => !document.querySelector(r), row);
+  assert.equal(fs.existsSync(fileOf(id)), false);
+  assert.equal(await page.locator('.me:has-text("throwaway")').count(), 0);  // the window moved on to another session
 });
 
 /* ---------- last: nothing leaked out of the sandbox ---------- */

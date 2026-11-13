@@ -59,10 +59,14 @@ On a fresh WSL install the Electron window needs GTK once:
   files included, and each file's diff. It shows only for projects that are git
   repositories, and updates as the agent works; the refresh button picks up
   changes made elsewhere.
+- Skills: type "/" in the message box for the skills and commands this session
+  has, filter by typing, and pick with Enter or Tab. The lightning button in the
+  header lists them all by source (project, yours, plugin, built in); a click
+  starts a message with one. The list is what Claude Code itself reports for the
+  folder and profile; it is read without sending anything or creating a session.
 - Dark and light theme (gear, bottom left).
 
-Not built yet: skills menu and panel,
-attachments, voice, settings dialog,
+Not built yet: attachments, voice, settings dialog,
 sign-in from the app, the Windows-side project list, the Mac build.
 
 ## Tests
@@ -71,7 +75,7 @@ sign-in from the app, the Windows-side project list, the Mac build.
 npm test
 ```
 
-About 40 seconds, 53 tests. They run the real service and the real `claudius`
+About 40 seconds, 57 tests. They run the real service and the real `claudius`
 inside a throwaway home folder (the same idea as Claudius's own tests), with a
 scripted stand-in for `claude` (`tests/fake-claude.mjs`). No real account is
 used and nothing is sent to Anthropic. Half of the tests drive the window with

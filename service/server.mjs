@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as src from './sources.mjs';
 import { readTranscript } from './transcript.mjs';
-import { runs, startTurn, answer, stop, publicRun } from './runs.mjs';
+import { runs, startTurn, answer, stop, publicRun, listCommands } from './runs.mjs';
 import { terms, openTerm, attach, typeInto, resize, closeTerm, closeAll } from './terminals.mjs';
 import { changesFor, changeOf } from './changes.mjs';
 import { createRequire } from 'node:module';
@@ -114,6 +114,7 @@ async function refreshLive() { state.live = await src.loadLive(); pushState(); }
 const body = req => new Promise((res, rej) => { let s = ''; req.on('data', d => { s += d; if (s.length > 5e6) req.destroy(); }); req.on('end', () => { try { res(s ? JSON.parse(s) : {}); } catch (e) { rej(e); } }); });
 const send = (res, code, data) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(data)); };
 
+const skills = new Map();   // folder|profile -> { at, list }, kept for two minutes
 async function api(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // after "api"
   if (req.method === 'GET' && parts[0] === 'events') {
@@ -123,6 +124,18 @@ async function api(req, res, url) {
     return;
   }
   if (req.method === 'GET' && parts[0] === 'defaults') return send(res, 200, await src.defaultsFor(url.searchParams.get('cwd'), url.searchParams.get('profile'), state.profiles));
+  if (req.method === 'GET' && parts[0] === 'skills') {
+    const cwd = url.searchParams.get('cwd'), prof = state.profiles.find(p => p.name === url.searchParams.get('profile')) || state.profiles.find(p => p.global);
+    if (!state.projects.some(p => p.cwd === cwd) && !state.sessions.some(s => s.cwd === cwd)) return send(res, 400, { error: 'Pick a project first.' });
+    const key = cwd + '|' + (prof?.name || ''), had = skills.get(key);
+    if (had && Date.now() - had.at < 120000) return send(res, 200, { skills: await had.list });
+    // Looking is not running: the profile's folder is used as it is, without renewing its sign-in.
+    const env = src.cleanEnv(prof && !prof.global ? { CLAUDE_CONFIG_DIR: src.configDir(prof.name, state.profiles) } : {});
+    const list = listCommands({ cwd, env, claude: state.claude }).then(l => src.labelSkills(l, cwd));
+    skills.set(key, { at: Date.now(), list });
+    try { return send(res, 200, { skills: await list }); }
+    catch (e) { skills.delete(key); return send(res, 502, { error: 'The list of skills could not be read: ' + String(e.message).split('\n')[0] }); }
+  }
   if (req.method === 'GET' && parts[0] === 'sessions' && parts[2] === 'work') {
     // When each previewable file last changed, so the window can reload one that was edited, by anyone.
     const all = knownWork(parts[1]);

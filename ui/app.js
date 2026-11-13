@@ -60,7 +60,7 @@ const V={sel:null,isNew:false,items:[],run:null,context:null,loading:false,     
   shut:JSON.parse(localStorage.getItem('ww.shut')||'{}'),more:{},openTools:new Set(),
   q:{id:null,step:0,picks:{},typed:{}},dismissed:null,busy:false,
   work:[],pv:null,full:false,
-  ch:null,chOpen:false,chFile:null,chDiff:null,                                    // changed files in the project; the changes panel
+  ch:null,side:null,sk:{key:null,list:null,err:null},chFile:null,chDiff:null,                                    // changed files in the project; the changes panel
   views:{},                                                                        // session -> 'chat' or 'term'
   showArch:localStorage.getItem('ww.arch')==='1',menuFor:null,renaming:null,renameText:'',caret:0};  // session actions                                                    // files the agent made; the one shown in the side panel
 const MODELS=[['','Default','Whatever Claude Code picks'],['claude-fable-5-2','Fable 5.2','Most capable'],['claude-opus-5-5','Opus 5.5','Strong, lighter on your limit'],['claude-sonnet-5-5','Sonnet 5.5','Fast, for everyday work'],['claude-haiku-5-5','Haiku 5.5','Fastest']];
@@ -193,13 +193,13 @@ $('dim').onclick=async e=>{
 $('newBtn').onclick=()=>newSession();
 
 function newSession(){
-  V.isNew=true;V.sel=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.dismissed=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.chOpen=false;V.chFile=null;V.chDiff=null;
+  V.isNew=true;V.sel=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.dismissed=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
   V.profile=globalProfile()?.name; // every new session starts on the global profile; the project stays as last chosen
   V.project=V.project&&A.projects.some(p=>p.cwd===V.project)?V.project:A.projects[0]?.cwd||null;
   render();$('input').focus();loadDefaults();
 }
 async function openSession(id){
-  V.isNew=false;V.sel=id;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.loading=true;V.dismissed=null;V.openTools.clear();V.work=[];V.pv=null;V.full=false;V.ch=null;V.chOpen=false;V.chFile=null;V.chDiff=null;
+  V.isNew=false;V.sel=id;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.loading=true;V.dismissed=null;V.openTools.clear();V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
   render();
   try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.used={model:d.model||'',effort:d.effort||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||''}}
   catch(e){oops(e.message)}
@@ -257,7 +257,7 @@ function renderThread(){
   if(V.cut)parts.push(['cut','<div class="sys">Earlier messages are not shown</div>']);
   for(const it of V.items){
     let h='';
-    if(it.kind==='user')h=`<div class="me">${esc(it.text)}</div>`;
+    if(it.kind==='user')h=`<div class="me">${it.skill?`<span class="chip">${svg('zap')}${esc(it.skill)}</span>`:''}${esc(it.text)}</div>`;
     else if(it.kind==='assistant')h=`<div class="ai">${md(it.text)}</div>`;
     else if(it.kind==='tools'){const open=V.openTools.has(it.n);h=`<div class="acts ${open?'open':''}"><button class="act" data-tools="${it.n}">${svg('chev-r')}${esc(toolSummary(it.tools))}</button>${open?`<div class="w2">${it.tools.map(x=>`<div class="sp"><span>${esc(x.verb)} ${esc(x.what)}</span></div>`).join('')}</div>`:''}</div>`}
     else if(it.kind==='skill')h=`<div class="sknote">${svg('zap')}Loaded skill <b>${esc(it.name)}</b></div>`;
@@ -275,8 +275,8 @@ const markCards=()=>document.querySelectorAll('#thread [data-open]').forEach(c=>
 /* ---------- side panel: what the agent made ---------- */
 let staged=null;
 function renderPanel(){
-  const i=V.work.findIndex(f=>f.path===V.pv),f=V.work[i],open=!V.isNew&&!!f&&!!A.preview,ch=!V.isNew&&V.chOpen&&!!V.ch?.repo;
-  $('panel').hidden=!open&&!ch;$('pvw').hidden=!open;$('chw').hidden=open||!ch;renderChanges();
+  const i=V.work.findIndex(f=>f.path===V.pv),f=V.work[i],open=!V.isNew&&!!f&&!!A.preview,ch=!V.isNew&&V.side==='changes'&&!!V.ch?.repo,sk=!V.isNew&&V.side==='skills';
+  $('panel').hidden=!open&&!ch&&!sk;$('pvw').hidden=!open;$('chw').hidden=open||!ch;$('skw').hidden=open||!sk;renderChanges();renderSkills();
   $('split').classList.toggle('full',open&&V.full);markCards();
   if(!open){if(staged){staged=null;$('stage').innerHTML=''}$('menu').hidden=true;return}
   $('pName').textContent=f.name;$('pCnt').textContent=V.work.length>1?`${i+1} of ${V.work.length}`:'';
@@ -304,7 +304,7 @@ async function checkWork(){
 // such as your own edits, there is the refresh button.
 let workTimer;const checkSoon=()=>{clearTimeout(workTimer);workTimer=setTimeout(checkWork,150)};
 $('bRefresh').onclick=async()=>{staged=null;await checkWork();if(!staged)renderPanel()};
-const showWork=p=>{V.pv=p;V.chOpen=false;renderPanel()};
+const showWork=p=>{V.pv=p;V.side=null;renderPanel()};
 const step=d=>()=>{const i=V.work.findIndex(f=>f.path===V.pv),n=V.work.length;if(n)showWork(V.work[(i+d+n)%n].path)};
 $('pPrev').onclick=step(-1);$('pNext').onclick=step(1);
 $('moreBtn').onclick=e=>{e.stopPropagation();const was=$('menu').hidden;closePops();$('menu').hidden=!was};
@@ -323,7 +323,7 @@ function toBottom(force){const s=$('scroll');if(force||s.scrollHeight-s.scrollTo
 /* ---------- changes: the project's working tree against its last commit, read only ---------- */
 function renderChanges(){
   const c=V.ch,b=$('bChanges');
-  b.hidden=!c?.repo;$('chN').textContent=c?.count||'';b.classList.toggle('on',V.chOpen&&!V.pv);
+  b.hidden=!c?.repo;$('chN').textContent=c?.count||'';b.classList.toggle('on',V.side==='changes'&&!V.pv);
   if($('chw').hidden)return;
   $('chT').textContent=c.count===1?'1 changed file':`${c.count} changed files`;
   $('chS').innerHTML=c.count?`<span class="plus">+${c.add}</span> <span class="minus">−${c.del}</span>`:'';
@@ -342,7 +342,7 @@ async function loadChanges(){
   try{c=await api(`sessions/${id}/changes`)}catch{return}
   if(id!==V.sel)return;V.ch=c;
   if(!c.files.some(f=>f.path===V.chFile)){V.chFile=c.files[0]?.path||null;V.chDiff=null}
-  renderPanel();if(V.chOpen&&V.chFile)loadDiff();
+  renderPanel();if(V.side==='changes'&&V.chFile)loadDiff();
 }
 async function loadDiff(){
   const id=V.sel,p=V.chFile;let d;
@@ -351,11 +351,76 @@ async function loadDiff(){
   const keep=V.chDiff?.path===p?$('diff').scrollTop:0;V.chDiff=d;renderChanges();$('diff').scrollTop=keep;
 }
 let chTimer;const changesSoon=()=>{clearTimeout(chTimer);chTimer=setTimeout(loadChanges,900)};
-$('bChanges').onclick=()=>{V.chOpen=!(V.chOpen&&!V.pv);V.pv=null;V.full=false;renderPanel();if(V.chOpen)loadChanges()};
-$('chClose').onclick=()=>{V.chOpen=false;renderPanel()};
+$('bChanges').onclick=()=>{V.side=V.side==='changes'&&!V.pv?null:'changes';V.pv=null;V.full=false;renderPanel();if(V.side)loadChanges()};
+$('chClose').onclick=()=>{V.side=null;renderPanel()};
 $('chRefresh').onclick=()=>loadChanges();
 $('files').onclick=e=>{const f=e.target.closest('[data-file]');if(!f||f.dataset.file===V.chFile)return;V.chFile=f.dataset.file;V.chDiff=null;renderChanges();loadDiff()};
 addEventListener('focus',()=>changesSoon());
+
+/* ---------- skills: what "/" can start in this session, as Claude Code reports it ---------- */
+const skillsKey=()=>{const s=selSession();return V.isNew?(V.project?V.project+'|'+(V.profile||''):null):s?s.cwd+'|'+(V.run?.profile||s.profile||''):null};
+const skillList=()=>V.sk.key===skillsKey()?V.sk.list:null;
+async function needSkills(){
+  const key=skillsKey();if(!key||V.sk.key===key)return;
+  V.sk={key,list:null,err:null};const [cwd,profile]=key.split('|');
+  try{const d=await api(`skills?cwd=${encodeURIComponent(cwd)}&profile=${encodeURIComponent(profile)}`);if(V.sk.key!==key)return;V.sk.list=d.skills}
+  catch(e){if(V.sk.key!==key)return;V.sk.list=[];V.sk.err=e.message}
+  renderSlash();renderSkills();
+}
+let slSel=0,slHits=[];
+const slashOpen=()=>!$('slash').hidden&&slHits.length>0;
+function renderSlash(){
+  const m=$('input').value.match(/^\/([\w:-]*)$/),el=$('slash');
+  if(!m){el.hidden=true;slHits=[];return}
+  needSkills();const all=skillList(),q=m[1].toLowerCase();el.hidden=false;
+  if(!all){slHits=[];el.innerHTML='<div class="note">Loading skills…</div>';return}
+  slHits=all.filter(s=>s.name.toLowerCase().startsWith(q)).concat(q?all.filter(s=>{const n=s.name.toLowerCase();return !n.startsWith(q)&&n.includes(q)}):[]);
+  slSel=Math.min(slSel,Math.max(slHits.length-1,0));
+  el.innerHTML=(q?'':`<div class="skl">${all.length} skills in this session</div>`)+(slHits.length?slHits.map((s,i)=>{const k=s.name.toLowerCase().indexOf(q);
+    return `<button class="skr ${i===slSel?'on':''}" data-sk="${esc(s.name)}" data-tip="${esc(s.about)}"><b>/${esc(s.name.slice(0,k))}<u>${esc(s.name.slice(k,k+q.length))}</u>${esc(s.name.slice(k+q.length))}</b><span class="d">${esc(s.about)}</span><span class="src">${s.from}</span></button>`}).join('')
+    :`<div class="skr none">${V.sk.err?esc(V.sk.err):q?`No skill matches "${esc(q)}"`:'No skills here'}</div>`);
+  el.querySelector('.skr.on')?.scrollIntoView({block:'nearest'});
+}
+function useSkill(n){const i=$('input');i.value='/'+n+' ';renderSlash();i.focus();i.setSelectionRange(i.value.length,i.value.length)}
+function slashKey(e){
+  if($('slash').hidden)return false;
+  if(e.key==='Escape'){e.preventDefault();$('input').value='';renderSlash();return true}
+  if(!slashOpen())return false;
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();slSel=(slSel+(e.key==='ArrowDown'?1:-1)+slHits.length)%slHits.length;renderSlash();return true}
+  if((e.key==='Enter'&&!e.shiftKey&&!e.isComposing)||e.key==='Tab'){e.preventDefault();useSkill(slHits[slSel].name);return true}
+  return false;
+}
+$('slash').onclick=e=>{const b=e.target.closest('[data-sk]');if(b)useSkill(b.dataset.sk)};
+function renderSkills(){
+  $('bSkills').classList.toggle('on',V.side==='skills'&&!V.pv);
+  if($('skw').hidden)return;
+  const all=skillList(),q=$('skQ').value.trim().toLowerCase(),hit=(all||[]).filter(s=>!q||s.name.toLowerCase().includes(q)||s.about.toLowerCase().includes(q));
+  $('skT').textContent=all&&!V.sk.err?`Skills · ${all.length}`:'Skills';
+  $('skl').innerHTML=!all?'<div class="note">Loading skills…</div>':V.sk.err?`<div class="note">${esc(V.sk.err)}</div>`
+    :(['Project','Yours','Plugin','Built in'].map(g=>{const l=hit.filter(s=>s.from===g);return l.length?`<div class="skl" style="padding-top:9px">${g}</div>`+l.map(s=>`<button class="skr" data-sk="${esc(s.name)}" data-tip="${esc(s.about)}"><b>/${esc(s.name)}</b><span class="d">${esc(s.about)}</span></button>`).join(''):''}).join('')
+      ||`<div class="note">${q?`No skill matches "${esc(q)}"`:'No skills here'}</div>`);
+}
+$('bSkills').onclick=()=>{V.side=V.side==='skills'&&!V.pv?null:'skills';V.pv=null;V.full=false;$('skQ').value='';renderPanel();if(V.side){needSkills();$('skQ').focus()}};
+$('skQ').oninput=()=>renderSkills();
+$('skQ').onkeydown=e=>{if(e.key==='Escape'&&$('skQ').value){e.stopPropagation();$('skQ').value='';renderSkills()}else if(e.key==='Enter'){const b=$('skl').querySelector('[data-sk]');if(b)useSkill(b.dataset.sk)}};
+$('skClose').onclick=()=>{V.side=null;renderPanel()};
+$('skl').onclick=e=>{const b=e.target.closest('[data-sk]');if(b)useSkill(b.dataset.sk)};
+
+/* ---------- hover notes: a fixed-width box that always stays inside the window ---------- */
+let tipFor=null,tipTimer;
+function hideTip(){clearTimeout(tipTimer);tipFor=null;$('tip').hidden=true}
+function showTip(el){
+  const t=$('tip');if(!el.isConnected||!el.dataset.tip){hideTip();return}
+  t.textContent=el.dataset.tip;t.hidden=false;
+  const r=el.getBoundingClientRect(),w=t.offsetWidth,h=t.offsetHeight,pad=8;
+  const top=r.bottom+6+h<=innerHeight-pad?r.bottom+6:Math.max(pad,r.top-6-h);
+  t.style.left=Math.max(pad,Math.min(r.left,innerWidth-w-pad))+'px';t.style.top=top+'px';
+}
+document.addEventListener('mouseover',e=>{
+  const el=e.target.closest?.('[data-tip]');if(el===tipFor)return;
+  hideTip();if(!el)return;tipFor=el;tipTimer=setTimeout(()=>{if(tipFor===el)showTip(el)},450);
+});
+for(const ev of ['pointerdown','keydown','wheel','blur'])addEventListener(ev,hideTip,true);
 
 /* ---------- terminal view: the session's real Claude Code terminal ---------- */
 const view=()=>V.isNew||!V.sel?'chat':V.views[V.sel]||'chat';
@@ -530,7 +595,8 @@ $('mEffort').onclick=e=>{e.stopPropagation();const t=e.target.closest('[data-v]'
 const input=$('input');
 const grow=()=>{input.style.height='auto';input.style.height=Math.min(220,input.scrollHeight)+'px'};
 input.addEventListener('input',grow);
-input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('send').click()}});
+input.addEventListener('input',()=>{slSel=0;renderSlash()});
+input.addEventListener('keydown',e=>{if(slashKey(e))return;if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('send').click()}});
 $('send').onclick=async()=>{
   const working=!V.isNew&&V.run&&(V.run.status==='working'||V.run.status==='waiting');
   if(working){try{await api(`sessions/${V.sel}/stop`,{})}catch(e){oops(e.message)}return}

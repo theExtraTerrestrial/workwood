@@ -159,6 +159,19 @@ export function answer(sessionId, { requestId, action, choice, answers, text }) 
   p.finish({ behavior: 'deny', message });
 }
 
+/**
+ * The slash commands and skills a session in this folder would have, as Claude Code itself reports them at
+ * start-up. Nothing is sent to the agent and no session is created.
+ */
+export async function listCommands({ cwd, env, claude }) {
+  let release; const held = new Promise(r => { release = r; });
+  const q = query({ prompt: (async function* () { await held; })(), options: { cwd, env, pathToClaudeCodeExecutable: claude,
+    settingSources: ['user', 'project', 'local'], stderr: () => {} } });
+  let timer;
+  try { return await Promise.race([q.supportedCommands(), new Promise((_, no) => { timer = setTimeout(() => no(new Error('Claude Code did not answer.')), 20000); })]); }
+  finally { clearTimeout(timer); release(); try { q.close?.(); } catch {} }
+}
+
 export async function stop(sessionId) {
   const run = runs.get(sessionId);
   if (!run?.q) return;

@@ -133,7 +133,16 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   if (process.env.FAKE_CLAUDE_TRACE) log('IN ' + line.slice(0, 300));
   if (m.type === 'control_request') {
     const ok = (response = {}) => out({ type: 'control_response', response: { subtype: 'success', request_id: m.request_id, response } });
-    if (m.request.subtype === 'initialize') return ok({ commands: [], agents: [], output_style: 'default', available_output_styles: ['default'], models: [], account: {} });
+    if (m.request.subtype === 'initialize') return ok({ commands: [
+      { name: 'mockup', description: 'Build standalone mockups to compare side by side (project)', argumentHint: '' },
+      { name: 'teach', description: 'Teach a new skill or concept. (user)', argumentHint: '' },
+      { name: 'tools:lint', description: '(tools) Lint the changed files', argumentHint: '<path>' },
+      { name: 'on-' + path.basename(process.env.CLAUDE_CONFIG_DIR || 'global'), description: 'Which profile folder this was read from', argumentHint: '' },
+      { name: 'code-review', description: 'Review the current diff for bugs', argumentHint: '', builtin: true },
+      { name: 'compact', description: 'Free up context by summarizing the conversation so far', argumentHint: '', builtin: true },
+      { name: '__internal', description: 'Not for people', argumentHint: '', builtin: true },
+      { name: 'extra-usage', description: 'Renamed to /usage-credits', argumentHint: '', builtin: true },
+    ], agents: [], output_style: 'default', available_output_styles: ['default'], models: [], account: {} });
     if (m.request.subtype === 'interrupt') { ok(); log('interrupted'); out({ type: 'result', subtype: 'error_during_execution', is_error: true, duration_ms: 500, num_turns: 1, session_id: sessionId, result: '', usage: {}, modelUsage: {}, uuid: randomUUID() }); return setTimeout(() => process.exit(0), 20); }
     return ok();
   }

@@ -26,6 +26,7 @@
           <button class="ib on" id="vChat" title="Chat" data-i="chat"></button>
           <button class="ib" id="vTerm" title="Terminal" data-i="term"></button>
         </div>
+        <button class="ib" id="bSkills" title="Skills in this session" data-i="zap"></button>
         <button class="ib wide" id="bChanges" title="Changes" hidden><i data-i="diff"></i><span id="chN"></span></button>
         <button class="ib" id="bCode" title="Open in VS Code" data-i="code"></button>
       </div>
@@ -40,6 +41,7 @@
         <div class="composer">
           <div class="qcard" id="qcard" hidden></div>
           <div class="box" id="box">
+            <div class="inl" id="slash" hidden></div>
             <textarea id="input" rows="1" placeholder="Message the agent…"></textarea>
             <div class="row">
               <span class="slot" id="sProject" hidden>
@@ -73,6 +75,11 @@
         </div>
         <div class="stage" id="stage"></div>
         </div>
+        <div class="pwrap" id="skw" hidden>
+          <div class="phead"><span class="ctitle" id="skT">Skills</span><span class="gap"></span><button class="ib" id="skClose" title="Close" data-i="x"></button></div>
+          <label class="find skf"><i data-i="search"></i><input id="skQ" placeholder="Search skills" autocomplete="off" spellcheck="false"></label>
+          <div class="ol" id="skl"></div>
+        </div>
         <div class="pwrap" id="chw" hidden>
           <div class="phead"><span class="ctitle" id="chT"></span><span class="cstat mono" id="chS"></span><span class="gap"></span><button class="ib" id="chRefresh" title="Refresh" data-i="refresh"></button><button class="ib" id="chClose" title="Close" data-i="x"></button></div>
           <div class="files mono" id="files"></div>
@@ -84,6 +91,7 @@
 </div>
 <div class="fmenu" id="gmenu" hidden style="width:220px"><button id="gTheme">Theme<span id="gThemeV"></span></button><button id="gArch">Archived sessions<span id="gArchV"></span></button></div>
 <div class="fmenu" id="smenu" hidden></div>
+<div class="tip2" id="tip" hidden></div>
 <div class="dim" id="dim" hidden><div class="ask" id="ask"></div></div>
 <script src="vendor/xterm.js"></script>
 <script src="vendor/addon-fit.js"></script>

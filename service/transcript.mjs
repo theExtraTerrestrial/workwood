@@ -31,6 +31,13 @@ const KINDS = { html: 'page', htm: 'page', svg: 'image', png: 'image', jpg: 'ima
 export const previewKind = p => KINDS[path.extname(String(p)).slice(1).toLowerCase()] || null;
 
 // Text the user never typed: command wrappers, reminders, hook output.
+// "/name the rest", as typed, or the wrapper Claude Code saves it in.
+function slash(t) {
+  const saved = /<command-name>\/?([^<\s]+)<\/command-name>/.exec(t);
+  if (saved) return /<local-command-stdout>/.test(t) ? null : { skill: saved[1], text: (/<command-args>([\s\S]*?)<\/command-args>/.exec(t)?.[1] || '').trim() };
+  const typed = /^\/([\w-]+(?::[\w-]+)?)(?:\s+([\s\S]*))?$/.exec(t.trim());
+  return typed ? { skill: typed[1], text: (typed[2] || '').trim() } : null;
+}
 const isNoise = t => /^\s*(<|Caveat:|\[Request interrupted|This session is being continued)/.test(t);
 
 /**
@@ -58,7 +65,11 @@ export class Builder {
     for (const p of parts) {
       if (p.type !== 'text' || !p.text) continue;
       if (/^\[Request interrupted/.test(p.text)) out.push(this.push({ kind: 'note', text: 'Interrupted' }));
-      else if (!isNoise(p.text)) { out.push(...this.flushWork()); out.push(this.push({ kind: 'user', text: p.text, ts })); }
+      else {
+        const s = slash(p.text);
+        if (s) { out.push(...this.flushWork()); out.push(this.push({ kind: 'user', text: s.text, skill: s.skill, ts })); }
+        else if (!isNoise(p.text)) { out.push(...this.flushWork()); out.push(this.push({ kind: 'user', text: p.text, ts })); }
+      }
     }
     return out;
   }

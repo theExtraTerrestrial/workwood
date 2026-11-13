@@ -216,6 +216,27 @@ export async function defaultsFor(cwd, profile, profiles) {
   return { model, effort };
 }
 
+// Where each command comes from, for the skills list. Claude Code marks its own; a "plugin:name" is a plugin's;
+// the rest are found on disk in the project or, failing that, are the user's own (including ones synced from claude.ai).
+const HIDE = new Set(['color', 'focus', 'heapdump', 'workflow-launch-exec']);   // only mean something in a terminal
+export function configDir(profile, profiles) {
+  const p = profiles.find(x => x.name === profile);
+  return !p || p.global ? path.join(HOME, '.claude') : path.join(PROFILE_ROOT, profile);
+}
+export function labelSkills(list, cwd) {
+  const inProject = n => fss.existsSync(path.join(cwd, '.claude', 'skills', n, 'SKILL.md')) || fss.existsSync(path.join(cwd, '.claude', 'commands', n + '.md'));
+  const seen = new Set(), out = [];
+  for (const c of list || []) {
+    const name = String(c?.name || ''), about = String(c?.description || '').replace(/\s+/g, ' ').trim();
+    if (!name || seen.has(name) || name.startsWith('_') || HIDE.has(name) || /^(\(removed\)|Renamed to )/.test(about)) continue;
+    seen.add(name);
+    out.push({ name, about: about.replace(/^\([\w-]+\) /, '').replace(/ \((user|project|claude\.ai sync)\)$/, ''), hint: String(c.argumentHint || ''),
+      from: c.builtin ? 'Built in' : name.includes(':') ? 'Plugin' : inProject(name) ? 'Project' : 'Yours' });
+  }
+  const order = ['Project', 'Yours', 'Plugin', 'Built in'];
+  return out.sort((a, b) => order.indexOf(a.from) - order.indexOf(b.from) || (a.name < b.name ? -1 : 1));
+}
+
 export async function claudePath() {
   try { const { stdout } = await run('which', ['claude']); return stdout.trim() || undefined; } catch { return undefined; }
 }

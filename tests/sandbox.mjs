@@ -44,6 +44,7 @@ export function makeSandbox() {
   // two projects with past sessions
   const projects = {};
   for (const p of ['alpha', 'beta']) { projects[p] = path.join(home, 'workspace', p); fs.mkdirSync(projects[p], { recursive: true }); }
+  w(path.join(projects.alpha, '.claude', 'skills', 'mockup', 'SKILL.md'), '---\nname: mockup\ndescription: Build standalone mockups\n---\n');
   // beta is a git repository with a commit, and then some changes on top of it
   const g = (...args) => execFileSync('git', ['-C', projects.beta, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', ...args],
     { env: { ...process.env, HOME: home, GIT_CONFIG_NOSYSTEM: '1' }, stdio: 'ignore' });

@@ -373,6 +373,36 @@ test('changes: what differs from the last commit, file by file, and nothing outs
   assert.equal((await svc.call(`sessions/${sb.sessions.alphaLive}/changes`)).body.repo, false);
 });
 
+test('skills: the list Claude Code reports for a folder and profile, labelled by where each comes from', async () => {
+  const get = (cwd, profile) => svc.call(`skills?cwd=${encodeURIComponent(cwd)}&profile=${profile}`);
+  const before = readLog(sb).length, had = (await state()).sessions.length, a = (await get(sb.projects.alpha, 'live')).body.skills, by = Object.fromEntries(a.map(s => [s.name, s]));
+  assert.deepEqual(a.map(s => s.from), [...a.map(s => s.from)].sort((x, y) => ['Project', 'Yours', 'Plugin', 'Built in'].indexOf(x) - ['Project', 'Yours', 'Plugin', 'Built in'].indexOf(y)));
+  assert.deepEqual([by.mockup.from, by.teach.from, by['tools:lint'].from, by['code-review'].from], ['Project', 'Yours', 'Plugin', 'Built in']);
+  assert.equal(by.mockup.about, 'Build standalone mockups to compare side by side');
+  assert.equal(by['tools:lint'].about, 'Lint the changed files');
+  assert.ok(!by.__internal && !by['extra-usage'] && by['on-global']);
+  // the same skill is not the project's in another folder, and another profile is read from its own folder
+  const b = (await get(sb.projects.beta, 'other')).body.skills;
+  assert.equal(b.find(s => s.name === 'mockup').from, 'Yours');
+  assert.ok(b.some(s => s.name === 'on-other'));
+  assert.equal((await get('/etc', 'live')).status, 400);
+  // Claude Code was started once per folder and profile, and no session came of it
+  assert.deepEqual(readLog(sb).slice(before).map(l => /config=(\S+)/.exec(l)[1]), ['global', 'other']);
+  await get(sb.projects.alpha, 'live');
+  assert.equal(readLog(sb).length, before + 2);              // a second look is answered from memory
+  assert.equal((await state()).sessions.length, had);
+});
+
+test('a message that starts with a skill keeps the skill apart from the text', async () => {
+  const id = await newSession('/mockup two directions for the header');
+  const live = (await idle(id)).items.find(i => i.kind === 'user');
+  assert.deepEqual([live.skill, live.text], ['mockup', 'two directions for the header']);
+  const saved = addSession(sb, 'alpha', 'live', '<command-message>teach</command-message>\n<command-name>/teach</command-name>\n<command-args>git rebase</command-args>', 'Taught.', 30);
+  await until(async () => (await svc.call('sessions/' + saved)).status === 200, 'the session to be listed', 15000);
+  const u = (await session(saved)).items.find(i => i.kind === 'user');
+  assert.deepEqual([u.skill, u.text], ['teach', 'git rebase']);
+});
+
 test('creates a project folder, and refuses odd names', async () => {
   const ok = await svc.call('projects', { name: 'gamma' });
   assert.equal(ok.status, 200); assert.ok(fs.statSync(path.join(sb.home, 'workspace', 'gamma')).isDirectory());
@@ -727,6 +757,58 @@ ui('window: the changes panel lists changed files and shows each one\'s diff', a
   await page.waitForSelector('#files [data-file="later.txt"]');
   fs.rmSync(path.join(sb.projects.beta, 'later.txt'));
   await page.click('#chClose');
+  assert.equal(await page.isVisible('#panel'), false);
+});
+
+ui('window: "/" lists skills, filters as you type, and Enter picks one', async () => {
+  await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`);
+  await page.waitForSelector('.me:has-text("Tidy the alpha readme")');
+  await page.fill('#input', '/');
+  await page.waitForSelector('#slash .skr[data-sk="mockup"]');
+  assert.match(await page.innerText('#slash .skl'), /\d+ skills in this session/i);
+  assert.match(await page.innerText('#slash .skr[data-sk="mockup"]'), /Project/);
+  await page.fill('#input', '/rev');
+  assert.deepEqual(await page.locator('#slash .skr').evaluateAll(els => els.map(e => e.dataset.sk)), ['code-review']);
+  await page.fill('#input', '/t');
+  await page.press('#input', 'ArrowDown');
+  assert.equal(await page.locator('#slash .skr.on').getAttribute('data-sk'), 'tools:lint');
+  await page.press('#input', 'Enter');
+  assert.equal(await page.inputValue('#input'), '/tools:lint ');
+  assert.equal(await page.isVisible('#slash'), false);
+  await page.fill('#input', '/zzz');
+  await page.waitForSelector('#slash .skr.none');
+  await page.press('#input', 'Escape');
+  assert.equal(await page.inputValue('#input'), '');
+});
+
+ui('window: the skills panel groups skills by source, and a click starts a message with one', async () => {
+  await page.click('#bSkills');
+  await page.waitForSelector('#skl .skr[data-sk="code-review"]');
+  assert.match(await page.innerText('#skT'), /^Skills · \d+$/);
+  assert.deepEqual(await page.locator('#skl .skl').allInnerTexts().then(l => l.map(x => x.toLowerCase())), ['project', 'yours', 'plugin', 'built in']);
+  // one line each, the whole description on hover; the search narrows by name or description
+  assert.ok((await page.locator('#skl .skr[data-sk="compact"]').boundingBox()).height < 36);
+  assert.equal(await page.getAttribute('#skl .skr[data-sk="compact"]', 'title'), null);   // no second, system tooltip
+  await page.setViewportSize({ width: 700, height: 500 });
+  await page.hover('#skl .skr[data-sk="compact"]');
+  await page.waitForSelector('#tip:visible');
+  assert.equal(await page.innerText('#tip'), 'Free up context by summarizing the conversation so far');
+  const tb = await page.locator('#tip').boundingBox();
+  assert.ok(tb.width === 300 && tb.x >= 0 && tb.x + tb.width <= 700 && tb.y >= 0 && tb.y + tb.height <= 500, JSON.stringify(tb));
+  await page.setViewportSize({ width: 1400, height: 880 });
+  await page.mouse.move(5, 5);
+  await page.waitForSelector('#tip', { state: 'hidden' });
+  await page.fill('#skQ', 'diff');
+  assert.deepEqual(await page.locator('#skl .skr').evaluateAll(els => els.map(e => e.dataset.sk)), ['code-review']);
+  await page.fill('#skQ', 'zzz');
+  await page.waitForSelector('#skl .note:has-text("No skill matches")');
+  await page.fill('#skQ', 'mock');
+  await page.click('#skl .skr[data-sk="mockup"]');
+  assert.equal(await page.inputValue('#input'), '/mockup ');
+  await page.type('#input', 'a header');
+  await page.press('#input', 'Enter');
+  await page.waitForSelector('.me:has-text("a header") .chip:has-text("mockup")');
+  await page.click('#skClose');
   assert.equal(await page.isVisible('#panel'), false);
 });
 

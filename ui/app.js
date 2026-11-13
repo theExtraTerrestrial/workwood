@@ -60,6 +60,7 @@ const V={sel:null,isNew:false,items:[],run:null,context:null,loading:false,     
   shut:JSON.parse(localStorage.getItem('ww.shut')||'{}'),more:{},openTools:new Set(),
   q:{id:null,step:0,picks:{},typed:{}},dismissed:null,busy:false,
   work:[],pv:null,full:false,
+  att:[],                                                                          // files waiting to go with the next message
   ch:null,side:null,sk:{key:null,list:null,err:null},chFile:null,chDiff:null,                                    // changed files in the project; the changes panel
   views:{},                                                                        // session -> 'chat' or 'term'
   showArch:localStorage.getItem('ww.arch')==='1',menuFor:null,renaming:null,renameText:'',caret:0};  // session actions                                                    // files the agent made; the one shown in the side panel
@@ -257,7 +258,7 @@ function renderThread(){
   if(V.cut)parts.push(['cut','<div class="sys">Earlier messages are not shown</div>']);
   for(const it of V.items){
     let h='';
-    if(it.kind==='user')h=`<div class="me">${it.skill?`<span class="chip">${svg('zap')}${esc(it.skill)}</span>`:''}${esc(it.text)}</div>`;
+    if(it.kind==='user'){const at=(it.images?[`${it.images} image${it.images>1?'s':''}`]:[]).concat(it.files||[]);h=`<div class="me">${it.skill?`<span class="chip">${svg('zap')}${esc(it.skill)}</span>`:''}${esc(it.text)}${at.length?`<div class="matt">${at.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`}
     else if(it.kind==='assistant')h=`<div class="ai">${md(it.text)}</div>`;
     else if(it.kind==='tools'){const open=V.openTools.has(it.n);h=`<div class="acts ${open?'open':''}"><button class="act" data-tools="${it.n}">${svg('chev-r')}${esc(toolSummary(it.tools))}</button>${open?`<div class="w2">${it.tools.map(x=>`<div class="sp"><span>${esc(x.verb)} ${esc(x.what)}</span></div>`).join('')}</div>`:''}</div>`}
     else if(it.kind==='skill')h=`<div class="sknote">${svg('zap')}Loaded skill <b>${esc(it.name)}</b></div>`;
@@ -405,6 +406,112 @@ $('skQ').oninput=()=>renderSkills();
 $('skQ').onkeydown=e=>{if(e.key==='Escape'&&$('skQ').value){e.stopPropagation();$('skQ').value='';renderSkills()}else if(e.key==='Enter'){const b=$('skl').querySelector('[data-sk]');if(b)useSkill(b.dataset.sk)}};
 $('skClose').onclick=()=>{V.side=null;renderPanel()};
 $('skl').onclick=e=>{const b=e.target.closest('[data-sk]');if(b)useSkill(b.dataset.sk)};
+
+/* ---------- attachments: pictures as thumbnails in the box, other files as chips by the paperclip ---------- */
+const PICS=['image/png','image/jpeg','image/gif','image/webp'];let attSeq=0;
+const b64=blob=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]||'');r.onerror=()=>no(r.error);r.readAsDataURL(blob)});
+// A picture too large to send as it is goes smaller, which loses nothing the agent can use.
+async function shrink(file){
+  const bmp=await createImageBitmap(file),k=Math.min(1,2000/Math.max(bmp.width,bmp.height)),c=document.createElement('canvas');
+  c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+  return new Promise(ok=>c.toBlob(ok,'image/jpeg',.85));
+}
+async function addFiles(files){
+  for(const f of [...files]){
+    if(V.att.length>=10){oops('Attach at most 10 files at a time.');break}
+    const where=window.workwood?.pathFor?.(f)||'';let blob=f,type=f.type,pic=PICS.includes(type);
+    if(where){V.att.push({id:++attSeq,name:f.name,type,pic,path:where,url:pic?URL.createObjectURL(f):null});continue} // already on disk: named, not copied
+    if(f.size>20e6){oops(`${f.name} is larger than 20 MB.`);continue}
+    if(!f.size)continue;
+    try{if(pic&&f.size>3.5e6){blob=await shrink(f);type='image/jpeg'}
+      V.att.push({id:++attSeq,name:f.name||'pasted image',type,pic,data:await b64(blob),url:pic?URL.createObjectURL(blob):null})}
+    catch{oops(`${f.name} could not be read.`)}
+  }
+  renderAtt();$('input').focus();
+}
+function renderAtt(){
+  const im=V.att.filter(a=>a.pic),fl=V.att.filter(a=>!a.pic);
+  $('atts').hidden=!im.length;
+  $('atts').innerHTML=im.map(a=>`<span class="ath" data-tip="${esc(a.path||a.name)}" style="background-image:url(${a.url})"><button data-rm="${a.id}" title="Remove">${svg('x')}</button></span>`).join('');
+  $('fchips').innerHTML=fl.map(a=>`<span class="fch"${a.path?` data-tip="${esc(a.path)}"`:''}>${svg('file')}${esc(a.name)}<button data-rm="${a.id}" title="Remove">${svg('x')}</button></span>`).join('');
+}
+function clearAtt(){for(const a of V.att)if(a.url)URL.revokeObjectURL(a.url);V.att=[];renderAtt()}
+$('bAttach').onclick=()=>$('filePick').click();
+$('filePick').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+$('box').addEventListener('click',e=>{const b=e.target.closest('[data-rm]');if(!b)return;const a=V.att.find(x=>x.id===+b.dataset.rm);if(a?.url)URL.revokeObjectURL(a.url);V.att=V.att.filter(x=>x!==a);hideTip();renderAtt()});
+$('input').addEventListener('paste',e=>{const f=e.clipboardData?.files;if(f?.length){e.preventDefault();addFiles(f)}});
+const hasFiles=e=>[...(e.dataTransfer?.types||[])].includes('Files');
+document.addEventListener('dragover',e=>{if(!hasFiles(e))return;e.preventDefault();$('box').classList.add('drop')});
+document.addEventListener('dragleave',e=>{if(!e.relatedTarget)$('box').classList.remove('drop')});
+document.addEventListener('drop',e=>{if(!hasFiles(e))return;e.preventDefault();$('box').classList.remove('drop');addFiles(e.dataTransfer.files)});
+
+/* ---------- dictation: record here, turn into text on this machine, put it in the message box ---------- */
+let R=null; // the recording under way: {stream, ctx, chunks, n, t0, base, timer, preview}
+$('wave').innerHTML='<i></i>'.repeat(22);
+const joined=r=>{const a=new Float32Array(r.n);let o=0;for(const c of r.chunks){a.set(c,o);o+=c.length}return a};
+async function hear(audio,preview){
+  const r=await fetch('/api/voice'+(preview?'?preview':''),{method:'POST',headers:{'x-workwood-token':TOKEN,'content-type':'application/octet-stream'},body:audio});
+  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Dictation did not work.');return j;
+}
+function voiceLook(){
+  const on=!!R&&!R.done;$('box').classList.toggle('rec',on);$('voice').hidden=!R;$('wave').hidden=$('vCancel').hidden=!on;
+  $('mic').classList.toggle('live',on);$('mic').classList.toggle('wait',!!R?.done);$('mic').dataset.i=on?'stop':'mic';
+  $('mic').dataset.tip=on?'Stop and keep the text':'Dictate: click to start and stop, or hold while you speak';hydrate($('mic').parentNode);
+}
+// Recording never waits for the speech model: what you say meanwhile is kept and written down once it is in memory.
+async function watchModel(r){
+  try{for(;;){const s=await api('voice?warm');if(R!==r)return;
+    if(s.state==='ready'){r.note='';return}if(s.state==='failed'){r.note='';oops('The speech model could not be loaded: '+s.error);return}
+    r.note=s.progress&&s.progress<100?` · getting the speech model, one time, ${s.progress}%`:' · loading the speech model';await new Promise(ok=>setTimeout(ok,400))}}catch{}
+}
+// A recording is cut at each pause. A finished piece is written down once and then never changes; only the piece
+// you are still speaking is shown as a guess and redone. Pieces with no speech in them are dropped.
+const QUIET=.012,PAUSE=5,LONGEST=16000*25;
+const cut=(r,a,b)=>{const out=new Float32Array(b-a);let o=0,at=r.off;for(const c of r.chunks){const lo=Math.max(a,at),hi=Math.min(b,at+c.length);if(hi>lo){out.set(c.subarray(lo-at,hi-at),o);o+=hi-lo}at+=c.length}return out};
+function showSaid(r,guess){input.value=[r.base.replace(/\s+$/,''),...r.fixed,guess||''].filter(Boolean).join(' ');grow()}
+function closePiece(r){
+  const a=r.from,b=r.n,spoke=r.spoke;r.from=b;r.spoke=false;r.gap=0;r.seen=b;r.guess='';
+  if(!spoke||b-a<4000)return;
+  const audio=cut(r,a,b),slot=r.fixed.push('')-1;
+  while(r.chunks.length&&r.off+r.chunks[0].length<=r.from)r.off+=r.chunks.shift().length;   // written down, no longer needed
+  r.chain=r.chain.then(async()=>{try{r.fixed[slot]=(await hear(audio)).text||''}catch(e){r.err=e.message}if(R===r)showSaid(r,r.guess)});
+}
+async function startVoice(){
+  if(R)return;oops('');R={done:true};$('mic').classList.add('wait');
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true}});
+    R.stream=stream;
+    const ctx=new AudioContext({sampleRate:16000}),node=ctx.createScriptProcessor(4096,1,1),bars=[...$('wave').children];
+    Object.assign(R,{done:false,note:'',ctx,chunks:[],off:0,n:0,from:0,seen:0,spoke:false,gap:0,fixed:[],guess:'',chain:Promise.resolve(),t0:Date.now(),base:input.value});
+    node.onaudioprocess=e=>{const r=R;if(!r||r.done)return;const d=new Float32Array(e.inputBuffer.getChannelData(0));r.chunks.push(d);r.n+=d.length;
+      let p=0,sq=0;for(const v of d){p=Math.max(p,Math.abs(v));sq+=v*v}
+      bars.forEach((b,i)=>{b.style.transform=`scaleY(${Math.max(.15,Math.min(1,p*3*(.55+.45*Math.sin(i*1.7+r.n/3000))))})`});
+      if(Math.sqrt(sq/d.length)>QUIET){r.spoke=true;r.gap=0}else r.gap++;
+      if((r.spoke&&r.gap>=PAUSE)||r.n-r.from>=LONGEST||(!r.spoke&&r.n-r.from>16000*4))closePiece(r)};
+    ctx.createMediaStreamSource(stream).connect(node);node.connect(ctx.destination);
+    R.timer=setInterval(async()=>{const r=R;if(!r||r.done)return;const s=Math.floor((Date.now()-r.t0)/1000);$('vtime').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}${r.note}`;
+      if(r.asking||!r.spoke||r.n-r.seen<16000)return;r.asking=true;r.seen=r.n;const from=r.from;
+      try{const j=await hear(cut(r,from,r.n),true);if(R===r&&!r.done&&r.from===from&&j.text!=null){r.guess=j.text;showSaid(r,r.guess)}}catch{}r.asking=false},500);
+    $('vtime').textContent='0:00';voiceLook();watchModel(R);if(R.letGo)stopVoice();
+  }catch(e){
+    R?.stream?.getTracks().forEach(t=>t.stop());R=null;voiceLook();
+    oops(e.name==='NotAllowedError'||e.name==='NotFoundError'?'No microphone is available to this window.':e.message);
+  }
+}
+async function stopVoice(keep=true){
+  const r=R;if(!r||r.done)return;r.done=true;clearInterval(r.timer);r.stream.getTracks().forEach(t=>t.stop());r.ctx.close();
+  if(!keep){input.value=r.base;grow();R=null;voiceLook();return}
+  $('vtime').textContent='Writing it down…';voiceLook();
+  closePiece(r);await r.chain;showSaid(r,'');if(r.err)oops(r.err);
+  R=null;voiceLook();input.focus();input.setSelectionRange(input.value.length,input.value.length);
+}
+// Click to start and click to stop, or hold the button while you speak and let go.
+let micDown=0,micHeld=false;
+$('mic').addEventListener('pointerdown',e=>{if(e.button)return;hideTip();if(R){micHeld=false;stopVoice()}else{micHeld=true;micDown=Date.now();startVoice()}});
+addEventListener('pointerup',()=>{if(!micHeld)return;micHeld=false;if(Date.now()-micDown<450||!R)return;R.done&&!R.ctx?R.letGo=true:stopVoice()});
+$('mic').onclick=e=>{if(e.detail===0)R?stopVoice():startVoice()};   // from the keyboard
+$('vCancel').onclick=()=>stopVoice(false);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&R&&!R.done){e.stopPropagation();stopVoice(false)}},true);
 
 /* ---------- hover notes: a fixed-width box that always stays inside the window ---------- */
 let tipFor=null,tipTimer;
@@ -600,21 +707,22 @@ input.addEventListener('keydown',e=>{if(slashKey(e))return;if(e.key==='Enter'&&!
 $('send').onclick=async()=>{
   const working=!V.isNew&&V.run&&(V.run.status==='working'||V.run.status==='waiting');
   if(working){try{await api(`sessions/${V.sel}/stop`,{})}catch(e){oops(e.message)}return}
-  const text=input.value.trim();if(!text||V.busy)return;
-  if(await sendText(text)){input.value='';grow()}
+  if(R){await stopVoice();return}                                          // finish dictating first; a second press sends
+  const text=input.value.trim();if((!text&&!V.att.length)||V.busy)return;
+  if(await sendText(text,undefined,V.att.map(({name,type,data,path})=>({name,type,data,path})))){input.value='';clearAtt();grow()}
 };
-async function sendText(text,asProfile){
+async function sendText(text,asProfile,attachments){
   if(V.busy)return false;V.busy=true;oops('');
   try{
     if(V.isNew){
       if(!V.project){oops('Pick a project first.');return false}
       $('hello').textContent='Starting…';
-      const r=await api('sessions',{cwd:V.project,profile:V.profile,text,model:curModel(),effort:curEffort()});
+      const r=await api('sessions',{cwd:V.project,profile:V.profile,text,attachments,model:curModel(),effort:curEffort()});
       if(V.pick.new){V.pick[r.sessionId]=V.pick.new;delete V.pick.new}
       await openSession(r.sessionId);
     }else{
       V.dismissed=null;
-      await api(`sessions/${V.sel}/send`,{text,profile:asProfile,model:curModel(),effort:curEffort()});
+      await api(`sessions/${V.sel}/send`,{text,attachments,profile:asProfile,model:curModel(),effort:curEffort()});
     }
     return true;
   }catch(e){oops(e.message);return false}

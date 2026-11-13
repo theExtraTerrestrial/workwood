@@ -64,9 +64,23 @@ On a fresh WSL install the Electron window needs GTK once:
   header lists them all by source (project, yours, plugin, built in); a click
   starts a message with one. The list is what Claude Code itself reports for the
   folder and profile; it is read without sending anything or creating a session.
+- Attachments: the paperclip, a paste, or a drop onto the window adds files to
+  the next message (up to 10, 20 MB each). Pictures are sent to the agent as
+  pictures, and very large ones are scaled down first. A file that is already
+  on disk is not copied: the message names its own path and the agent reads it
+  from there (the Electron window only; Edge cannot tell where a file lives).
+  Anything else, such as a pasted picture, is saved under
+  `~/.cache/workwood/attachments`; copies are cleared after 30 days.
+- Dictation: the mic button records, shows what it has heard so far while you
+  speak, and puts the text in the message box after what you typed; nothing is
+  sent until you press send. Escape discards the recording. Speech is turned
+  into text on this machine by a Whisper model (about 240 MB, downloaded once on
+  first use into `~/.cache/workwood/models`); no audio leaves it. English by
+  default: set `WORKWOOD_STT_LANGUAGE` (for example `latvian`) for another
+  language, or `WORKWOOD_STT_MODEL` for another model.
 - Dark and light theme (gear, bottom left).
 
-Not built yet: attachments, voice, settings dialog,
+Not built yet: settings dialog,
 sign-in from the app, the Windows-side project list, the Mac build.
 
 ## Tests
@@ -75,7 +89,7 @@ sign-in from the app, the Windows-side project list, the Mac build.
 npm test
 ```
 
-About 40 seconds, 57 tests. They run the real service and the real `claudius`
+About 45 seconds, 61 tests. They run the real service and the real `claudius`
 inside a throwaway home folder (the same idea as Claudius's own tests), with a
 scripted stand-in for `claude` (`tests/fake-claude.mjs`). No real account is
 used and nothing is sent to Anthropic. Half of the tests drive the window with

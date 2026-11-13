@@ -61,16 +61,27 @@ export class Builder {
   push(it) { it.n = this.seq++; this.items.push(it); return it; }
   user(content, ts) {
     const parts = typeof content === 'string' ? [{ type: 'text', text: content }] : (content || []);
-    const out = [];
+    const out = [], images = parts.filter(p => p.type === 'image').length;
+    let mine = null;
+    const say = (text, skill) => {
+      const m = /(?:^|\n+)Attached files:\n((?:- .+\n?)+)$/.exec(text), it = { kind: 'user', text: m ? text.slice(0, m.index) : text, ts };
+      if (skill) it.skill = skill;
+      if (m) it.files = m[1].trim().split('\n').map(l => path.basename(l.slice(2)));
+      out.push(...this.flushWork()); out.push(mine = this.push(it));
+    };
     for (const p of parts) {
       if (p.type !== 'text' || !p.text) continue;
       if (/^\[Request interrupted/.test(p.text)) out.push(this.push({ kind: 'note', text: 'Interrupted' }));
       else {
         const s = slash(p.text);
-        if (s) { out.push(...this.flushWork()); out.push(this.push({ kind: 'user', text: s.text, skill: s.skill, ts })); }
-        else if (!isNoise(p.text)) { out.push(...this.flushWork()); out.push(this.push({ kind: 'user', text: p.text, ts })); }
+        if (s) say(s.text, s.skill);
+        else if (!isNoise(p.text)) say(p.text);
       }
     }
+    // A picture that is also listed by its path is shown once, by name.
+    const unnamed = images - (mine?.files || []).filter(f => /\.(png|jpe?g|gif|webp)$/i.test(f)).length;
+    if (images && !mine) say('');
+    if (unnamed > 0) mine.images = unnamed;
     return out;
   }
   assistant(message, ts, effort) {

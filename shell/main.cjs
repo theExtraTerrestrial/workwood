@@ -13,8 +13,10 @@ async function open() {
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     title: 'Workwood', backgroundColor: '#18191c', autoHideMenuBar: true,
-    webPreferences: { contextIsolation: true, nodeIntegration: false, spellcheck: true },
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, spellcheck: true },
   });
+  // The microphone, for dictation, and nothing else.
+  win.webContents.session.setPermissionRequestHandler((wc, what, done, d) => done(what === 'media' && !(d.mediaTypes || []).includes('video')));
   // Links in a conversation open in your browser, never inside the app window.
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(new URL(address).origin)) { e.preventDefault(); shell.openExternal(url); } });

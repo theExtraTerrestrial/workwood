@@ -42,8 +42,10 @@
           <div class="qcard" id="qcard" hidden></div>
           <div class="box" id="box">
             <div class="inl" id="slash" hidden></div>
+            <div class="atts" id="atts" hidden></div>
             <textarea id="input" rows="1" placeholder="Message the agent…"></textarea>
             <div class="row">
+              <button class="ib" id="bAttach" title="Attach files" data-i="clip"></button><span id="fchips" style="display:contents"></span><input type="file" id="filePick" multiple hidden>
               <span class="slot" id="sProject" hidden>
                 <button class="pick" id="pProject" title="Project"></button>
                 <div class="pop" id="mProject" hidden></div>
@@ -53,6 +55,8 @@
                 <div class="pop" id="mProfile" hidden></div>
               </span>
               <span class="gap"></span>
+              <span class="voice" id="voice" hidden><button class="ib" id="vCancel" data-tip="Discard this dictation (Esc)" data-i="x"></button><span class="wave" id="wave"></span><span id="vtime">0:00</span></span>
+              <button class="ib" id="mic" data-tip="Dictate: click to start and stop, or hold while you speak" data-i="mic"></button>
               <button class="send" id="send" title="Send" data-i="up"></button>
             </div>
           </div>

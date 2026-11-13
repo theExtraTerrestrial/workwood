@@ -6,6 +6,7 @@ import fs from 'node:fs/promises';
 import fss from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 const run = promisify(execFile);
 const HOME = os.homedir();
@@ -214,6 +215,45 @@ export async function defaultsFor(cwd, profile, profiles) {
   const m = model && /^([a-z]+)(\[1m\])?$/i.exec(model);
   if (m && ALIAS[m[1].toLowerCase()]) model = ALIAS[m[1].toLowerCase()] + (m[2] || '');
   return { model, effort };
+}
+
+// Attachments. A file that is already on disk is named by its own path, never copied; one that is not (a paste,
+// or a window that cannot tell where a file lives) is saved outside the project. Either way the message lists the
+// paths, so the agent reads a file when it needs to. Pictures are also sent as pictures. Old copies are cleared
+// at start-up.
+export const ATTACH_ROOT = path.join(HOME, '.cache', 'workwood', 'attachments');
+const PICTURES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+export async function takeAttachments(text, list) {
+  text = String(text || '').trim();
+  if (!Array.isArray(list) || !list.length) return text;
+  if (list.length > 10) throw new Error('Attach at most 10 files at a time.');
+  const images = [], files = [], dir = path.join(ATTACH_ROOT, randomUUID());
+  for (const a of list) {
+    if (a?.path) {                                          // already on disk: point at it
+      const p = String(a.path);
+      let st; try { st = await fs.stat(p); } catch {}
+      if (!path.isAbsolute(p) || !st?.isFile()) throw new Error(`${a.name || p} could not be found.`);
+      files.push(p);
+      if (PICTURES.has(a.type) && st.size <= 3.7e6) images.push({ type: 'image', source: { type: 'base64', media_type: a.type, data: (await fs.readFile(p)).toString('base64') } });
+      continue;
+    }
+    const buf = Buffer.from(String(a?.data || ''), 'base64');
+    if (!buf.length) continue;
+    if (buf.length > 20e6) throw new Error(`${a.name} is larger than 20 MB.`);
+    if (PICTURES.has(a.type) && buf.length <= 3.7e6) { images.push({ type: 'image', source: { type: 'base64', media_type: a.type, data: buf.toString('base64') } }); continue; }
+    let name = path.basename(String(a.name || 'file')).replace(/[^\w.\- ()]/g, '_').slice(0, 120) || 'file';
+    while (files.some(f => path.basename(f) === name)) name = '_' + name;
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, name), buf);
+    files.push(path.join(dir, name));
+  }
+  if (files.length) text += (text ? '\n\n' : '') + 'Attached files:\n' + files.map(f => '- ' + f).join('\n');
+  return images.length ? [...(text ? [{ type: 'text', text }] : []), ...images] : text;
+}
+export async function clearOldAttachments(days = 30) {
+  await fs.mkdir(ATTACH_ROOT, { recursive: true }).catch(() => {});
+  let names; try { names = await fs.readdir(ATTACH_ROOT); } catch { return; }
+  for (const n of names) { const d = path.join(ATTACH_ROOT, n); try { if (Date.now() - (await fs.stat(d)).mtimeMs > days * 864e5) await fs.rm(d, { recursive: true, force: true }); } catch {} }
 }
 
 // Where each command comes from, for the skills list. Claude Code marks its own; a "plugin:name" is a plugin's;

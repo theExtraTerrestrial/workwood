@@ -66,9 +66,9 @@ const ask = (toolName, input, suggestions = []) => new Promise(resolve => {
   out({ type: 'control_request', request_id: requestId, request: { subtype: 'can_use_tool', tool_name: toolName, input, tool_use_id: toolUseId, permission_suggestions: suggestions } });
 });
 
-async function turn(prompt) {
+async function turn(prompt, said = prompt) {
   record({ type: 'session-owner', accountUuid: identity.accountUuid });
-  record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: prompt } });
+  record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: said } });
   if (/\bLIMIT\b/.test(prompt)) {
     out({ type: 'assistant', error: 'rate_limit', message: { id: 'm', type: 'message', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: 'You have reached your 5-hour limit.' }] }, parent_tool_use_id: null, session_id: sessionId });
     return finish('You have reached your 5-hour limit.', { is_error: true });
@@ -154,6 +154,8 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
   if (m.type === 'user' && !started) {
     started = true;
     out({ type: 'system', subtype: 'init', session_id: sessionId, cwd, tools: [], mcp_servers: [], model: 'claude-test', permissionMode: 'default', slash_commands: [], apiKeySource: 'none', output_style: 'default', uuid: randomUUID() });
-    const c = m.message.content; turn(typeof c === 'string' ? c : c.map(b => b.text || '').join(''));
+    const c = m.message.content;
+    if (Array.isArray(c) && c.some(b => b.type === 'image')) log(`pictures=${c.filter(b => b.type === 'image').length} readable=${args.filter((a, i) => a.startsWith('--add-dir') ).length ? 'yes' : 'no'}`);
+    turn(typeof c === 'string' ? c : c.map(b => b.text || '').join(''), c);
   }
 });

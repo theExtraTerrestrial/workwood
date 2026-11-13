@@ -70,7 +70,7 @@ export function makeSandbox() {
 
   sb.env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^CLAUDE|^ANTHROPIC|^WORKWOOD|^NODE_|^npm_/.test(k))),
     HOME: home, PATH: `${bin}:${process.env.PATH}`, ASDF_DATA_DIR: process.env.ASDF_DATA_DIR || path.join(REAL_HOME, '.asdf'),
-    FAKE_CLAUDE_LOG: sb.log, FAKE_CLAUDE_AGENTS: sb.agents, WORKWOOD_TOKEN: 'test-token', WORKWOOD_TERMINAL: path.join(bin, 'terminal') };
+    FAKE_CLAUDE_LOG: sb.log, FAKE_CLAUDE_AGENTS: sb.agents, WORKWOOD_TOKEN: 'test-token', WORKWOOD_STT: path.join(HERE, 'fake-stt.mjs'), WORKWOOD_TERMINAL: path.join(bin, 'terminal') };
   return sb;
 }
 

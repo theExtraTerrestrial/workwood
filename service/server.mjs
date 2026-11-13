@@ -12,6 +12,7 @@ import { readTranscript } from './transcript.mjs';
 import { runs, startTurn, answer, stop, publicRun, listCommands } from './runs.mjs';
 import { terms, openTerm, attach, typeInto, resize, closeTerm, closeAll } from './terminals.mjs';
 import { changesFor, changeOf } from './changes.mjs';
+import * as voice from './voice.mjs';
 import { createRequire } from 'node:module';
 
 const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui');
@@ -111,7 +112,7 @@ async function doRefresh() {
 }
 async function refreshLive() { state.live = await src.loadLive(); pushState(); }
 
-const body = req => new Promise((res, rej) => { let s = ''; req.on('data', d => { s += d; if (s.length > 5e6) req.destroy(); }); req.on('end', () => { try { res(s ? JSON.parse(s) : {}); } catch (e) { rej(e); } }); });
+const body = req => new Promise((res, rej) => { let s = ''; req.on('data', d => { s += d; if (s.length > 3e8) req.destroy(); }); req.on('end', () => { try { res(s ? JSON.parse(s) : {}); } catch (e) { rej(e); } }); });
 const send = (res, code, data) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(data)); };
 
 const skills = new Map();   // folder|profile -> { at, list }, kept for two minutes
@@ -173,17 +174,28 @@ async function api(req, res, url) {
     return send(res, 200, { ...t, context: run?.context || t.context, model: run?.builder.model || t.model, effort: run?.effort || t.effort,
       defaults: await src.defaultsFor(s.cwd, run?.profile || s.profile, state.profiles), run: publicRun(run) });
   }
+  if (parts[0] === 'voice') {
+    if (req.method === 'GET') { if (url.searchParams.has('warm')) voice.warm(); return send(res, 200, voice.status); }
+    // The body is the recording itself: 16 kHz mono, 32-bit floats. A preview is skipped while another is being worked on.
+    if (url.searchParams.has('preview') && voice.isBusy()) { req.resume(); return send(res, 200, { skipped: true }); }
+    const chunks = []; let n = 0;
+    for await (const c of req) { n += c.length; if (n > 16000 * 4 * 60 * 20) return send(res, 413, { error: 'That recording is too long.' }); chunks.push(c); }
+    const buf = Buffer.concat(chunks), audio = new Float32Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length - buf.length % 4));
+    try { return send(res, 200, { text: audio.length < 1600 ? '' : await voice.transcribe(audio, url.searchParams.get('language') || undefined) }); }
+    catch (e) { return send(res, 500, { error: 'Dictation did not work: ' + String(e.message).split('\n')[0] }); }
+  }
   if (req.method !== 'POST') return send(res, 404, { error: 'Not found.' });
   const b = await body(req);
 
   if (parts[0] === 'sessions' && !parts[1]) {            // start a new session
-    if (!b.text?.trim()) return send(res, 400, { error: 'Type a message first.' });
+    if (!b.text?.trim() && !b.attachments?.length) return send(res, 400, { error: 'Type a message first.' });
     const proj = state.projects.find(p => p.cwd === b.cwd);
     if (!proj) return send(res, 400, { error: 'Pick a project first.' });
     const profile = state.profiles.find(p => p.name === b.profile)?.name || state.profiles.find(p => p.global)?.name;
     const env = await src.envForProfile(profile, state.profiles);
-    const id = await startTurn({ cwd: proj.cwd, profile, env, text: b.text, model: b.model, effort: b.effort, claude: state.claude, emit });
-    runs.get(id).title = b.text.trim().split('\n')[0].slice(0, 80);
+    let content; try { content = await src.takeAttachments(b.text, b.attachments); } catch (e) { return send(res, 400, { error: e.message }); }
+    const id = await startTurn({ cwd: proj.cwd, profile, env, text: b.text || '', content, readable: [src.ATTACH_ROOT], model: b.model, effort: b.effort, claude: state.claude, emit });
+    runs.get(id).title = (b.text || '').trim().split('\n')[0].slice(0, 80) || 'Attached files';
     state.sessions.unshift({ id, title: runs.get(id).title, cwd: proj.cwd, project: proj.name, branch: null, mts: Math.floor(Date.now() / 1000), profile, file: transcriptFile(proj.cwd, id) });
     pushState();
     return send(res, 200, { sessionId: id });
@@ -191,7 +203,7 @@ async function api(req, res, url) {
   if (parts[0] === 'sessions' && parts[2] === 'send') {
     const s = state.sessions.find(x => x.id === parts[1]);
     if (!s) return send(res, 404, { error: 'No such session.' });
-    if (!b.text?.trim()) return send(res, 400, { error: 'Type a message first.' });
+    if (!b.text?.trim() && !b.attachments?.length) return send(res, 400, { error: 'Type a message first.' });
     if (terms.has(s.id)) {                               // one owner at a time: writing here ends the terminal view's hold
       await refreshLive();
       if (state.live.get(s.id) && state.live.get(s.id).status !== 'idle') return send(res, 409, { error: 'This session is working in the terminal view.' });
@@ -201,7 +213,8 @@ async function api(req, res, url) {
     if (live && live.status !== 'idle' && !(run && run.q)) return send(res, 409, { error: 'This session is in use in a terminal.' });
     const profile = state.profiles.find(p => p.name === b.profile)?.name || run?.profile || s.profile;
     const env = await src.envForProfile(profile, state.profiles);
-    await startTurn({ sessionId: s.id, cwd: s.cwd, profile, env, text: b.text, model: b.model, effort: b.effort, claude: state.claude, emit });
+    let content; try { content = await src.takeAttachments(b.text, b.attachments); } catch (e) { return send(res, 400, { error: e.message }); }
+    await startTurn({ sessionId: s.id, cwd: s.cwd, profile, env, text: b.text || '', content, readable: [src.ATTACH_ROOT], model: b.model, effort: b.effort, claude: state.claude, emit });
     pushState();
     return send(res, 200, { ok: true });
   }
@@ -346,6 +359,7 @@ const server = http.createServer(async (req, res) => {
 
 /** Starts the service and resolves with the address to open. */
 export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
+  src.clearOldAttachments(); voice.warmIfPresent();
   state.claude = await src.claudePath();
   await new Promise(r => server.listen(port, '127.0.0.1', r));
   await new Promise(r => previews.listen(0, '127.0.0.1', r));

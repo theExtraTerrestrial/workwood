@@ -403,6 +403,47 @@ test('a message that starts with a skill keeps the skill apart from the text', a
   assert.deepEqual([u.skill, u.text], ['teach', 'git rebase']);
 });
 
+const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+test('attachments: pictures go to the agent as pictures, other files are saved and named in the message', async () => {
+  const before = readLog(sb).length;
+  const r = await svc.call('sessions', { cwd: sb.projects.alpha, profile: 'live', text: 'Look at these', attachments: [
+    { name: 'shot.png', type: 'image/png', data: PNG }, { name: '../../notes.txt', type: 'text/plain', data: Buffer.from('remember the milk').toString('base64') }] });
+  assert.equal(r.status, 200);
+  const s = await idle(r.body.sessionId), u = s.items.find(i => i.kind === 'user');
+  assert.deepEqual([u.text, u.images, u.files], ['Look at these', 1, ['notes.txt']]);
+  assert.ok(readLog(sb).slice(before).some(l => l.startsWith('pictures=1')));
+  const saved = /- (\S+notes\.txt)/.exec(lastText(s))[1];                  // the agent was told where the file is
+  assert.ok(saved.startsWith(path.join(sb.home, '.cache', 'workwood', 'attachments') + path.sep));
+  assert.equal(fs.readFileSync(saved, 'utf8'), 'remember the milk');
+  // a message can be attachments alone; and the saved history reads back the same way
+  assert.equal((await svc.call(`sessions/${r.body.sessionId}/send`, { text: '', attachments: [{ name: 'a.png', type: 'image/png', data: PNG }] })).status, 200);
+  assert.deepEqual((await idle(r.body.sessionId)).items.filter(i => i.kind === 'user').map(i => [i.text, i.images]), [['Look at these', 1], ['', 1]]);
+  assert.equal((await svc.call(`sessions/${r.body.sessionId}/send`, { text: '' })).status, 400);
+  // a file that is already on disk is named where it is, not copied; a picture among them is still sent as one
+  const logo = path.join(sb.projects.alpha, 'logo.png'), spec = path.join(sb.projects.alpha, 'spec.txt');
+  fs.writeFileSync(logo, Buffer.from(PNG, 'base64')); fs.writeFileSync(spec, 'the spec');
+  const copies = fs.readdirSync(path.join(sb.home, '.cache', 'workwood', 'attachments')).length, at = readLog(sb).length;
+  const there = await svc.call('sessions', { cwd: sb.projects.alpha, profile: 'live', text: 'Use these', attachments: [{ name: 'logo.png', type: 'image/png', path: logo }, { name: 'spec.txt', type: 'text/plain', path: spec }] });
+  const ts = await idle(there.body.sessionId), tu = ts.items.find(i => i.kind === 'user');
+  assert.deepEqual([tu.text, tu.images, tu.files], ['Use these', undefined, ['logo.png', 'spec.txt']]);
+  assert.ok(lastText(ts).includes('- ' + logo) && lastText(ts).includes('- ' + spec));
+  assert.ok(readLog(sb).slice(at).some(l => l.startsWith('pictures=1')));
+  assert.equal(fs.readdirSync(path.join(sb.home, '.cache', 'workwood', 'attachments')).length, copies);
+  assert.equal((await svc.call(`sessions/${there.body.sessionId}/send`, { text: 'x', attachments: [{ name: 'gone.txt', path: path.join(sb.projects.alpha, 'gone.txt') }] })).status, 400);
+  const old = addSession(sb, 'alpha', 'live', [{ type: 'text', text: 'Compare\n\nAttached files:\n- /x/y/spec.pdf\n- /x/y/data.csv' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: PNG } }], 'Compared.', 20);
+  await until(async () => (await svc.call('sessions/' + old)).status === 200, 'the session to be listed', 15000);
+  const o = (await session(old)).items.find(i => i.kind === 'user');
+  assert.deepEqual([o.text, o.images, o.files], ['Compare', 1, ['spec.pdf', 'data.csv']]);
+});
+
+test('dictation: a recording comes back as text, and only with the token', async () => {
+  const say = (seconds, q = '') => fetch(new URL('/api/voice' + q, svc.address), { method: 'POST', headers: { 'x-workwood-token': 'test-token' }, body: new Float32Array(16000 * seconds) }).then(r => r.json());
+  assert.deepEqual(await say(1), { text: 'dictated words' });
+  assert.deepEqual(await say(0.05), { text: '' });                  // too short to be speech
+  assert.equal((await svc.call('voice')).body.state, 'ready');
+  assert.equal((await fetch(new URL('/api/voice', svc.address), { method: 'POST', body: new Float32Array(16000) })).status, 403);
+});
+
 test('creates a project folder, and refuses odd names', async () => {
   const ok = await svc.call('projects', { name: 'gamma' });
   assert.equal(ok.status, 200); assert.ok(fs.statSync(path.join(sb.home, 'workspace', 'gamma')).isDirectory());
@@ -422,7 +463,7 @@ const chrome = findChrome();
 const ui = (name, fn) => test(name, { skip: chrome ? false : 'no Chromium found; set WORKWOOD_CHROME or run: npx playwright install chromium-headless-shell' }, async () => {
   if (!page) {
     const { chromium } = await import('playwright-core');
-    browser = await chromium.launch({ executablePath: chrome, args: ['--no-sandbox'] });
+    browser = await chromium.launch({ executablePath: chrome, args: ['--no-sandbox', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
     page = await browser.newPage({ viewport: { width: 1400, height: 880 } });
     page.setDefaultTimeout(8000);
     await page.goto(svc.address + '#' + sb.sessions.alphaLive);
@@ -810,6 +851,69 @@ ui('window: the skills panel groups skills by source, and a click starts a messa
   await page.waitForSelector('.me:has-text("a header") .chip:has-text("mockup")');
   await page.click('#skClose');
   assert.equal(await page.isVisible('#panel'), false);
+});
+
+ui('window: attach files with the paperclip, remove one, send; the message shows what went with it', async () => {
+  await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`);
+  await page.waitForSelector('.me:has-text("Tidy the alpha readme")');
+  await page.setInputFiles('#filePick', [
+    { name: 'shot.png', mimeType: 'image/png', buffer: Buffer.from(PNG, 'base64') },
+    { name: 'second.png', mimeType: 'image/png', buffer: Buffer.from(PNG, 'base64') },
+    { name: 'tokens.css', mimeType: 'text/css', buffer: Buffer.from(':root{}') }]);
+  await page.waitForSelector('#atts .ath >> nth=1');
+  assert.match(await page.innerText('#fchips .fch'), /tokens\.css/);
+  await page.click('#atts .ath >> nth=1 >> [data-rm]');
+  assert.equal(await page.locator('#atts .ath').count(), 1);
+  await send('Use these for the header');
+  await page.waitForSelector('.me:has-text("Use these for the header") .matt:has-text("1 image")');
+  assert.match(await page.innerText('.me:has-text("Use these for the header") .matt'), /tokens\.css/);
+  assert.equal(await page.locator('#atts .ath, #fchips .fch').count(), 0);   // the box is empty again
+  // where the window can tell where a file lives (the Electron window), the path is sent, not the contents
+  const real = path.join(sb.projects.alpha, 'spec.txt'); fs.writeFileSync(real, 'the spec');
+  await page.evaluate(p => { window.workwood = { pathFor: () => p }; }, real);
+  await page.setInputFiles('#filePick', [{ name: 'spec.txt', mimeType: 'text/plain', buffer: Buffer.from('not this') }]);
+  await page.waitForSelector('#fchips .fch[data-tip]');
+  await send('Follow the spec');
+  await page.waitForSelector(`.ai li:has-text("${real}")`);
+  await page.evaluate(() => { delete window.workwood; });
+});
+
+ui('window: the mic button dictates into the message box, after what was typed; Escape discards', async () => {
+  await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`);
+  await page.waitForSelector('.me:has-text("Tidy the alpha readme")');
+  await page.fill('#input', 'Typed first,');
+  await page.click('#mic');
+  await page.waitForSelector('#box.rec');
+  await page.waitForSelector('#vtime:has-text("0:01")');
+  await page.waitForFunction(() => /^Typed first,( dictated words)+$/.test(document.getElementById('input').value));   // heard so far, while still recording
+  const early = await page.inputValue('#input');
+  await page.click('#mic');
+  await page.waitForSelector('#box:not(.rec)');
+  await page.waitForSelector('#voice', { state: 'hidden' });
+  const said = await page.inputValue('#input');
+  assert.match(said, /^Typed first,( dictated words)+$/);
+  assert.ok(said.length >= early.length);                        // what was already written down stayed
+  await page.click('#mic');
+  await page.waitForSelector('#box.rec');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#box:not(.rec)');
+  assert.equal(await page.inputValue('#input'), said);
+  // the same with the mouse: the discard button; and holding the mic records until it is let go
+  await page.click('#mic');
+  await page.waitForSelector('#box.rec');
+  await page.click('#vCancel');
+  await page.waitForSelector('#box:not(.rec)');
+  assert.equal(await page.inputValue('#input'), said);
+  await page.fill('#input', '');
+  const m = await page.locator('#mic').boundingBox();
+  await page.mouse.move(m.x + m.width / 2, m.y + m.height / 2);
+  await page.mouse.down();
+  await page.waitForSelector('#box.rec');
+  await page.waitForFunction(() => /dictated words/.test(document.getElementById('input').value));
+  await page.mouse.up();
+  await page.waitForSelector('#voice', { state: 'hidden' });
+  assert.match(await page.inputValue('#input'), /^dictated words/);
+  await page.fill('#input', '');
 });
 
 test('sandbox containment', () => {

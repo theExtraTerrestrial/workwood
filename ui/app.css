@@ -128,6 +128,14 @@
   .skr .src{font-size:10.5px;color:var(--faint)}
   .skr.none{color:var(--faint)}
   #skl .skr{padding:6px 9px}
+  .ath{background-size:cover;background-position:center}
+  .box.drop{border-color:var(--accent)}
+  .matt{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}.me .matt:not(:first-child){margin-top:8px}
+  .matt .fch{padding-right:8px;white-space:nowrap}
+  #vCancel{width:24px;height:24px;margin-right:-4px}#vCancel svg{width:13px;height:13px}
+  #mic.live:hover{background:var(--hot);color:#fff;filter:brightness(1.12)}
+  #mic{margin-right:4px}#mic.wait{opacity:.5;pointer-events:none}
+  .wave i{animation:none;transition:transform .08s}
   .tip2{position:fixed;z-index:60;width:300px;max-width:calc(100vw - 16px);box-sizing:border-box;background:var(--pop);border:1px solid var(--line2);border-radius:10px;box-shadow:var(--shadow);padding:9px 12px;font-size:12px;line-height:1.5;color:var(--text);pointer-events:none;overflow-wrap:anywhere;max-height:60vh;overflow:hidden}
   .tip2[hidden]{display:none}
   .skf{flex:none;padding:10px 16px;margin:0}

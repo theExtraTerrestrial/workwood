@@ -25,7 +25,7 @@ export function publicRun(r) {
  * Starts a turn. Resolves with the session id as soon as the session exists
  * (immediately for an existing session, after start-up for a new one).
  */
-export function startTurn({ sessionId, cwd, profile, env, text, model, effort, claude, emit }) {
+export function startTurn({ sessionId, cwd, profile, env, text, content = text, model, effort, claude, emit, readable = [] }) {
   const existing = sessionId && runs.get(sessionId);
   if (existing && existing.status !== 'idle' && existing.status !== 'stopped') throw new Error('This session is still working.');
 
@@ -53,7 +53,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, model, effort, c
   });
 
   async function* prompt() {
-    yield { type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null };
+    yield { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null };
     await run.finished; // keep the input open so the agent can ask questions during the turn
   }
   let endTurn; run.finished = new Promise(r => { endTurn = r; });
@@ -62,7 +62,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, model, effort, c
     (async () => {
       try {
         run.q = query({ prompt: prompt(), options: {
-          cwd, env, resume: sessionId || undefined, canUseTool,
+          cwd, env, resume: sessionId || undefined, canUseTool, additionalDirectories: readable,
           model: model || undefined, effort: effort || undefined,
           permissionMode: process.env.WORKWOOD_PERMISSION_MODE || undefined, // normally your own Claude Code setting decides
           pathToClaudeCodeExecutable: claude,
@@ -74,7 +74,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, model, effort, c
           if (m.session_id && !run.sessionId) {
             run.sessionId = m.session_id; runs.set(run.sessionId, run);
             resolve(run.sessionId);
-            sayItems(run.builder.user(text, new Date().toISOString()));
+            sayItems(run.builder.user(content, new Date().toISOString()));
             sayState();
           }
           if (m.type === 'assistant' && !m.parent_tool_use_id) {
@@ -114,7 +114,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, model, effort, c
     })();
     if (sessionId) {
       resolve(sessionId);
-      sayItems(run.builder.user(text, new Date().toISOString()));
+      sayItems(run.builder.user(content, new Date().toISOString()));
       sayState();
     }
   });

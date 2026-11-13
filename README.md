@@ -11,13 +11,22 @@ npm start         # the Workwood window (Electron, shown on Windows through WSL)
 npm run edge      # alternative: the same app in a Microsoft Edge app window
 ```
 
-On Windows, run `npm run shortcut` once. It puts Workwood in the Start menu as
-a native Windows window: the window program (Electron for Windows, downloaded
-once into `%LOCALAPPDATA%\Workwood`) runs on Windows, and it starts the service
-in WSL and stops it again when the window closes. The service's output goes to
-`~/.cache/workwood/workwood.log`. Run `npm run shortcut` again after pulling
-changes to the window program; `npm run shortcut -- --remove` takes it all away.
-`npm start` still opens the Linux window through WSLg.
+On Windows, run `npm run shortcut` once (inside WSL). It puts Workwood in the
+Start menu as a native Windows window, installed under `%LOCALAPPDATA%\Workwood`
+(Electron for Windows, downloaded once, and a Windows copy of the service).
+The window has a switch at the top of the sidebar for where sessions run:
+
+- **Windows**: the service runs inside the window itself and uses the Windows
+  Claude Code (`claude.exe`), your Windows folders and Claude Code's Windows
+  history. Nothing goes through WSL. There is no Claudius there, so there is
+  one account: the one Claude Code is signed in to.
+- **WSL**: the window starts the service in WSL and stops it again when the
+  window closes; this is the full set-up with Claudius profiles. Its output
+  goes to `~/.cache/workwood/workwood.log`.
+
+Run `npm run shortcut` again after pulling changes (the Windows side is a copy);
+`npm run shortcut -- --remove` takes it all away. `npm start` still opens the
+Linux window through WSLg.
 
 When started from a terminal: keep the terminal open while you use the app; closing it or pressing Ctrl+C quits.
 The terminal prints a few "Failed to connect to the bus" lines at start-up under
@@ -93,7 +102,7 @@ On a fresh WSL install the Electron window needs GTK once:
   stopped because a sign-in lapsed has the same button on its card.
 - Dark and light theme (gear, bottom left).
 
-Not built yet: projects that live on the Windows side, the Mac build.
+Not built yet: the Mac build; an installer that runs on a Windows PC without WSL.
 
 ## Tests
 
@@ -101,7 +110,7 @@ Not built yet: projects that live on the Windows side, the Mac build.
 npm test
 ```
 
-About 50 seconds, 63 tests. They run the real service and the real `claudius`
+About 50 seconds, 64 tests. They run the real service and the real `claudius`
 inside a throwaway home folder (the same idea as Claudius's own tests), with a
 scripted stand-in for `claude` (`tests/fake-claude.mjs`). No real account is
 used and nothing is sent to Anthropic. Half of the tests drive the window with

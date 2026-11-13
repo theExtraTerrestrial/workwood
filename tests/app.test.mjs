@@ -475,6 +475,27 @@ test('settings: default profile and dictation language are kept; sign-in again r
   assert.ok(readLog(sb).includes('claudius relogin other'));
 });
 
+test('without Claudius (as on Windows): one account, sessions read straight from the history, and a turn runs', async () => {
+  const plain = await startService(sb, { WORKWOOD_PLAIN: '1' });
+  try {
+    const st = await until(async () => {
+      const r = await fetch(new URL('/api/events?token=test-token', plain.address)), reader = r.body.getReader();
+      const { value } = await reader.read(); reader.cancel();
+      const s = JSON.parse(/data: (.*)/.exec(new TextDecoder().decode(value))[1]);
+      return s.fresh && s.sessions.length && s;
+    }, 'the plain service to list sessions', 15000);
+    assert.equal(st.plain, true);
+    assert.equal(st.profiles.length, 1);
+    assert.equal(st.profiles[0].global, true);
+    const old = st.sessions.find(x => x.id === sb.sessions.betaOther);
+    assert.deepEqual([old.title, old.project, old.profile, old.branch], ['Add a beta changelog', 'beta', st.profiles[0].name, 'main']);
+    assert.equal(st.sessions.find(x => x.title === '/teach git rebase')?.project, 'alpha');   // a session that began with a skill
+    const r = await plain.call('sessions', { cwd: sb.projects.alpha, profile: st.profiles[0].name, text: 'Hello from plain' });
+    assert.equal(r.status, 200);
+    await until(async () => { const s = (await plain.call('sessions/' + r.body.sessionId)).body; return s.run?.status === 'idle' && /Echo: Hello from plain/.test(lastText(s)); }, 'the turn to end');
+  } finally { plain.stop(); }
+});
+
 test('creates a project folder, and refuses odd names', async () => {
   const ok = await svc.call('projects', { name: 'gamma' });
   assert.equal(ok.status, 200); assert.ok(fs.statSync(path.join(sb.home, 'workspace', 'gamma')).isDirectory());

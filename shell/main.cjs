@@ -7,6 +7,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 let win = null;
 
 async function open() {
+  require('electron').ipcMain.on('env:get', e => { e.returnValue = null; });   // one place only here; the Windows window has two
   const { start } = await import(pathToFileURL(path.join(__dirname, '..', 'service', 'server.mjs')).href);
   const { address } = await start();
   Menu.setApplicationMenu(null);

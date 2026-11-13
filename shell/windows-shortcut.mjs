@@ -33,6 +33,30 @@ if (!fs.existsSync(path.join(runtime, 'electron.exe'))) {
   fs.mkdirSync(runtime, { recursive: true });
   execFileSync('unzip', ['-q', '-o', zip, '-d', runtime]); fs.rmSync(zip, { force: true });
 }
+// The Windows copy of the service: this project's service and page, with the Windows builds of what they need.
+// Built here, then unpacked on the Windows side in one go (copying thousands of small files across is slow).
+if (!process.argv.includes('--window-only')) {
+  console.log('Preparing the Windows copy of the service…');
+  const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'workwood-win-'));
+  for (const f of ['package.json', 'package-lock.json']) fs.copyFileSync(path.join(dir, f), path.join(stage, f));
+  execFileSync('npm', ['install', '--omit=dev', '--os=win32', '--cpu=x64', '--ignore-scripts', '--no-audit', '--no-fund', '--loglevel=error'], { cwd: stage, stdio: 'inherit' });
+  const nm = path.join(stage, 'node_modules');
+  // Left out: the Claude Code that ships with the SDK (yours is used), and builds for other systems.
+  for (const d of fs.readdirSync(path.join(nm, '@anthropic-ai')).filter(n => /^claude-agent-sdk-/.test(n))) fs.rmSync(path.join(nm, '@anthropic-ai', d), { recursive: true, force: true });
+  for (const napi of fs.readdirSync(path.join(nm, 'onnxruntime-node', 'bin'))) for (const sys of ['darwin', 'linux']) fs.rmSync(path.join(nm, 'onnxruntime-node', 'bin', napi, sys), { recursive: true, force: true });
+  for (const d of fs.readdirSync(path.join(nm, 'node-pty', 'prebuilds')).filter(n => !n.startsWith('win32-x64'))) fs.rmSync(path.join(nm, 'node-pty', 'prebuilds', d), { recursive: true, force: true });
+  fs.cpSync(path.join(dir, 'service'), path.join(stage, 'service'), { recursive: true });
+  fs.cpSync(path.join(dir, 'ui'), path.join(stage, 'ui'), { recursive: true });
+  const tar = path.join(H, 'native.tar');
+  fs.mkdirSync(H, { recursive: true });
+  execFileSync('tar', ['-cf', tar, '-C', stage, '.']);
+  fs.rmSync(path.join(H, 'native'), { recursive: true, force: true }); fs.mkdirSync(path.join(H, 'native'));
+  win("tar.exe", ["-xf", home + "\\native.tar", "-C", home + "\\native"]);
+  fs.rmSync(tar, { force: true }); fs.rmSync(stage, { recursive: true, force: true });
+  // The speech model, if it is already here, so Windows does not download it again.
+  const model = path.join(os.homedir(), '.cache', 'workwood', 'models'), winHome = here(ps('[Environment]::GetFolderPath("UserProfile")'));
+  if (fs.existsSync(model) && !fs.existsSync(path.join(winHome, '.cache', 'workwood', 'models'))) fs.cpSync(model, path.join(winHome, '.cache', 'workwood', 'models'), { recursive: true });
+}
 const appDir = path.join(H, 'app');
 fs.rmSync(path.join(H, 'Workwood.vbs'), { force: true });
 fs.mkdirSync(appDir, { recursive: true }); fs.mkdirSync(path.join(os.homedir(), '.cache', 'workwood'), { recursive: true });

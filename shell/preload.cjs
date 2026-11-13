@@ -1,3 +1,9 @@
-// Lets the page ask where an attached file lives on disk, so a file that is already there is named, not copied.
-const { contextBridge, webUtils } = require('electron');
-contextBridge.exposeInMainWorld('workwood', { pathFor: file => { try { return webUtils.getPathForFile(file) || ''; } catch { return ''; } } });
+// Lets the page ask where an attached file lives on disk, so a file that is already there is named, not copied;
+// and, in the Windows window, which place sessions run in (Windows or WSL) and to switch between them.
+const { contextBridge, webUtils, ipcRenderer } = require('electron');
+let env = null; try { env = ipcRenderer.sendSync('env:get'); } catch {}
+contextBridge.exposeInMainWorld('workwood', {
+  pathFor: file => { try { return webUtils.getPathForFile(file) || ''; } catch { return ''; } },
+  env: env && env.list ? env : null,
+  setEnv: id => ipcRenderer.invoke('env:set', id),
+});

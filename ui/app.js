@@ -231,7 +231,7 @@ function patch(root,parts){
   while(root.children.length>parts.length)root.lastElementChild.remove();
 }
 const KIND={page:'Page',image:'Image',video:'Video',pdf:'PDF'};
-const fileUrl=f=>`${A.preview}/${V.sel}${f.path.split('/').map(encodeURIComponent).join('/')}?v=${f.v}`;
+const fileUrl=f=>`${A.preview}/${V.sel}/${f.path.split(/[\\/]/).filter(Boolean).map(encodeURIComponent).join('/')}?v=${f.v}`;
 const folderOf=f=>{const cwd=selSession()?.cwd||'',d=f.path.slice(0,f.path.lastIndexOf('/'));return d===cwd?'':d.startsWith(cwd+'/')?d.slice(cwd.length+1):d.replace(/^\/home\/[^/]+/,'~')};
 const SANDBOX='allow-scripts allow-forms allow-same-origin allow-popups allow-modals';
 function thumb(f){
@@ -532,7 +532,7 @@ function renderSettings(){
     <div class="srow"><span>Dictation language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>
     <div class="srow"><span>Projects folder<small>Where the project menu looks first.</small></span><span class="sstate">${esc((A.workspace||'').replace(/^\/home\/[^/]+/,'~'))}</span></div>`;
   else if(stab===1)pg.innerHTML=`<div class="pgh">Profiles</div>`+A.profiles.map(p=>`<div class="srow"><span>${esc(p.name)}${p.global?' <span class="pill">global</span>':''}<small>${[p.plan?cap(p.plan):null,p.h5!=null?`5h ${p.h5}%`:null,p.d7!=null?`7d ${p.d7}%`:null].filter(Boolean).join(' · ')}</small></span><button class="sval" data-login="${esc(p.name)}">Sign in again</button></div>`).join('')
-    +`<div class="cap2" style="padding:10px 8px">Profiles come from Claudius. Add or remove them there. Signing in again keeps the profile and its history.</div>`;
+    +`<div class="cap2" style="padding:10px 8px">${A.plain?'This is the account Claude Code is signed in to on this computer.':'Profiles come from Claudius. Add or remove them there. Signing in again keeps the profile and its history.'}</div>`;
   else if(stab===2){needSkills();const all=skillList();pg.innerHTML=`<div class="pgh">Skills</div>`+(!all?'<div class="cap2">Loading skills…</div>':V.sk.err?`<div class="cap2">${esc(V.sk.err)}</div>`:all.map(s=>`<div class="srow" data-tip="${esc(s.about)}"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">/${esc(s.name)}</span><span class="sstate">${s.from}</span></div>`).join('')+`<div class="cap2" style="padding:10px 8px">As Claude Code reports them for ${V.isNew?'a new session here':'the open session'}.</div>`)}
   else{pg.innerHTML=`<div class="pgh">About</div>`+(about?`<div class="srow"><span>Workwood</span><span class="sstate">${esc(about.version)}</span></div>
     <div class="srow"><span>Claude Code<small>Runs your sessions.</small></span><span class="sstate ${about.claude?'':'bad'}">${esc(about.claude||'Not found')}</span></div>
@@ -574,6 +574,11 @@ $('spage').onchange=async e=>{
     if(e.target.id==='sLang')A.prefs=await api('settings',{language:e.target.value})}catch(err){oops(err.message)}
   e.target.blur();
 };
+
+/* ---------- Windows window only: where sessions run, Windows or WSL ---------- */
+{const e=window.workwood?.env;if(e&&e.list.length>1){$('envs').hidden=false;
+  $('envs').innerHTML=e.list.map(x=>`<button data-env="${esc(x.id)}" class="${x.id===e.current?'on':''}" data-tip="Sessions that run ${x.id==='wsl'?'inside WSL':'on Windows itself'}">${esc(x.label)}</button>`).join('');
+  $('envs').onclick=ev=>{const b=ev.target.closest('[data-env]');if(b&&!b.classList.contains('on')){$('envs').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));window.workwood.setEnv(b.dataset.env)}}}}
 
 /* ---------- hover notes: a fixed-width box that always stays inside the window ---------- */
 let tipFor=null,tipTimer;

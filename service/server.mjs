@@ -80,7 +80,7 @@ const transcriptFile = (cwd, id) => path.join(src.PROJECTS_ROOT, cwd.replace(/[^
 
 const snapshot = () => ({
   profiles: state.profiles.map(({ account, ...p }) => p), next: state.next, projects: state.projects,
-  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, prefs, workspace: src.WORKSPACE, preview: previewBase,
+  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, prefs, plain: src.PLAIN, workspace: src.WORKSPACE, preview: previewBase,
 });
 let lastSent = '';
 function pushState() { const s = JSON.stringify(snapshot()); if (s !== lastSent) { lastSent = s; emit('state', JSON.parse(s)); } }
@@ -211,7 +211,7 @@ async function api(req, res, url) {
     if (parts[3] === 'input') return send(res, typeInto(key, b.data ?? '') ? 200 : 404, {});
     if (parts[3] === 'resize') return send(res, resize(key, b.cols, b.rows) ? 200 : 404, {});
     if (parts[3] === 'close') { await closeTerm(key); return send(res, 200, { ok: true }); }
-    if (!terms.has(key)) openTerm({ sessionId: key, cwd: os.homedir(), file: 'claudius', args: ['relogin', p.name], env: src.cleanEnv(), cols: b.cols, rows: b.rows, onChange: () => setTimeout(refreshAll, 500) });
+    if (!terms.has(key)) openTerm({ sessionId: key, cwd: os.homedir(), ...(src.PLAIN ? { file: state.claude || 'claude', args: ['/login'] } : { file: 'claudius', args: ['relogin', p.name] }), env: src.cleanEnv(), cols: b.cols, rows: b.rows, onChange: () => setTimeout(refreshAll, 500) });
     return send(res, 200, { ok: true });
   }
   if (parts[0] === 'sessions' && !parts[1]) {            // start a new session
@@ -308,7 +308,7 @@ async function api(req, res, url) {
   if (parts[0] === 'open-editor') {
     const s = state.sessions.find(x => x.id === b.sessionId);
     if (!s) return send(res, 404, { error: 'No such session.' });
-    spawn('code', [s.cwd], { detached: true, stdio: 'ignore', env: src.cleanEnv() }).on('error', () => {}).unref();
+    spawn('code', [s.cwd], { detached: true, stdio: 'ignore', env: src.cleanEnv(), shell: process.platform === 'win32', windowsHide: true }).on('error', () => {}).unref();
     return send(res, 200, { ok: true });
   }
   send(res, 404, { error: 'Not found.' });
@@ -333,7 +333,7 @@ const previews = http.createServer(async (req, res) => {
     const s = key === PREVIEW_KEY && state.sessions.find(x => x.id === id);
     if (!s || !rest.length) return deny();
     for (const [sid, run] of runs) if (sid === id) for (const f of run.builder.work()) previewDirs(id).add(path.dirname(f.path)); // written a moment ago
-    const file = await real(path.sep + rest.map(decodeURIComponent).join(path.sep));
+    const file = await real((process.platform === 'win32' ? '' : path.sep) + rest.map(decodeURIComponent).join(path.sep));   // on Windows the first part is the drive
     if (!file) return deny(404);
     const roots = (await Promise.all([s.cwd, ...previewDirs(id)].map(real))).filter(Boolean);
     const parts = file.split(path.sep);

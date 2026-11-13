@@ -12,7 +12,12 @@ const run = promisify(execFile);
 const HOME = os.homedir();
 export const PROFILE_ROOT = path.join(HOME, '.claude-profiles');
 export const PROJECTS_ROOT = path.join(HOME, '.claude', 'projects');
-export const WORKSPACE = path.join(HOME, 'workspace');
+export const WORKSPACE = process.env.WORKWOOD_WORKSPACE || path.join(HOME, 'workspace');
+// Without Claudius (always so on Windows) there is one account, the one Claude Code itself is signed in to,
+// and the session list is read straight from Claude Code's history.
+export const PLAIN = process.platform === 'win32' || process.env.WORKWOOD_PLAIN === '1';
+const WIN = process.platform === 'win32';
+let CLAUDE = 'claude';   // set by claudePath(); on Windows Claude Code is often not on the PATH
 
 // Variables that describe the Claude Code session this service may have been
 // started from. A session we start must not inherit them.
@@ -45,6 +50,11 @@ async function json(cmd, args, timeout) {
 
 /** Profiles from Claudius, global one first. Usage that belongs to a window that has already reset counts as 0. */
 export async function loadProfiles() {
+  if (PLAIN) {
+    let who = null; try { who = JSON.parse(await fs.readFile(path.join(HOME, '.claude.json'), 'utf8')).oauthAccount || null; } catch {}
+    const name = String(who?.emailAddress || '').split('@')[0].replace(/[^\w.-]/g, '') || 'claude';
+    return [{ name, global: true, account: who?.accountUuid || null, plan: null, lapsed: false, h5: null, d7: null, r5: null, r7: null }];
+  }
   const list = await json('claudius', ['list', '--json']);
   if (!list) return null;
   const now = Date.now() / 1000;
@@ -63,6 +73,7 @@ export async function loadProfiles() {
 }
 
 export async function loadNext() {
+  if (PLAIN) return null;
   return (await read('claudius', ['next'], 15000))?.trim().split('\n').pop() || null;
 }
 
@@ -115,14 +126,61 @@ export async function deleteSession(file, id) {
 }
 
 /** The shared session pool as Claudius reports it, newest first. Slow part of loading; needs nothing else. */
-export const loadSessionList = () => json('claudius', ['sessions', '--json', '--limit', '400'], 30000);
+export const loadSessionList = () => PLAIN ? scanSessions() : json('claudius', ['sessions', '--json', '--limit', '400'], 30000);
+
+// The same list Claudius gives, read from the history folder: the newest 400 sessions, each with its folder,
+// branch and first message. Only the start of each file is read.
+const headCache = new Map();
+async function headOf(file, mtimeMs) {
+  const had = headCache.get(file);
+  if (had && had.cwd && had.at === mtimeMs) return had;
+  const out = { at: mtimeMs, cwd: null, branch: null, label: null };
+  let fh;
+  try {
+    fh = await fs.open(file, 'r');
+    const buf = Buffer.alloc(262144), { bytesRead } = await fh.read(buf, 0, buf.length, 0);
+    for (const line of buf.toString('utf8', 0, bytesRead).split('\n')) {
+      if (!line.includes('"cwd"')) continue;
+      let m; try { m = JSON.parse(line); } catch { continue; }
+      if (m.isSidechain) continue;
+      if (!out.cwd && m.cwd) { out.cwd = m.cwd; out.branch = m.gitBranch || null; }
+      if (!out.label && m.type === 'user' && !m.isMeta) {
+        const c = m.message?.content, t = (typeof c === 'string' ? c : (c || []).find(b => b.type === 'text')?.text || '').trim();
+        const cmd = /<command-name>(\/[^<\s]+)<\/command-name>/.exec(t);
+        if (cmd && !/<local-command-stdout>/.test(t)) out.label = (cmd[1] + ' ' + (/<command-args>([\s\S]*?)<\/command-args>/.exec(t)?.[1] || '')).trim().split('\n')[0].slice(0, 80);
+        else if (t && !/^(<|Caveat:|\[Request interrupted|This session is being continued)/.test(t)) out.label = t.split('\n')[0].slice(0, 80);
+      }
+      if (out.cwd && out.label) break;
+    }
+  } catch {} finally { await fh?.close().catch(() => {}); }
+  headCache.set(file, out);
+  return out;
+}
+async function scanSessions() {
+  let dirs; try { dirs = await fs.readdir(PROJECTS_ROOT, { withFileTypes: true }); } catch { return []; }
+  const files = [];
+  await Promise.all(dirs.filter(d => d.isDirectory()).map(async d => {
+    let names; try { names = await fs.readdir(path.join(PROJECTS_ROOT, d.name)); } catch { return; }
+    await Promise.all(names.filter(n => /^[0-9a-f-]{36}\.jsonl$/.test(n)).map(async n => {
+      try { const st = await fs.stat(path.join(PROJECTS_ROOT, d.name, n)); files.push({ dirkey: d.name, id: n.slice(0, 36), mtimeMs: st.mtimeMs }); } catch {}
+    }));
+  }));
+  files.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const out = [];
+  for (const f of files.slice(0, 400)) {
+    const h = await headOf(path.join(PROJECTS_ROOT, f.dirkey, f.id + '.jsonl'), f.mtimeMs);
+    if (!h.cwd) continue;
+    out.push({ id: f.id, dirkey: f.dirkey, cwd: h.cwd, branch: h.branch, label: h.label, mts: Math.floor(f.mtimeMs / 1000), exists: fss.existsSync(h.cwd) });
+  }
+  return out;
+}
 
 /** Tags each session with the profile that last ran it. */
 export async function tagSessions(list, profiles) {
   if (!list) return null;
   const byAccount = new Map(profiles.filter(p => p.account).map(p => [p.account, p.name]));
   const fallback = (profiles.find(p => p.global) || profiles[0])?.name || null;
-  const keep = list.filter(s => s.exists && !s.cwd.includes('/scratchpad/')); // folders that are gone, and throwaway test runs
+  const keep = list.filter(s => s.exists && !/[\\/]scratchpad[\\/]/.test(s.cwd)); // folders that are gone, and throwaway test runs
   return Promise.all(keep.map(async s => {
     const file = path.join(PROJECTS_ROOT, s.dirkey, s.id + '.jsonl');
     const { account, title } = await metaOf(file, s.mts);
@@ -149,7 +207,9 @@ export const writeKept = data => writeJson(KEPT, data);
 export function openTerminal(cwd, argv) {
   const line = argv.map(a => /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`).join(' ');
   let cmd, args;
+  if (WIN && argv[0] === 'claude') argv = [CLAUDE, ...argv.slice(1)];
   if (process.env.WORKWOOD_TERMINAL) { cmd = process.env.WORKWOOD_TERMINAL; args = [cwd, ...argv]; }             // your own launcher
+  else if (WIN) { cmd = 'wt.exe'; args = ['-w', '0', 'nt', '-d', cwd, ...argv]; }                                 // a new Windows Terminal tab
   else if (process.env.WSL_DISTRO_NAME) { cmd = 'wt.exe'; args = ['-w', '0', 'nt', 'wsl.exe', '-d', process.env.WSL_DISTRO_NAME, '--cd', cwd, '--', 'bash', '-lic', line]; } // a new Windows Terminal tab
   else if (process.platform === 'darwin') { cmd = 'osascript'; args = ['-e', `tell application "Terminal" to do script ${JSON.stringify(`cd ${JSON.stringify(cwd)} && ${line}`)}`, '-e', 'tell application "Terminal" to activate']; }
   else { cmd = 'x-terminal-emulator'; args = ['-e', 'bash', '-lic', `cd ${JSON.stringify(cwd)} && ${line}`]; }
@@ -162,7 +222,7 @@ export function openTerminal(cwd, argv) {
 
 /** Sessions that are running somewhere right now, in this app or in any terminal. */
 export async function loadLive() {
-  const list = await json('claude', ['agents', '--json'], 15000);
+  const list = await json(CLAUDE, ['agents', '--json'], 15000);
   const map = new Map();
   for (const a of list || []) if (a.sessionId) map.set(a.sessionId, { kind: a.kind, status: a.status, waitingFor: a.waitingFor || null });
   return map;
@@ -237,7 +297,7 @@ export async function takeAttachments(text, list) {
   const images = [], files = [], dir = path.join(ATTACH_ROOT, randomUUID());
   for (const a of list) {
     if (a?.path) {                                          // already on disk: point at it
-      const p = fromWindows(String(a.path));
+      const p = WIN ? String(a.path) : fromWindows(String(a.path));
       let st; try { st = await fs.stat(p); } catch {}
       if (!path.isAbsolute(p) || !st?.isFile()) throw new Error(`${a.name || p} could not be found.`);
       files.push(p);
@@ -288,5 +348,11 @@ export async function claudeVersion(file) {
   try { const { stdout } = await run(file || 'claude', ['--version'], { timeout: 10000, env: cleanEnv() }); return stdout.trim().split(' ')[0] || null; } catch { return null; }
 }
 export async function claudePath() {
-  try { const { stdout } = await run('which', ['claude']); return stdout.trim() || undefined; } catch { return undefined; }
+  if (WIN) {
+    let found = null; try { found = (await run('where', ['claude'])).stdout.split(/\r?\n/).find(l => /\.(exe|cmd)$/i.test(l.trim()))?.trim() || null; } catch {}
+    if (!found) { const usual = path.join(HOME, '.local', 'bin', 'claude.exe'); if (fss.existsSync(usual)) found = usual; }
+    if (found) CLAUDE = found;
+    return found || undefined;
+  }
+  try { const { stdout } = await run('which', ['claude']); const found = stdout.trim(); if (found) CLAUDE = found; return found || undefined; } catch { return undefined; }
 }

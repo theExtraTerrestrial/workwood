@@ -94,8 +94,8 @@ export function addSession(sb, project, owner, prompt, reply, ageSeconds = 0, ra
 }
 
 /** Starts the Workwood service inside the sandbox. */
-export async function startService(sb) {
-  const child = spawn(NODE, [path.join(HERE, '..', 'service', 'server.mjs')], { env: sb.env, stdio: ['ignore', 'pipe', 'pipe'] });
+export async function startService(sb, extra = {}) {
+  const child = spawn(NODE, [path.join(HERE, '..', 'service', 'server.mjs')], { env: { ...sb.env, ...extra }, stdio: ['ignore', 'pipe', 'pipe'] });
   let err = ''; child.stderr.on('data', d => { err += d; });
   const address = await new Promise((resolve, reject) => {
     let out = '';

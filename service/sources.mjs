@@ -221,6 +221,13 @@ export async function defaultsFor(cwd, profile, profiles) {
 // or a window that cannot tell where a file lives) is saved outside the project. Either way the message lists the
 // paths, so the agent reads a file when it needs to. Pictures are also sent as pictures. Old copies are cleared
 // at start-up.
+// The Windows window names files the Windows way; here they are reached through /mnt/<drive> or directly.
+export function fromWindows(p) {
+  let m = /^([A-Za-z]):[\\/](.*)$/.exec(p);
+  if (m) return `/mnt/${m[1].toLowerCase()}/${m[2].replace(/\\/g, '/')}`;
+  m = /^\\\\wsl(?:\.localhost|\$)\\[^\\]+\\(.*)$/i.exec(p);
+  return m ? '/' + m[1].replace(/\\/g, '/') : p;
+}
 export const ATTACH_ROOT = path.join(HOME, '.cache', 'workwood', 'attachments');
 const PICTURES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 export async function takeAttachments(text, list) {
@@ -230,7 +237,7 @@ export async function takeAttachments(text, list) {
   const images = [], files = [], dir = path.join(ATTACH_ROOT, randomUUID());
   for (const a of list) {
     if (a?.path) {                                          // already on disk: point at it
-      const p = String(a.path);
+      const p = fromWindows(String(a.path));
       let st; try { st = await fs.stat(p); } catch {}
       if (!path.isAbsolute(p) || !st?.isFile()) throw new Error(`${a.name || p} could not be found.`);
       files.push(p);

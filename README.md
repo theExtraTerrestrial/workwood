@@ -11,7 +11,15 @@ npm start         # the Workwood window (Electron, shown on Windows through WSL)
 npm run edge      # alternative: the same app in a Microsoft Edge app window
 ```
 
-Keep the terminal open while you use the app; closing it or pressing Ctrl+C quits.
+On Windows, run `npm run shortcut` once. It puts Workwood in the Start menu as
+a native Windows window: the window program (Electron for Windows, downloaded
+once into `%LOCALAPPDATA%\Workwood`) runs on Windows, and it starts the service
+in WSL and stops it again when the window closes. The service's output goes to
+`~/.cache/workwood/workwood.log`. Run `npm run shortcut` again after pulling
+changes to the window program; `npm run shortcut -- --remove` takes it all away.
+`npm start` still opens the Linux window through WSLg.
+
+When started from a terminal: keep the terminal open while you use the app; closing it or pressing Ctrl+C quits.
 The terminal prints a few "Failed to connect to the bus" lines at start-up under
 WSL; they are harmless.
 
@@ -85,7 +93,7 @@ On a fresh WSL install the Electron window needs GTK once:
   stopped because a sign-in lapsed has the same button on its card.
 - Dark and light theme (gear, bottom left).
 
-Not built yet: the Windows launcher and Windows-side project list, the Mac build.
+Not built yet: projects that live on the Windows side, the Mac build.
 
 ## Tests
 

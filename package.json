@@ -8,6 +8,7 @@
   "scripts": {
     "start": "electron .",
     "edge": "node shell/edge.mjs",
+    "shortcut": "node shell/windows-shortcut.mjs",
     "service": "node service/server.mjs",
     "test": "node --test tests/app.test.mjs"
   },

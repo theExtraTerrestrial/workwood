@@ -402,4 +402,6 @@ export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { address } = await start();
   console.log(`Workwood service running. Open: ${address}`);
+  // Started by the Windows window: live exactly as long as it does.
+  if (process.env.WORKWOOD_PARENT) { process.stdin.resume(); process.stdin.on('end', () => process.exit(0)); process.stdin.on('error', () => process.exit(0)); }
 }

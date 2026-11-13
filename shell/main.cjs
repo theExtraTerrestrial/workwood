@@ -12,7 +12,7 @@ async function open() {
   Menu.setApplicationMenu(null);
   win = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
-    title: 'Workwood', backgroundColor: '#18191c', autoHideMenuBar: true,
+    title: 'Workwood', backgroundColor: '#18191c', icon: path.join(__dirname, 'icon.png'), autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, spellcheck: true },
   });
   // The microphone, for dictation, and nothing else.

@@ -430,6 +430,10 @@ test('attachments: pictures go to the agent as pictures, other files are saved a
   assert.ok(readLog(sb).slice(at).some(l => l.startsWith('pictures=1')));
   assert.equal(fs.readdirSync(path.join(sb.home, '.cache', 'workwood', 'attachments')).length, copies);
   assert.equal((await svc.call(`sessions/${there.body.sessionId}/send`, { text: 'x', attachments: [{ name: 'gone.txt', path: path.join(sb.projects.alpha, 'gone.txt') }] })).status, 400);
+  // the Windows window names a file the Windows way
+  const viaWin = await svc.call(`sessions/${there.body.sessionId}/send`, { text: 'And this', attachments: [{ name: 'spec.txt', path: '\\\\wsl.localhost\\Ubuntu' + spec.replace(/\//g, '\\') }] });
+  assert.equal(viaWin.status, 200);
+  assert.ok(lastText(await idle(there.body.sessionId)).includes('- ' + spec));
   const old = addSession(sb, 'alpha', 'live', [{ type: 'text', text: 'Compare\n\nAttached files:\n- /x/y/spec.pdf\n- /x/y/data.csv' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: PNG } }], 'Compared.', 20);
   await until(async () => (await svc.call('sessions/' + old)).status === 200, 'the session to be listed', 15000);
   const o = (await session(old)).items.find(i => i.kind === 'user');

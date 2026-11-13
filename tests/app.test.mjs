@@ -444,6 +444,33 @@ test('dictation: a recording comes back as text, and only with the token', async
   assert.equal((await fetch(new URL('/api/voice', svc.address), { method: 'POST', body: new Float32Array(16000) })).status, 403);
 });
 
+test('settings: default profile and dictation language are kept; sign-in again runs Claudius in a terminal', async () => {
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian' });
+  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian' });
+  const kept = JSON.parse(fs.readFileSync(path.join(sb.home, '.config', 'workwood', 'state.json'), 'utf8'));
+  assert.deepEqual([kept.defaultProfile, kept.language, Array.isArray(kept.archived)], ['other', 'latvian', true]);
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null });
+  const a = (await svc.call('about')).body;
+  assert.deepEqual([a.version, a.claude, typeof a.speech.model], ['0.1.0', '2.1.322', 'string']);
+  assert.equal((await svc.call('profiles/nobody/login', {})).status, 404);
+  assert.equal((await svc.call('profiles/other/login', { cols: 80, rows: 20 })).status, 200);
+  const seen = await new Promise((resolve, reject) => {
+    let text = '', sent = false;
+    fetch(new URL('/api/profiles/other/login?token=test-token', svc.address)).then(async r => {
+      const dec = new TextDecoder();
+      for await (const chunk of r.body) {
+        text += dec.decode(chunk);
+        if (!sent && text.includes('paste the code')) { sent = true; svc.call('profiles/other/login/input', { data: 'good\r' }); }
+        if (text.includes('event: exit')) return resolve(text);
+      }
+      resolve(text);
+    }, reject);
+  });
+  assert.match(seen, /Signed in to other\./);
+  assert.match(seen, /event: exit\ndata: \{"code":0\}/);
+  assert.ok(readLog(sb).includes('claudius relogin other'));
+});
+
 test('creates a project folder, and refuses odd names', async () => {
   const ok = await svc.call('projects', { name: 'gamma' });
   assert.equal(ok.status, 200); assert.ok(fs.statSync(path.join(sb.home, 'workspace', 'gamma')).isDirectory());
@@ -871,6 +898,8 @@ ui('window: attach files with the paperclip, remove one, send; the message shows
   // where the window can tell where a file lives (the Electron window), the path is sent, not the contents
   const real = path.join(sb.projects.alpha, 'spec.txt'); fs.writeFileSync(real, 'the spec');
   await page.evaluate(p => { window.workwood = { pathFor: () => p }; }, real);
+  await page.waitForSelector('.ai:has-text("Echo: Use these for the header")');
+  await page.waitForSelector('#send[title="Send"]');             // the first turn is over; until then the button means Stop
   await page.setInputFiles('#filePick', [{ name: 'spec.txt', mimeType: 'text/plain', buffer: Buffer.from('not this') }]);
   await page.waitForSelector('#fchips .fch[data-tip]');
   await send('Follow the spec');
@@ -914,6 +943,37 @@ ui('window: the mic button dictates into the message box, after what was typed; 
   await page.waitForSelector('#voice', { state: 'hidden' });
   assert.match(await page.inputValue('#input'), /^dictated words/);
   await page.fill('#input', '');
+});
+
+ui('window: the settings dialog: tabs, default profile for new sessions, sign in again from the Profiles tab', async () => {
+  await page.click('#bGear'); await page.click('#gAll');
+  await page.waitForSelector('#spage .pgh:has-text("General")');
+  await page.selectOption('#sProf', 'other');
+  await page.selectOption('#sLang', 'german');
+  await until(async () => { const p = (await state()).prefs; return p.defaultProfile === 'other' && p.language === 'german'; }, 'the settings to be saved');
+  await page.click('#stabs [data-st="3"]');
+  await page.waitForSelector('#spage .srow:has-text("Claude Code") .sstate:has-text("2.1.322")');
+  await page.click('#stabs [data-st="2"]');
+  await page.waitForSelector('#spage .srow:has-text("/code-review")');
+  await page.click('#stabs [data-st="1"]');
+  await page.click('#spage [data-login="full"]');
+  await page.waitForSelector('#lgx .xterm');
+  await page.waitForFunction(() => document.querySelector('#lgx .xterm-rows')?.innerText.includes('paste the code'));
+  await page.keyboard.type('good'); await page.keyboard.press('Enter');
+  await page.waitForSelector('#lgNote:has-text("Signed in")');
+  await page.click('#lgBack');
+  await page.waitForSelector('#spage [data-login="full"]');
+  await page.click('#dClose');
+  assert.equal(await page.isVisible('#sdim'), false);
+  await page.click('#newBtn');
+  await page.waitForSelector('#pProfile:has-text("other")');           // new sessions now start on the chosen profile
+  await svc.call('settings', { defaultProfile: null, language: null });
+  // a turn that stopped on a lost sign-in offers the same sign-in, one click away
+  await startNew('AUTH please');
+  await page.click('#qcard [data-signin]');
+  await page.waitForSelector('#lgx .xterm');
+  assert.match(await page.innerText('.lgbar b'), /Sign in to live/);
+  await page.click('#dClose');
 });
 
 test('sandbox containment', () => {

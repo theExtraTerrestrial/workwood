@@ -91,6 +91,7 @@ const dur=ms=>{const s=Math.round(ms/1000);return s<60?s+'s':Math.floor(s/60)+'m
 const clock=ts=>{const d=new Date(ts);return isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})};
 const selSession=()=>A.sessions.find(s=>s.id===V.sel)||null;
 const profile=n=>A.profiles.find(p=>p.name===n);
+const startProfile=()=>A.profiles.find(p=>p.name===A.prefs?.defaultProfile)||globalProfile();
 const globalProfile=()=>A.profiles.find(p=>p.global)||A.profiles[0];
 function oops(msg){const o=$('oops');o.textContent=msg||'';o.hidden=!msg;if(msg)setTimeout(()=>{if(o.textContent===msg)o.hidden=true},8000)}
 
@@ -195,7 +196,7 @@ $('newBtn').onclick=()=>newSession();
 
 function newSession(){
   V.isNew=true;V.sel=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.dismissed=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
-  V.profile=globalProfile()?.name; // every new session starts on the global profile; the project stays as last chosen
+  V.profile=startProfile()?.name; // every new session starts on your default profile (the global one unless you chose another); the project stays as last chosen
   V.project=V.project&&A.projects.some(p=>p.cwd===V.project)?V.project:A.projects[0]?.cwd||null;
   render();$('input').focus();loadDefaults();
 }
@@ -513,6 +514,67 @@ $('mic').onclick=e=>{if(e.detail===0)R?stopVoice():startVoice()};   // from the 
 $('vCancel').onclick=()=>stopVoice(false);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&R&&!R.done){e.stopPropagation();stopVoice(false)}},true);
 
+/* ---------- settings dialog ---------- */
+const STABS=['General','Profiles','Skills','About'],LANGS=['english','latvian','russian','german','french','spanish','italian','polish','lithuanian','estonian','finnish','swedish','ukrainian'];
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+let stab=0,about=null,L=null; // L: the sign-in terminal on screen {name, term, es, ro}
+function dropLogin(close){if(!L)return;const l=L;L=null;l.es?.close();l.ro?.disconnect();l.term?.dispose();if(close)api(`profiles/${l.name}/login/close`,{}).catch(()=>{})}
+function renderSettings(){
+  if($('sdim').hidden)return;
+  $('stabs').innerHTML=STABS.map((t,i)=>`<button data-st="${i}" class="${i===stab?'on':''}">${t}</button>`).join('');
+  if(L&&stab===1)return;                                     // the sign-in terminal is showing; leave it be
+  if(stab===0&&$('spage').contains(document.activeElement)&&document.activeElement.tagName==='SELECT')return; // a menu is open
+  const cd=svg('chev-d'),pf=A.prefs||{},pg=$('spage');
+  if(stab===0)pg.innerHTML=`<div class="pgh">General</div>
+    <div class="srow"><span>Theme</span><button class="sval" data-set="theme">${root.dataset.theme==='dark'?'Dark':'Light'}${cd}</button></div>
+    <div class="srow"><span>Default profile<small>New sessions start on this profile.</small></span><select class="sval" id="sProf"><option value="">The global one (${esc(globalProfile()?.name||'')})</option>${A.profiles.map(p=>`<option value="${esc(p.name)}" ${pf.defaultProfile===p.name?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
+    <div class="srow"><span>Archived sessions<small>Show archived sessions in the sidebar.</small></span><i class="stog ${V.showArch?'on':''}" data-set="arch"></i></div>
+    <div class="srow"><span>Dictation language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>
+    <div class="srow"><span>Projects folder<small>Where the project menu looks first.</small></span><span class="sstate">${esc((A.workspace||'').replace(/^\/home\/[^/]+/,'~'))}</span></div>`;
+  else if(stab===1)pg.innerHTML=`<div class="pgh">Profiles</div>`+A.profiles.map(p=>`<div class="srow"><span>${esc(p.name)}${p.global?' <span class="pill">global</span>':''}<small>${[p.plan?cap(p.plan):null,p.h5!=null?`5h ${p.h5}%`:null,p.d7!=null?`7d ${p.d7}%`:null].filter(Boolean).join(' · ')}</small></span><button class="sval" data-login="${esc(p.name)}">Sign in again</button></div>`).join('')
+    +`<div class="cap2" style="padding:10px 8px">Profiles come from Claudius. Add or remove them there. Signing in again keeps the profile and its history.</div>`;
+  else if(stab===2){needSkills();const all=skillList();pg.innerHTML=`<div class="pgh">Skills</div>`+(!all?'<div class="cap2">Loading skills…</div>':V.sk.err?`<div class="cap2">${esc(V.sk.err)}</div>`:all.map(s=>`<div class="srow" data-tip="${esc(s.about)}"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">/${esc(s.name)}</span><span class="sstate">${s.from}</span></div>`).join('')+`<div class="cap2" style="padding:10px 8px">As Claude Code reports them for ${V.isNew?'a new session here':'the open session'}.</div>`)}
+  else{pg.innerHTML=`<div class="pgh">About</div>`+(about?`<div class="srow"><span>Workwood</span><span class="sstate">${esc(about.version)}</span></div>
+    <div class="srow"><span>Claude Code<small>Runs your sessions.</small></span><span class="sstate ${about.claude?'':'bad'}">${esc(about.claude||'Not found')}</span></div>
+    <div class="srow"><span>Speech model<small>${esc(about.speech.model)}, on this computer.</small></span><span class="sstate ${about.speech.state==='failed'?'bad':''}">${{idle:'Not loaded yet',loading:'Loading…',ready:'Ready',failed:'Could not be loaded'}[about.speech.state]}</span></div>
+    <div class="srow"><span>Service<small>Node ${esc(about.node)}</small></span><span class="sstate">Running</span></div>`:'<div class="cap2">Loading…</div>');
+    if(!about)api('about').then(a=>{about=a;renderSettings()}).catch(()=>{})}
+}
+function openSettings(tab=0){closePops();stab=tab;about=null;$('sdim').hidden=false;renderSettings()}
+function closeSettings(){dropLogin(true);$('sdim').hidden=true}
+async function startLogin(name){
+  $('spage').innerHTML=`<div class="lgbar"><b>Sign in to ${esc(name)}</b><span id="lgNote">Follow the steps below. A browser page may open.</span><button class="sval" id="lgBack">Back</button></div><div class="lgx" id="lgx"></div>`;
+  const term=new Terminal({fontFamily:'"Cascadia Code","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace',fontSize:12.5,cursorBlink:true,theme:termTheme()});
+  const fit=new FitAddon.FitAddon();term.loadAddon(fit);term.open($('lgx'));try{fit.fit()}catch{}
+  const me=L={name,term};const say=t=>{if(L===me)$('lgNote').textContent=t};
+  try{await api(`profiles/${name}/login`,{cols:term.cols,rows:term.rows})}catch(e){return say(e.message)}
+  if(L!==me)return;
+  const es=me.es=new EventSource(`/api/profiles/${name}/login?token=${TOKEN}`);
+  es.addEventListener('data',e=>term.write(JSON.parse(e.data)));
+  es.addEventListener('exit',e=>{es.close();say(JSON.parse(e.data).code===0?'Signed in. You can go back.':'The sign-in did not finish.')});
+  let q=Promise.resolve();
+  term.onData(d=>{q=q.then(()=>api(`profiles/${name}/login/input`,{data:d}).catch(()=>{}))});
+  term.onResize(({cols,rows})=>api(`profiles/${name}/login/resize`,{cols,rows}).catch(()=>{}));
+  term.attachCustomKeyEventHandler(e=>{if(e.type==='keydown'&&e.ctrlKey&&e.shiftKey&&e.code==='KeyC'){navigator.clipboard?.writeText(term.getSelection());return false}return true});
+  me.ro=new ResizeObserver(()=>{try{fit.fit()}catch{}});me.ro.observe($('lgx'));term.focus();
+}
+$('gAll').onclick=()=>openSettings(0);
+$('dClose').onclick=closeSettings;
+$('sdim').addEventListener('pointerdown',e=>{if(e.target===$('sdim'))closeSettings()});
+$('stabs').onclick=e=>{const b=e.target.closest('[data-st]');if(!b)return;dropLogin(true);stab=+b.dataset.st;renderSettings()};
+$('spage').onclick=e=>{
+  const s=e.target.closest('[data-set]'),l=e.target.closest('[data-login]');
+  if(e.target.closest('#lgBack')){dropLogin(true);renderSettings();return}
+  if(l){startLogin(l.dataset.login);return}
+  if(s?.dataset.set==='theme'){setTheme(root.dataset.theme==='dark'?'light':'dark');renderSettings()}
+  if(s?.dataset.set==='arch'){setArch(!V.showArch);const cur=selSession();!V.showArch&&cur?.archived?leave(cur.id):render();renderSettings()}
+};
+$('spage').onchange=async e=>{
+  try{if(e.target.id==='sProf')A.prefs=await api('settings',{defaultProfile:e.target.value||null});
+    if(e.target.id==='sLang')A.prefs=await api('settings',{language:e.target.value})}catch(err){oops(err.message)}
+  e.target.blur();
+};
+
 /* ---------- hover notes: a fixed-width box that always stays inside the window ---------- */
 let tipFor=null,tipTimer;
 function hideTip(){clearTimeout(tipTimer);tipFor=null;$('tip').hidden=true}
@@ -615,14 +677,15 @@ function renderCard(){
 function stoppedCard(st){
   const cur=V.run.profile,others=A.profiles.filter(p=>p.name!==cur);
   const head={limit:['Limit reached',`Limit reached on ${cur}`],auth:['Sign-in needed',`${cur} is signed out`]}[st.reason]||['Stopped','The turn stopped'];
-  const why=st.reason==='auth'?`Its sign-in could not be renewed. Run <code>claudius relogin ${esc(cur)}</code> in a terminal, then continue. Nothing is lost.`:esc(st.text||'');
+  const why=st.reason==='auth'?`Its sign-in could not be renewed. Sign in again, then continue. Nothing is lost.`:esc(st.text||'');
   return `<div class="steps2"><span class="qhd">${head[0]}</span></div><div class="qq">${esc(head[1])}</div><div class="why">${why}</div>
-    <div class="qrow">${st.reason==='limit'?'':`<button class="qbtn pri" data-go="${esc(cur)}">${st.reason==='auth'?'I have signed in, continue':'Try again'}</button>`}${others.map((p,i)=>`<button class="qbtn ${st.reason==='limit'&&!i?'pri':''} ${p.h5>=100?'off':''}" data-go="${esc(p.name)}">Continue on ${esc(p.name)}${p.h5!=null?`<small>${p.h5>=100?'5h full':p.h5+'% used'}</small>`:''}</button>`).join('')}<button class="qbtn" data-act="dismiss">Dismiss</button></div>`;
+    <div class="qrow">${st.reason==='auth'?`<button class="qbtn pri" data-signin="${esc(cur)}">Sign in again</button>`:''}${st.reason==='limit'?'':`<button class="qbtn ${st.reason==='auth'?'':'pri'}" data-go="${esc(cur)}">${st.reason==='auth'?'I have signed in, continue':'Try again'}</button>`}${others.map((p,i)=>`<button class="qbtn ${st.reason==='limit'&&!i?'pri':''} ${p.h5>=100?'off':''}" data-go="${esc(p.name)}">Continue on ${esc(p.name)}${p.h5!=null?`<small>${p.h5>=100?'5h full':p.h5+'% used'}</small>`:''}</button>`).join('')}<button class="qbtn" data-act="dismiss">Dismiss</button></div>`;
 }
 $('qcard').addEventListener('input',e=>{if(e.target.id==='qText')V.q.typed[V.q.step]=e.target.value});
 $('qcard').addEventListener('keydown',e=>{if(e.target.id==='qText'&&e.key==='Enter'){e.preventDefault();const b=$('qcard').querySelector('[data-act=next],[data-act=send]')||$('qcard').querySelector('[data-act=deny]');b?.click()}});
 $('qcard').onclick=async e=>{
   const p=V.run?.pending,o=e.target.closest('[data-opt]'),a=e.target.closest('[data-act]'),go=e.target.closest('[data-go]');
+  const si=e.target.closest('[data-signin]');if(si){openSettings(1);startLogin(si.dataset.signin);return}
   if(go){sendText('Continue where you left off.',go.dataset.go);return}
   if(a?.dataset.act==='dismiss'){V.dismissed=V.run.startedAt;render();return}
   if(a?.dataset.act==='term'){api(`sessions/${V.sel}/stop`,{}).catch(err=>oops(err.message));setView(V.sel,'term');return}
@@ -686,7 +749,7 @@ $('pEffort').onclick=toggle('pEffort','mEffort');
 // Menus close when you press anywhere outside them. (Listening for a click instead let a second click event, which some
 // windows deliver for one press, close a menu the moment it opened.)
 document.addEventListener('pointerdown',e=>{if(!e.target.closest('.pop,.fmenu,.menu,.pick,#bGear,#moreBtn,[data-dots]'))closePops()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePops();$('dim').hidden=true}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePops();$('dim').hidden=true;if(!$('sdim').hidden&&!L)closeSettings()}});
 $('mProject').addEventListener('input',e=>{if(e.target.id==='pFind'){V.find=e.target.value;const at=e.target.selectionStart;renderMenus();const i=$('pFind');i.focus();i.setSelectionRange(at,at)}});
 $('mProject').addEventListener('keydown',e=>{if(e.target.id==='mkName'&&e.key==='Enter')$('mProject').querySelector('[data-create]').click()});
 $('mProject').onclick=async e=>{
@@ -758,8 +821,8 @@ function connect(){
     Object.assign(A,JSON.parse(e.data));
     if(first&&A.ready){first=false;const s=A.sessions.find(x=>x.id===location.hash.slice(1))||A.sessions.find(shown);if(s&&location.hash!=='#new')openSession(s.id);else newSession();return}
     if(!V.isNew&&V.sel&&A.fresh&&!V.loading&&!A.sessions.some(x=>x.id===V.sel)){leave(V.sel);return} // deleted somewhere else
-    if(V.isNew){if(!V.profile)V.profile=globalProfile()?.name;if(!V.project)V.project=A.projects[0]?.cwd||null}
-    render();
+    if(V.isNew){if(!V.profile)V.profile=startProfile()?.name;if(!V.project)V.project=A.projects[0]?.cwd||null}
+    render();renderSettings();
   });
   es.addEventListener('run',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;V.run=d.run;if(d.run?.context)V.context=d.run.context;if(d.run?.model)V.used.model=d.run.model;if(d.run?.effort)V.used.effort=d.run.effort;checkSoon();changesSoon();renderThread();renderCard();renderComposer();renderTerm();toBottom()});
   es.addEventListener('item',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const i=V.items.findIndex(x=>x.n===d.item.n);if(i>=0)V.items[i]=d.item;else V.items.push(d.item);if(d.item.kind==='work'){addWork(d.item.files);renderPanel()}checkSoon();changesSoon();renderThread();toBottom()});

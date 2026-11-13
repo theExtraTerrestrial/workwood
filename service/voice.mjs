@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const MODEL = process.env.WORKWOOD_STT_MODEL || 'onnx-community/whisper-small';
+export const MODEL = process.env.WORKWOOD_STT_MODEL || 'onnx-community/whisper-small';
 export const status = { state: 'idle', progress: 0, error: null };   // idle | loading | ready | failed
 let engine = null, queue = Promise.resolve(), busy = 0;
 

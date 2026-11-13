@@ -76,12 +76,16 @@ On a fresh WSL install the Electron window needs GTK once:
   sent until you press send. Escape discards the recording. Speech is turned
   into text on this machine by a Whisper model (about 240 MB, downloaded once on
   first use into `~/.cache/workwood/models`); no audio leaves it. English by
-  default: set `WORKWOOD_STT_LANGUAGE` (for example `latvian`) for another
-  language, or `WORKWOOD_STT_MODEL` for another model.
+  default: pick another language in Settings; `WORKWOOD_STT_MODEL` names another model.
+- Settings (gear, "All settings…"): theme, the profile new sessions start on,
+  archived sessions, the dictation language, your profiles with their usage,
+  the skills list, and versions.
+- Sign in again from the app: Settings, Profiles, "Sign in again" runs
+  `claudius relogin <profile>` in a terminal inside the dialog. A turn that
+  stopped because a sign-in lapsed has the same button on its card.
 - Dark and light theme (gear, bottom left).
 
-Not built yet: settings dialog,
-sign-in from the app, the Windows-side project list, the Mac build.
+Not built yet: the Windows launcher and Windows-side project list, the Mac build.
 
 ## Tests
 
@@ -89,7 +93,7 @@ sign-in from the app, the Windows-side project list, the Mac build.
 npm test
 ```
 
-About 45 seconds, 61 tests. They run the real service and the real `claudius`
+About 50 seconds, 63 tests. They run the real service and the real `claudius`
 inside a throwaway home folder (the same idea as Claudius's own tests), with a
 scripted stand-in for `claude` (`tests/fake-claude.mjs`). No real account is
 used and nothing is sent to Anthropic. Half of the tests drive the window with

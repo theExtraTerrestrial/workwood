@@ -53,7 +53,7 @@ export async function loadProfiles() {
     let account = null;
     try { account = JSON.parse(await fs.readFile(path.join(PROFILE_ROOT, p.name, '.claude.json'), 'utf8')).oauthAccount?.accountUuid || null; } catch {}
     out.push({
-      name: p.name, global: !!p.active, account,
+      name: p.name, global: !!p.active, account, plan: p.sub || null, lapsed: !!p.expired,
       h5: p.r5 && p.r5 < now ? 0 : (p.u5 ?? null), d7: p.r7 && p.r7 < now ? 0 : (p.u7 ?? null),
       r5: p.r5 && p.r5 > now ? p.r5 : null, r7: p.r7 && p.r7 > now ? p.r7 : null,
     });
@@ -277,6 +277,9 @@ export function labelSkills(list, cwd) {
   return out.sort((a, b) => order.indexOf(a.from) - order.indexOf(b.from) || (a.name < b.name ? -1 : 1));
 }
 
+export async function claudeVersion(file) {
+  try { const { stdout } = await run(file || 'claude', ['--version'], { timeout: 10000, env: cleanEnv() }); return stdout.trim().split(' ')[0] || null; } catch { return null; }
+}
 export async function claudePath() {
   try { const { stdout } = await run('which', ['claude']); return stdout.trim() || undefined; } catch { return undefined; }
 }

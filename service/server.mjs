@@ -4,6 +4,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import fss from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -32,7 +33,9 @@ const VENDOR = { 'xterm.js': '@xterm/xterm/lib/xterm.js', 'xterm.css': '@xterm/x
 const state = { profiles: [], sessions: [], projects: [], live: new Map(), next: null, claude: undefined, ready: false, fresh: false };
 const cached = src.readCache();
 if (cached?.profiles?.length) Object.assign(state, { profiles: cached.profiles, sessions: cached.sessions || [], projects: cached.projects || [], next: cached.next || null, ready: true });
-const archived = new Set(src.readKept().archived || []);
+const kept = src.readKept(), archived = new Set(kept.archived || []);
+const prefs = { defaultProfile: kept.defaultProfile || null, language: kept.language || null };   // your choices in the settings dialog
+const keep = () => src.writeKept({ archived: [...archived], ...prefs });
 const renamed = new Map();   // session -> [when, name], for a list that was being read while you renamed
 const deleted = new Set();   // gone, but a list read a moment earlier may still name them
 const clients = new Set();
@@ -77,7 +80,7 @@ const transcriptFile = (cwd, id) => path.join(src.PROJECTS_ROOT, cwd.replace(/[^
 
 const snapshot = () => ({
   profiles: state.profiles.map(({ account, ...p }) => p), next: state.next, projects: state.projects,
-  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, workspace: src.WORKSPACE, preview: previewBase,
+  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, prefs, workspace: src.WORKSPACE, preview: previewBase,
 });
 let lastSent = '';
 function pushState() { const s = JSON.stringify(snapshot()); if (s !== lastSent) { lastSent = s; emit('state', JSON.parse(s)); } }
@@ -125,6 +128,15 @@ async function api(req, res, url) {
     return;
   }
   if (req.method === 'GET' && parts[0] === 'defaults') return send(res, 200, await src.defaultsFor(url.searchParams.get('cwd'), url.searchParams.get('profile'), state.profiles));
+  if (req.method === 'GET' && parts[0] === 'about') {
+    return send(res, 200, { version: lib('../package.json').version, claude: await src.claudeVersion(state.claude), node: process.version, speech: { model: voice.MODEL, ...voice.status } });
+  }
+  if (req.method === 'GET' && parts[0] === 'profiles' && parts[2] === 'login') {
+    if (!terms.has('login:' + parts[1])) return send(res, 404, { error: 'No sign-in is under way for this profile.' });
+    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+    attach('login:' + parts[1], res);
+    return;
+  }
   if (req.method === 'GET' && parts[0] === 'skills') {
     const cwd = url.searchParams.get('cwd'), prof = state.profiles.find(p => p.name === url.searchParams.get('profile')) || state.profiles.find(p => p.global);
     if (!state.projects.some(p => p.cwd === cwd) && !state.sessions.some(s => s.cwd === cwd)) return send(res, 400, { error: 'Pick a project first.' });
@@ -181,12 +193,27 @@ async function api(req, res, url) {
     const chunks = []; let n = 0;
     for await (const c of req) { n += c.length; if (n > 16000 * 4 * 60 * 20) return send(res, 413, { error: 'That recording is too long.' }); chunks.push(c); }
     const buf = Buffer.concat(chunks), audio = new Float32Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length - buf.length % 4));
-    try { return send(res, 200, { text: audio.length < 1600 ? '' : await voice.transcribe(audio, url.searchParams.get('language') || undefined) }); }
+    try { return send(res, 200, { text: audio.length < 1600 ? '' : await voice.transcribe(audio, prefs.language || undefined) }); }
     catch (e) { return send(res, 500, { error: 'Dictation did not work: ' + String(e.message).split('\n')[0] }); }
   }
   if (req.method !== 'POST') return send(res, 404, { error: 'Not found.' });
   const b = await body(req);
 
+  if (parts[0] === 'settings') {
+    if ('defaultProfile' in b) prefs.defaultProfile = state.profiles.some(p => p.name === b.defaultProfile) ? b.defaultProfile : null;
+    if ('language' in b) prefs.language = /^[a-z]{3,20}$/.test(b.language || '') ? b.language : null;
+    await keep(); pushState();
+    return send(res, 200, prefs);
+  }
+  if (parts[0] === 'profiles' && parts[2] === 'login') {   // sign in again: Claudius's own sign-in, in a terminal shown in the settings dialog
+    const p = state.profiles.find(x => x.name === parts[1]), key = 'login:' + parts[1];
+    if (!p) return send(res, 404, { error: 'No such profile.' });
+    if (parts[3] === 'input') return send(res, typeInto(key, b.data ?? '') ? 200 : 404, {});
+    if (parts[3] === 'resize') return send(res, resize(key, b.cols, b.rows) ? 200 : 404, {});
+    if (parts[3] === 'close') { await closeTerm(key); return send(res, 200, { ok: true }); }
+    if (!terms.has(key)) openTerm({ sessionId: key, cwd: os.homedir(), file: 'claudius', args: ['relogin', p.name], env: src.cleanEnv(), cols: b.cols, rows: b.rows, onChange: () => setTimeout(refreshAll, 500) });
+    return send(res, 200, { ok: true });
+  }
   if (parts[0] === 'sessions' && !parts[1]) {            // start a new session
     if (!b.text?.trim() && !b.attachments?.length) return send(res, 400, { error: 'Type a message first.' });
     const proj = state.projects.find(p => p.cwd === b.cwd);
@@ -244,7 +271,7 @@ async function api(req, res, url) {
     const run = runs.get(s.id), busy = run && (run.status === 'working' || run.status === 'waiting'), live = state.live.get(s.id);
     if (parts[2] === 'archive') {                         // only hidden here; the history is untouched
       b.on === false ? archived.delete(s.id) : archived.add(s.id);
-      await src.writeKept({ archived: [...archived] });
+      await keep();
     } else if (parts[2] === 'rename') {
       const title = String(b.title || '').replace(/\s+/g, ' ').trim().slice(0, 120);
       if (!title) return send(res, 400, { error: 'Type a name first.' });
@@ -265,7 +292,7 @@ async function api(req, res, url) {
       } else if (live) return send(res, 409, { error: 'This session is open in a terminal. Close it there before deleting it.' });
       await src.deleteSession(s.file, s.id);
       deleted.add(s.id); runs.delete(s.id); workPaths.delete(s.id); dirsBySession.delete(s.id);
-      if (archived.delete(s.id)) await src.writeKept({ archived: [...archived] });
+      if (archived.delete(s.id)) await keep();
       state.sessions = state.sessions.filter(x => x.id !== s.id);
       state.projects = await src.loadProjects(state.sessions);
       src.writeCache({ profiles: state.profiles, sessions: state.sessions, projects: state.projects, next: state.next });

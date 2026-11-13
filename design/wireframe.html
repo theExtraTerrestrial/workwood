@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent manager — wireframe</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#eceae6;color:#2b2b2b;font:12px/1.4 system-ui,"Segoe UI",sans-serif}
+  .top{display:flex;gap:6px;align-items:center;padding:10px 16px;background:#fff;border-bottom:1.5px solid #999;position:sticky;top:0;z-index:5}
+  .top b{margin-right:10px;font-size:13px}
+  .top button{font:inherit;padding:5px 12px;border:1.5px solid #999;background:#fff;border-radius:4px;cursor:pointer}
+  .top button.on{background:#2b2b2b;color:#fff;border-color:#2b2b2b}
+  .wrap{display:flex;gap:16px;padding:16px;align-items:flex-start}
+  .frame{flex:1;min-width:820px;height:640px;background:#fff;border:2px solid #555;display:flex;flex-direction:column}
+  .legend{width:310px;flex:none;background:#fff;border:1.5px solid #999;padding:12px 14px}
+  .legend h3{margin:12px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#777}
+  .legend h3:first-child{margin-top:0}
+  .legend div{display:flex;gap:8px;margin:5px 0}
+  .legend span b{font-weight:600}
+
+  .n{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#2563eb;color:#fff;font:600 10px/1 system-ui;flex:none;vertical-align:middle}
+  .ic{width:24px;height:24px;border:1.5px solid #888;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;flex:none;background:#fff}
+  .ic.on{background:#ddd;border-color:#333}
+  .w{border:1.5px solid #888;border-radius:3px;padding:3px 7px;background:#fff;display:inline-flex;gap:5px;align-items:center;white-space:nowrap}
+  .w.on{background:#ddd}
+  .row{display:flex;gap:6px;align-items:center}
+  .grow{flex:1;min-width:0}
+  .muted{color:#888}
+  .lines i{display:block;height:7px;background:#d5d5d5;margin:5px 0;border-radius:2px}
+  .x{background:repeating-linear-gradient(45deg,#f1f1f1,#f1f1f1 8px,#e3e3e3 8px,#e3e3e3 16px)}
+
+  .body{flex:1;display:flex;min-height:0}
+  .side{width:220px;flex:none;border-right:1.5px solid #888;padding:10px;display:flex;flex-direction:column;gap:6px}
+  .grp{font:600 10px/1 system-ui;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-top:10px;display:flex;gap:6px;align-items:center}
+  .sess{padding:7px 8px;border:1.5px solid #bbb;border-radius:6px;display:flex;gap:8px;align-items:center;background:#fff}
+  .sess.sel{background:#e6e6e6;border-color:#333;border-width:2px}
+  .sess .t{font-weight:600;display:flex;gap:6px;align-items:center}
+  .sess .m{display:flex;gap:6px;align-items:center;margin-top:3px;color:#888;font-size:11px}
+  .sess .tag{border:1.5px solid #bbb;border-radius:8px;padding:0 6px;color:#666}
+  .st{width:26px;height:26px;border-radius:6px;border:1.5px solid #888;flex:none;display:flex;align-items:center;justify-content:center;font-size:11px}
+  .st.f{background:#555;color:#fff;border-color:#555}
+  .panel.full{width:auto;flex:1;border-left:0}
+
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .head{border-bottom:1.5px solid #888;padding:8px 10px;display:flex;gap:7px;align-items:center;flex:none}
+  .split{flex:1;display:flex;min-height:0}
+  .conv{flex:1;min-width:0;display:flex;flex-direction:column}
+  .scroll{flex:1;padding:14px;display:flex;flex-direction:column;gap:11px;overflow:hidden}
+  .msg.me{background:#f1f1f1;border:1.5px solid #bbb;border-radius:3px;padding:6px 8px;width:76%;align-self:flex-end}
+  .cards{display:flex;gap:6px;margin-top:7px;align-items:center}
+  .card{width:84px;height:58px;border:1.5px solid #888;display:flex;align-items:flex-end;padding:3px;font-size:10px}
+  .ask{border:1.5px solid #333;border-radius:3px;padding:7px 9px}
+  .comp{padding:10px 14px 14px;flex:none}
+  .input{border:1.5px solid #888;border-radius:5px;padding:7px 8px;display:flex;flex-direction:column;gap:10px}
+  .panel{width:42%;flex:none;border-left:1.5px solid #888;display:flex;flex-direction:column}
+  .ptabs{border-bottom:1.5px solid #888;padding:7px 8px;display:flex;gap:5px;align-items:center}
+  .stage{flex:1;margin:8px;border:1.5px solid #888;display:flex;align-items:center;justify-content:center;color:#888}
+  .files{padding:8px;border-bottom:1.5px dashed #aaa;display:flex;flex-direction:column;gap:4px}
+  .diff{flex:1;margin:8px;border:1.5px solid #888;padding:8px;font-family:ui-monospace,Consolas,monospace;color:#777}
+  .term{flex:1;margin:12px;border:1.5px solid #333;background:#f4f4f4;padding:10px;font-family:ui-monospace,Consolas,monospace;color:#555}
+  .empty{flex:1;display:flex;align-items:center;justify-content:center;color:#aaa}
+</style>
+</head>
+<body>
+<div class="top">
+  <b>Wireframe</b>
+  <button data-s="chat" class="on">1 · Chat</button>
+  <button data-s="full">2 · Preview full width</button>
+  <button data-s="term">3 · Terminal</button>
+  <button data-s="changes">4 · Changes</button>
+  <button data-s="new">5 · New session</button>
+</div>
+<div class="wrap"><div class="frame" id="frame"></div><div class="legend" id="legend"></div></div>
+
+<script>
+const n=i=>`<b class="n">${i}</b>`;
+
+const side=(isNew)=>`<div class="side">
+  <div class="row"><b class="grow">App name</b><span class="ic">+</span>${n(1)}</div>
+  <div class="grp">Global ${n(2)}</div>
+  ${isNew?`<div class="sess sel"><span class="st">+</span><span class="grow"><span class="t">New session ${n(16)}</span></span></div>`:''}
+  <div class="sess ${isNew?'':'sel'}"><span class="st f">●</span><span class="grow"><span class="t">Session title ${n(3)}</span><span class="m"><span class="tag">project</span><span class="grow"></span>12m</span></span></div>
+  <div class="sess "><span class="st f">?</span><span class="grow"><span class="t">Session title</span><span class="m"><span class="tag">project</span><span class="grow"></span>1h</span></span></div>
+  <div class="sess "><span class="st "></span><span class="grow"><span class="t">Session title</span><span class="m"><span class="tag">project</span><span class="grow"></span>yesterday</span></span></div>
+  <div class="grp">Profile 2</div>
+  <div class="sess "><span class="st f">●</span><span class="grow"><span class="t">Session title</span><span class="m"><span class="tag">project</span><span class="grow"></span>3m</span></span></div>
+  <div class="sess "><span class="st "></span><span class="grow"><span class="t">Session title</span><span class="m"><span class="tag">project</span><span class="grow"></span>yesterday</span></span></div>
+  <div class="grp">Profile 3</div>
+  <div class="sess "><span class="st "></span><span class="grow"><span class="t">Session title</span><span class="m"><span class="tag">project</span><span class="grow"></span>last week</span></span></div>
+</div>`;
+
+const head=(v)=>`<div class="head">
+  <b>Session title</b>${n(4)}<span class="muted">project · branch</span>${n(5)}
+  <span class="grow"></span>
+  <span class="row" style="gap:0"><span class="ic ${v=='chat'?'on':''}">☰</span><span class="ic ${v=='term'?'on':''}" style="margin-left:-1.5px">&gt;_</span></span>${n(6)}
+  <span class="ic ${v=='changes'?'on':''}">±</span>${n(7)}
+  <span class="ic">&lt;/&gt;</span>${n(8)}
+</div>`;
+
+const convo=`<div class="scroll">
+  <div class="msg me">Your message ${n(9)}<div class="lines"><i></i><i style="width:60%"></i></div></div>
+  <div>Agent reply ${n(10)}<div class="lines"><i></i><i style="width:85%"></i><i style="width:40%"></i></div>
+    <span class="muted">▸ read 2 files, wrote 3</span>
+    <div class="cards"><div class="card x">HTML</div><div class="card x">HTML</div><div class="card x">▶ video</div>${n(11)}</div>
+  </div>
+  <div class="ask">Agent asks a question ${n(12)}<div class="row" style="margin-top:6px"><span class="w on">Option 1</span><span class="w">Option 2</span></div></div>
+</div>`;
+
+const composer=(isNew)=>`<div class="comp"><div class="input">
+  <span class="muted">${isNew?'What should the agent do?':'Message the agent…'} ${n(13)}</span>
+  <div class="row"><span class="ic">＋</span>${n(14)}
+    ${isNew?`<span class="w">project ▾</span>${n(17)}<span class="w">global ▾</span>${n(18)}`:''}
+    <span class="grow"></span><span class="ic on">↑</span>${n(15)}</div>
+</div></div>`;
+
+const preview=(full)=>`<div class="panel ${full?'full':''}">
+  <div class="ptabs"><span class="w on">file-a.html</span><span class="w">file-b.html</span><span class="w">clip.webm</span>${n(19)}<span class="w">+4 ▾</span>${n(24)}<span class="grow"></span>
+    <span class="ic ${full?'on':''}">${full?'⤡':'⤢'}</span>${n(25)}<span class="ic">↗</span>${n(26)}<span class="ic">✕</span>${n(20)}</div>
+  <div class="stage x">rendered HTML / image / video ${n(21)}</div>
+</div>`;
+
+const changes=`<div class="panel">
+  <div class="ptabs"><b>7 changed files</b><span class="grow"></span><span class="ic">✕</span></div>
+  <div class="files">${n(22)}<span class="w on">app/views/checkout/payment.html.erb</span><span class="w">app/models/order.rb</span><span class="w">spec/models/order_spec.rb</span><span class="muted">…</span></div>
+  <div class="diff">${n(23)}<br>- removed line<br>+ added line<br>&nbsp; unchanged line</div>
+</div>`;
+
+const shell=(isNew,inner)=>`<div class="body">${side(isNew)}<div class="main">${inner}</div></div>`;
+
+const base=[
+  ['Sidebar'],
+  [1,'<b>New session.</b> Icon only. Adds a new item and opens it empty (screen 5).'],
+  [2,'<b>Profile heading.</b> Sessions are listed under the Claudius profile they run on. Plain label, no controls.'],
+  [3,'<b>Session card.</b> A status badge on the left (working / waiting for you / idle), the title, a project tag and age. The selected one is filled. Includes sessions started outside the app.'],
+  ['Session header'],
+  [4,'<b>Title.</b> Click to rename.'],
+  [5,'<b>Project · branch.</b> Plain text.'],
+  [6,'<b>Chat / Terminal.</b> Two icons; switches the view of the same session.'],
+  [7,'<b>Changes.</b> Icon; opens the changed files in the side panel (screen 4).'],
+  [8,'<b>Open in VS Code.</b> Icon; opens this session\'s folder there.'],
+];
+const convL=[
+  ['Conversation'],
+  [9,'<b>Your message.</b>'],
+  [10,'<b>Agent reply</b> with a one-line summary of what it did; click to expand.'],
+  [11,'<b>Work cards.</b> One per HTML, image or video the agent produced. Click opens it in the side panel.'],
+  [12,'<b>Question from the agent.</b> Answer with a click or by typing.'],
+  ['Composer'],
+  [13,'<b>Message box.</b>'],
+  [14,'<b>Attach.</b> Icon.'],
+  [15,'<b>Send.</b> Icon; becomes Stop while the agent works.'],
+];
+
+const prevL=[
+  ['Side panel (only when something is open)'],
+  [19,'<b>Open items</b> as tabs. Only the most recent few are shown; tabs never wrap or scroll.'],
+  [24,'<b>Everything else.</b> A menu listing all other work from this session, newest first. Picking one swaps it into the tabs.'],
+  [25,'<b>Full width.</b> Icon; hides the conversation so the work fills the area (screen 2).'],
+  [26,'<b>Open in browser.</b> Icon.'],
+  [20,'<b>Close</b> the panel; the conversation takes the full width.'],
+  [21,'<b>The work itself.</b> Reloads when the file changes.'],
+];
+
+const screens={
+  chat:{
+    html:shell(false,head('chat')+`<div class="split"><div class="conv">${convo}${composer()}</div>${preview(false)}</div>`),
+    legend:[...base,...convL,
+      ['Side panel (only when something is open)'],
+      ...prevL
+    ]
+  },
+  full:{
+    html:shell(false,head('chat')+`<div class="split">${preview(true)}</div>`),
+    legend:[...base,
+      ['Preview at full width'],
+      ['','The conversation is hidden and the work takes the whole area next to the sidebar. The same icon (25) brings the conversation back.'],
+      ...prevL.slice(1)
+    ]
+  },
+  term:{
+    html:shell(false,head('term')+`<div class="split"><div class="conv"><div class="term">Real Claude Code terminal for this session<br><br>&gt; _</div></div></div>`),
+    legend:[...base,
+      ['Terminal view'],
+      ['','The real Claude Code terminal fills the area. No composer; you type in the terminal. Switching back to chat (6) continues the same session.'],
+    ]
+  },
+  changes:{
+    html:shell(false,head('changes')+`<div class="split"><div class="conv">${convo}${composer()}</div>${changes}</div>`),
+    legend:[...base,
+      ['Changes (uses the same side panel)'],
+      [22,'<b>Changed files</b> in this session\'s folder.'],
+      [23,'<b>Read-only diff</b> of the selected file. For anything more, use Open in VS Code (8).'],
+    ]
+  },
+  new:{
+    html:shell(true,`<div class="head"><b>New session</b><span class="grow"></span></div><div class="split"><div class="conv"><div class="empty">empty conversation</div>${composer(true)}</div></div>`),
+    legend:[
+      ['New session — no form'],
+      [16,'<b>New item</b> appears in the sidebar and is selected. It gets a real title after your first message.'],
+      [13,'<b>Message box</b> is focused. Type and send; that starts the session.'],
+      [17,'<b>Project.</b> Preselected to the last one you used; change only if needed.'],
+      [18,'<b>Profile.</b> Global unless you change it.'],
+      ['','After the first message, 17 and 18 disappear and the header shows the normal controls.'],
+    ]
+  }
+};
+
+function show(k){
+  document.getElementById('frame').innerHTML=screens[k].html;
+  document.getElementById('legend').innerHTML=screens[k].legend.map(r=>r.length==1?`<h3>${r[0]}</h3>`:`<div>${r[0]!==''?n(r[0]):''}<span>${r[1]}</span></div>`).join('');
+  document.querySelectorAll('.top button').forEach(b=>b.classList.toggle('on',b.dataset.s==k));
+}
+document.querySelectorAll('.top button').forEach(b=>b.onclick=()=>show(b.dataset.s));
+show('chat');
+</script>
+</body>
+</html>

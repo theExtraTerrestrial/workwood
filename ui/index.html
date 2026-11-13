@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Workwood</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body data-token="__TOKEN__">
+<div class="app">
+  <aside class="side">
+    <div class="side-head"><span>Sessions</span></div>
+    <div class="prog" id="prog"></div>
+    <div class="list" id="list"></div>
+    <div class="side-foot"><button class="newb" id="newBtn"><i data-i="plus"></i>New session</button><button class="ib" id="bGear" title="Settings" data-i="cog"></button></div>
+  </aside>
+
+  <section class="main" id="main">
+    <header class="head">
+      <h1 id="title"></h1><div class="where" id="where"></div>
+      <div id="tools" style="display:flex;align-items:center;gap:4px">
+        <button class="ib" id="bCode" title="Open in VS Code" data-i="code"></button>
+      </div>
+    </header>
+
+    <div class="split" id="split">
+      <section class="conv" id="conv">
+        <div class="scroll" id="scroll">
+          <div class="col" id="thread"></div>
+          <div class="hello" id="hello" hidden>What should the agent do?</div>
+        </div>
+        <div class="composer">
+          <div class="qcard" id="qcard" hidden></div>
+          <div class="box" id="box">
+            <textarea id="input" rows="1" placeholder="Message the agent…"></textarea>
+            <div class="row">
+              <span class="slot" id="sProject" hidden>
+                <button class="pick" id="pProject" title="Project"></button>
+                <div class="pop" id="mProject" hidden></div>
+              </span>
+              <span class="slot" id="sProfile" hidden>
+                <button class="pick" id="pProfile" title="Profile"></button>
+                <div class="pop" id="mProfile" hidden></div>
+              </span>
+              <span class="gap"></span>
+              <button class="send" id="send" title="Send" data-i="up"></button>
+            </div>
+          </div>
+          <div class="support"><span class="slot"><button class="pick" id="pModel" title="Model"></button><div class="pop sm" id="mModel" hidden></div></span><span class="slot"><button class="pick" id="pEffort" title="Effort"></button><div class="pop sm" id="mEffort" hidden></div></span><span class="gap"></span><span class="ctx" id="pCtx" title="Context used"></span><div class="bar3" id="ctxBar"><i></i></div></div>
+          <div class="oops" id="oops" hidden></div>
+        </div>
+      </section>
+    </div>
+  </section>
+</div>
+<div class="fmenu" id="gmenu" hidden style="width:220px"><button id="gTheme">Theme<span id="gThemeV"></span></button></div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+// A stand-in for the `claude` command, used only by the tests. It speaks the same
+// line-by-line JSON protocol the Agent SDK expects and plays a short scripted
+// turn chosen by a keyword in the message (ASK, PERMISSION, EDIT, PLAN, LIMIT,
+// AUTH, SLOW). It also records which account it was started under.
+import fs from 'node:fs';
+import path from 'node:path';
+import readline from 'node:readline';
+import { randomUUID } from 'node:crypto';
+
+const args = process.argv.slice(2);
+const log = line => { if (process.env.FAKE_CLAUDE_LOG) fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, line + '\n'); };
+if (args[0] === '--version') { console.log('2.1.322 (Claude Code)'); process.exit(0); }
+if (args[0] === 'agents') { console.log(fs.readFileSync(process.env.FAKE_CLAUDE_AGENTS, 'utf8')); process.exit(0); }
+if (args[0] === 'auth') process.exit(1);
+
+// the SDK passes options as --name=value; a person typing would use --name value
+const arg = name => { const eq = args.find(a => a.startsWith(name + '=')); if (eq) return eq.slice(name.length + 1); const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
+const home = process.env.HOME, configDir = process.env.CLAUDE_CONFIG_DIR || null;
+const identity = JSON.parse(fs.readFileSync(configDir ? path.join(configDir, '.claude.json') : path.join(home, '.claude.json'), 'utf8')).oauthAccount;
+const sessionId = arg('--resume') || randomUUID();
+const cwd = process.cwd();
+log(`session account=${identity.emailAddress} config=${configDir ? path.basename(configDir) : 'global'} resume=${arg('--resume') || 'no'} model=${arg('--model') || 'default'} effort=${arg('--effort') || 'default'}`);
+
+const out = o => process.stdout.write(JSON.stringify(o) + '\n');
+// The shared history lives under ~/.claude whichever account is in use, as Claudius arranges.
+const transcript = path.join(home, '.claude', 'projects', cwd.replace(/[^A-Za-z0-9]/g, '-'), sessionId + '.jsonl');
+const record = o => { fs.mkdirSync(path.dirname(transcript), { recursive: true }); fs.appendFileSync(transcript, JSON.stringify({ cwd, sessionId, timestamp: new Date().toISOString(), gitBranch: 'main', isSidechain: false, ...o }) + '\n'); };
+const say = content => {
+  const message = { id: 'msg_' + randomUUID(), type: 'message', role: 'assistant', model: 'claude-test', content, usage: { input_tokens: 50000, output_tokens: 1000 } };
+  out({ type: 'assistant', message, parent_tool_use_id: null, session_id: sessionId, uuid: randomUUID() });
+  record({ type: 'assistant', uuid: randomUUID(), message });
+};
+const text = t => say([{ type: 'text', text: t }]);
+const finish = (result, extra = {}) => {
+  out({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1200, duration_api_ms: 900, num_turns: 1, result, session_id: sessionId, total_cost_usd: 0,
+    usage: { input_tokens: 50000, output_tokens: 1000 }, modelUsage: { 'claude-test': { contextWindow: 200000 } }, permission_denials: [], uuid: randomUUID(), ...extra });
+  setTimeout(() => process.exit(extra.is_error ? 1 : 0), 20);
+};
+
+const waiting = new Map(); // request id -> resolve
+const ask = (toolName, input, suggestions = []) => new Promise(resolve => {
+  const toolUseId = 'toolu_' + randomUUID().slice(0, 8), requestId = randomUUID();
+  say([{ type: 'tool_use', id: toolUseId, name: toolName, input }]);
+  waiting.set(requestId, resolve);
+  out({ type: 'control_request', request_id: requestId, request: { subtype: 'can_use_tool', tool_name: toolName, input, tool_use_id: toolUseId, permission_suggestions: suggestions } });
+});
+
+async function turn(prompt) {
+  record({ type: 'session-owner', accountUuid: identity.accountUuid });
+  record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: prompt } });
+  if (/\bLIMIT\b/.test(prompt)) {
+    out({ type: 'assistant', error: 'rate_limit', message: { id: 'm', type: 'message', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: 'You have reached your 5-hour limit.' }] }, parent_tool_use_id: null, session_id: sessionId });
+    return finish('You have reached your 5-hour limit.', { is_error: true });
+  }
+  if (/\bAUTH\b/.test(prompt)) {
+    out({ type: 'assistant', error: 'authentication_failed', message: { id: 'm', type: 'message', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: 'OAuth session expired and could not be refreshed' }] }, parent_tool_use_id: null, session_id: sessionId });
+    return finish('Failed to authenticate', { is_error: true });
+  }
+  if (/\bASK\b/.test(prompt)) {
+    const input = { questions: [
+      { question: 'Which direction should I take?', header: 'Direction', multiSelect: false, options: [{ label: 'Light', description: 'Minimal.' }, { label: 'Dark', description: 'Matches the dashboard.' }] },
+      { question: 'What else should it include?', header: 'Scope', multiSelect: true, options: [{ label: 'Tests', description: 'Update specs.' }, { label: 'Docs', description: 'Update the readme.' }, { label: 'Mobile', description: 'Small screens.' }] }] };
+    const r = await ask('AskUserQuestion', input);
+    return r.behavior === 'allow' ? (text('ANSWERS ' + JSON.stringify(r.updatedInput.answers)), finish('ok')) : (text('DECLINED ' + r.message), finish('ok'));
+  }
+  if (/\bPERMISSION\b/.test(prompt)) {
+    const r = await ask('Bash', { command: 'touch probe.txt', description: 'Create an empty probe file' },
+      [{ type: 'addRules', rules: [{ toolName: 'Bash', ruleContent: 'touch probe.txt' }], behavior: 'allow', destination: 'localSettings' }]);
+    text(r.behavior === 'allow' ? 'RAN ' + JSON.stringify(r.updatedPermissions || null) : 'DENIED ' + r.message);
+    return finish('ok');
+  }
+  if (/\bEDIT\b/.test(prompt)) {
+    const r = await ask('Edit', { file_path: path.join(cwd, 'app.rb'), old_string: 'validates :name', new_string: 'validates :name, presence: true\nbefore_save :tidy' },
+      [{ type: 'setMode', mode: 'acceptEdits', destination: 'session' }]);
+    text(r.behavior === 'allow' ? 'EDITED ' + JSON.stringify(r.updatedPermissions || null) : 'DENIED ' + r.message);
+    return finish('ok');
+  }
+  if (/\bPLAN\b/.test(prompt)) {
+    const r = await ask('ExitPlanMode', { plan: '## Plan\n\n1. Read the parser.\n2. Split it in two.\n3. Add tests.' });
+    text(r.behavior === 'allow' ? 'PLAN APPROVED' : 'PLAN REJECTED ' + r.message);
+    return finish('ok');
+  }
+  if (/\bSLOW\b/.test(prompt)) {
+    say([{ type: 'tool_use', id: 'toolu_slow', name: 'Bash', input: { command: 'sleep 600', description: 'Wait a long time' } }]);
+    return; // stays busy until interrupted
+  }
+  say([{ type: 'tool_use', id: 'toolu_read', name: 'Read', input: { file_path: path.join(cwd, 'README.md') } }]);
+  text('Echo: ' + prompt);
+  finish('ok');
+}
+
+let started = false;
+readline.createInterface({ input: process.stdin }).on('line', line => {
+  let m; try { m = JSON.parse(line); } catch { return; }
+  if (process.env.FAKE_CLAUDE_TRACE) log('IN ' + line.slice(0, 300));
+  if (m.type === 'control_request') {
+    const ok = (response = {}) => out({ type: 'control_response', response: { subtype: 'success', request_id: m.request_id, response } });
+    if (m.request.subtype === 'initialize') return ok({ commands: [], agents: [], output_style: 'default', available_output_styles: ['default'], models: [], account: {} });
+    if (m.request.subtype === 'interrupt') { ok(); log('interrupted'); out({ type: 'result', subtype: 'error_during_execution', is_error: true, duration_ms: 500, num_turns: 1, session_id: sessionId, result: '', usage: {}, modelUsage: {}, uuid: randomUUID() }); return setTimeout(() => process.exit(0), 20); }
+    return ok();
+  }
+  if (m.type === 'control_response') {
+    const r = m.response, resolve = waiting.get(r.request_id);
+    if (resolve) { waiting.delete(r.request_id); resolve(r.response || { behavior: 'deny', message: r.error || 'error' }); }
+    return;
+  }
+  if (m.type === 'user' && !started) {
+    started = true;
+    out({ type: 'system', subtype: 'init', session_id: sessionId, cwd, tools: [], mcp_servers: [], model: 'claude-test', permissionMode: 'default', slash_commands: [], apiKeySource: 'none', output_style: 'default', uuid: randomUUID() });
+    const c = m.message.content; turn(typeof c === 'string' ? c : c.map(b => b.text || '').join(''));
+  }
+});

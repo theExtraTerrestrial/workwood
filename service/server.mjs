@@ -1,0 +1,194 @@
+// The Workwood service: a local web server that the window talks to.
+// It only listens on this machine and every request must carry the start-up token.
+import http from 'node:http';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { randomBytes } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import * as src from './sources.mjs';
+import { readTranscript } from './transcript.mjs';
+import { runs, startTurn, answer, stop, publicRun } from './runs.mjs';
+
+const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui');
+const TOKEN = process.env.WORKWOOD_TOKEN || randomBytes(24).toString('hex');
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+
+// `ready` means there is a list to draw; `fresh` means it has been re-read since this launch.
+const state = { profiles: [], sessions: [], projects: [], live: new Map(), next: null, claude: undefined, ready: false, fresh: false };
+const cached = src.readCache();
+if (cached?.profiles?.length) Object.assign(state, { profiles: cached.profiles, sessions: cached.sessions || [], projects: cached.projects || [], next: cached.next || null, ready: true });
+const clients = new Set();
+const emit = (type, data) => {
+  const msg = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const c of clients) c.write(msg);
+  if (type === 'run') pushState();                                   // the sidebar follows every change of a live turn
+  if (type === 'turn-end') setTimeout(() => { refreshAll(); refreshLive(); }, 800); // titles, owners and usage may have changed
+};
+
+// What the sidebar shows for one session: who owns it right now and what it is doing.
+function decorate(s) {
+  const run = runs.get(s.id), live = state.live.get(s.id);
+  const mine = run && (run.status === 'working' || run.status === 'waiting');
+  const outside = !mine && !!live;
+  let status = 'idle', line = '';
+  if (mine) {
+    status = run.status === 'waiting' ? 'wait' : 'work';
+    line = run.status === 'waiting' ? waitingLine(run.pending) : (run.activity || 'Working');
+  } else if (run?.status === 'stopped') {
+    status = 'wait'; line = { auth: 'Paused · sign-in needed', limit: 'Stopped · limit reached' }[run.stopped.reason] || 'Stopped · something went wrong';
+  } else if (outside) {
+    status = live.status === 'busy' ? 'work' : live.status === 'waiting' ? 'wait' : 'idle';
+    line = 'In a terminal · ' + (live.status === 'busy' ? 'working' : live.status === 'waiting' ? 'waiting for you' : 'idle');
+  }
+  return { id: s.id, title: s.title, project: s.project, cwd: s.cwd, branch: s.branch, mts: s.mts,
+    profile: run?.profile || s.profile, status, line, outside, locked: outside && live.status !== 'idle' };
+}
+const waitingLine = p => !p ? 'Waiting for you'
+  : p.kind === 'question' ? (p.input.questions.length === 1 ? '1 question for you' : `${p.input.questions.length} questions for you`)
+  : p.kind === 'plan' ? 'Plan ready for review'
+  : p.kind === 'unknown' ? 'Needs your answer'
+  : /^(Edit|Write|MultiEdit|NotebookEdit)$/.test(p.toolName) ? 'Wants to edit a file' : p.toolName === 'Bash' ? 'Wants to run a command' : `Wants to use ${p.toolName}`;
+
+// Where Claude Code keeps a session's transcript: the folder path with every other character turned into a dash.
+const transcriptFile = (cwd, id) => path.join(src.PROJECTS_ROOT, cwd.replace(/[^A-Za-z0-9]/g, '-'), id + '.jsonl');
+
+const snapshot = () => ({
+  profiles: state.profiles.map(({ account, ...p }) => p), next: state.next, projects: state.projects,
+  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, workspace: src.WORKSPACE,
+});
+let lastSent = '';
+function pushState() { const s = JSON.stringify(snapshot()); if (s !== lastSent) { lastSent = s; emit('state', JSON.parse(s)); } }
+
+let refreshing = null;
+function refreshAll() { return refreshing ||= doRefresh().finally(() => { refreshing = null; }); }
+async function doRefresh() {
+  // The three slow reads run side by side; the list is shown as soon as profiles and sessions are in.
+  const nextP = src.loadNext();
+  const [profiles, list] = await Promise.all([src.loadProfiles(), src.loadSessionList()]);
+  if (profiles) state.profiles = profiles;
+  const sessions = await src.tagSessions(list, state.profiles);
+  if (sessions) {
+    // A session started here appears in the pool a moment later; keep it listed meanwhile.
+    for (const [id, run] of runs) if (!sessions.some(s => s.id === id)) {
+      const old = state.sessions.find(s => s.id === id);
+      sessions.unshift(old || { id, title: run.title || 'New session', cwd: run.cwd, project: path.basename(run.cwd), branch: null, mts: Math.floor(run.startedAt / 1000), profile: run.profile, file: transcriptFile(run.cwd, id) });
+    }
+    state.sessions = sessions;
+  }
+  state.projects = await src.loadProjects(state.sessions);
+  state.ready = true; state.fresh = !!(profiles && sessions);
+  pushState();
+  state.next = await nextP;
+  pushState();
+  if (state.fresh) src.writeCache({ profiles: state.profiles, sessions: state.sessions, projects: state.projects, next: state.next });
+}
+async function refreshLive() { state.live = await src.loadLive(); pushState(); }
+
+const body = req => new Promise((res, rej) => { let s = ''; req.on('data', d => { s += d; if (s.length > 5e6) req.destroy(); }); req.on('end', () => { try { res(s ? JSON.parse(s) : {}); } catch (e) { rej(e); } }); });
+const send = (res, code, data) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(data)); };
+
+async function api(req, res, url) {
+  const parts = url.pathname.split('/').filter(Boolean).slice(1); // after "api"
+  if (req.method === 'GET' && parts[0] === 'events') {
+    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+    res.write(`event: state\ndata: ${JSON.stringify(snapshot())}\n\n`);
+    clients.add(res); req.on('close', () => clients.delete(res));
+    return;
+  }
+  if (req.method === 'GET' && parts[0] === 'sessions' && parts[1]) {
+    const s = state.sessions.find(x => x.id === parts[1]);
+    if (!s) return send(res, 404, { error: 'No such session.' });
+    const t = s.file ? await readTranscript(s.file) : { items: [], context: null, total: 0 };
+    const run = runs.get(s.id);
+    if (run && run.status !== 'idle') {
+      // The current turn is still in memory: show it from there, not from what has reached the file so far.
+      const live = run.builder.items.map(({ open, ...it }) => it), firstUser = live.find(i => i.kind === 'user');
+      if (firstUser) for (let i = t.items.length - 1; i >= 0; i--) if (t.items[i].kind === 'user' && t.items[i].text === firstUser.text) { t.items = t.items.slice(0, i); break; }
+      t.items = t.items.concat(live);
+    }
+    return send(res, 200, { ...t, context: run?.context || t.context, run: publicRun(run) });
+  }
+  if (req.method !== 'POST') return send(res, 404, { error: 'Not found.' });
+  const b = await body(req);
+
+  if (parts[0] === 'sessions' && !parts[1]) {            // start a new session
+    if (!b.text?.trim()) return send(res, 400, { error: 'Type a message first.' });
+    const proj = state.projects.find(p => p.cwd === b.cwd);
+    if (!proj) return send(res, 400, { error: 'Pick a project first.' });
+    const profile = state.profiles.find(p => p.name === b.profile)?.name || state.profiles.find(p => p.global)?.name;
+    const env = await src.envForProfile(profile, state.profiles);
+    const id = await startTurn({ cwd: proj.cwd, profile, env, text: b.text, model: b.model, effort: b.effort, claude: state.claude, emit });
+    runs.get(id).title = b.text.trim().split('\n')[0].slice(0, 80);
+    state.sessions.unshift({ id, title: runs.get(id).title, cwd: proj.cwd, project: proj.name, branch: null, mts: Math.floor(Date.now() / 1000), profile, file: transcriptFile(proj.cwd, id) });
+    pushState();
+    return send(res, 200, { sessionId: id });
+  }
+  if (parts[0] === 'sessions' && parts[2] === 'send') {
+    const s = state.sessions.find(x => x.id === parts[1]);
+    if (!s) return send(res, 404, { error: 'No such session.' });
+    if (!b.text?.trim()) return send(res, 400, { error: 'Type a message first.' });
+    const live = state.live.get(s.id), run = runs.get(s.id);
+    if (live && live.status !== 'idle' && !(run && run.q)) return send(res, 409, { error: 'This session is in use in a terminal.' });
+    const profile = state.profiles.find(p => p.name === b.profile)?.name || run?.profile || s.profile;
+    const env = await src.envForProfile(profile, state.profiles);
+    await startTurn({ sessionId: s.id, cwd: s.cwd, profile, env, text: b.text, model: b.model, effort: b.effort, claude: state.claude, emit });
+    pushState();
+    return send(res, 200, { ok: true });
+  }
+  if (parts[0] === 'sessions' && parts[2] === 'answer') { answer(parts[1], b); pushState(); return send(res, 200, { ok: true }); }
+  if (parts[0] === 'sessions' && parts[2] === 'stop') { await stop(parts[1]); return send(res, 200, { ok: true }); }
+  if (parts[0] === 'projects') {
+    const p = await src.createProject(String(b.name || '').trim());
+    state.projects.push(p); pushState();
+    return send(res, 200, p);
+  }
+  if (parts[0] === 'open-editor') {
+    const s = state.sessions.find(x => x.id === b.sessionId);
+    if (!s) return send(res, 404, { error: 'No such session.' });
+    spawn('code', [s.cwd], { detached: true, stdio: 'ignore', env: src.cleanEnv() }).on('error', () => {}).unref();
+    return send(res, 200, { ok: true });
+  }
+  send(res, 404, { error: 'Not found.' });
+}
+
+const server = http.createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url, 'http://localhost');
+    const host = (req.headers.host || '').split(':')[0];
+    if (host !== '127.0.0.1' && host !== 'localhost') { res.writeHead(403); return res.end(); }
+    if (url.pathname.startsWith('/api/')) {
+      const given = req.headers['x-workwood-token'] || url.searchParams.get('token');
+      if (given !== TOKEN) return send(res, 403, { error: 'Missing or wrong token.' });
+      return await api(req, res, url);
+    }
+    if (url.pathname === '/') {
+      if (url.searchParams.get('token') !== TOKEN) { res.writeHead(403, { 'content-type': 'text/plain' }); return res.end('Open Workwood from its own window or from the link it printed at start-up.'); }
+      const html = (await fs.readFile(path.join(UI, 'index.html'), 'utf8')).replace('__TOKEN__', TOKEN);
+      res.writeHead(200, { 'content-type': TYPES['.html'], 'cache-control': 'no-store' }); return res.end(html);
+    }
+    const name = path.basename(url.pathname);
+    if (!['app.js', 'app.css'].includes(name)) { res.writeHead(404); return res.end(); }
+    res.writeHead(200, { 'content-type': TYPES[path.extname(name)], 'cache-control': 'no-store' });
+    res.end(await fs.readFile(path.join(UI, name)));
+  } catch (e) {
+    console.error('[workwood]', e);
+    if (!res.headersSent) send(res, 500, { error: String(e.message || e).split('\n')[0] }); else res.end();
+  }
+});
+
+/** Starts the service and resolves with the address to open. */
+export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
+  state.claude = await src.claudePath();
+  await new Promise(r => server.listen(port, '127.0.0.1', r));
+  const address = `http://127.0.0.1:${server.address().port}/?token=${TOKEN}`;
+  refreshAll(); refreshLive();
+  setInterval(refreshLive, 5000).unref();
+  setInterval(refreshAll, 30000).unref();
+  return { address };
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const { address } = await start();
+  console.log(`Workwood service running. Open: ${address}`);
+}

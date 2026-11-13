@@ -11,6 +11,7 @@ const P={
   min:'<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>',
   ext:'<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>',
   x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  refresh:'<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>',
   zap:'<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
   pencil:'<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
   archive:'<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/>',
@@ -52,11 +53,12 @@ async function api(path,body){
 }
 
 /* ---------- state ---------- */
-const A={profiles:[],sessions:[],projects:[],next:null,ready:false,fresh:false};           // from the service
+const A={profiles:[],sessions:[],projects:[],next:null,ready:false,fresh:false,preview:null};           // from the service
 const V={sel:null,isNew:false,items:[],run:null,context:null,loading:false,     // what the window shows
   project:null,profile:null,model:'',effort:'',mk:false,find:'',
   shut:JSON.parse(localStorage.getItem('ww.shut')||'{}'),more:{},openTools:new Set(),
-  q:{id:null,step:0,picks:{},typed:{}},dismissed:null,busy:false};
+  q:{id:null,step:0,picks:{},typed:{}},dismissed:null,busy:false,
+  work:[],pv:null,full:false};                                                    // files the agent made; the one shown in the side panel
 const MODELS=[['','Default','Whatever this project is set to use'],['claude-fable-5-2','Fable 5.2','Most capable'],['claude-opus-5-5','Opus 5.5','Strong, lighter on your limit'],['claude-sonnet-5-5','Sonnet 5.5','Fast, for everyday work'],['claude-haiku-5-5','Haiku 5.5','Fastest']];
 const EFFORTS=[['','Default','Whatever this project is set to use'],['low','Low','Quick answers, least of your limit'],['medium','Medium','A balance for routine work'],['high','High','Thinks longer on each step'],['xhigh','Extra','For hard problems'],['max','Max','Slowest, uses the most of your limit']];
 
@@ -118,15 +120,15 @@ $('list').onclick=e=>{
 $('newBtn').onclick=()=>newSession();
 
 function newSession(){
-  V.isNew=true;V.sel=null;V.items=[];V.run=null;V.context=null;V.dismissed=null;
+  V.isNew=true;V.sel=null;V.items=[];V.run=null;V.context=null;V.dismissed=null;V.work=[];V.pv=null;V.full=false;
   V.profile=globalProfile()?.name; // every new session starts on the global profile; the project stays as last chosen
   V.project=V.project&&A.projects.some(p=>p.cwd===V.project)?V.project:A.projects[0]?.cwd||null;
   render();$('input').focus();
 }
 async function openSession(id){
-  V.isNew=false;V.sel=id;V.items=[];V.run=null;V.context=null;V.loading=true;V.dismissed=null;V.openTools.clear();
+  V.isNew=false;V.sel=id;V.items=[];V.run=null;V.context=null;V.loading=true;V.dismissed=null;V.openTools.clear();V.work=[];V.pv=null;V.full=false;
   render();
-  try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut}
+  try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[]}
   catch(e){oops(e.message)}
   V.loading=false;render();toBottom(true);
 }
@@ -140,25 +142,105 @@ function toolSummary(tools){
   if(rest.length)parts.push(rest.length===1?rest[0].verb.toLowerCase():`${rest.length} other steps`);
   const s=parts.join(', ');return s.charAt(0).toUpperCase()+s.slice(1);
 }
+// Redraws only what changed, so previews inside the conversation are not reloaded on every update.
+function patch(root,parts){
+  let i=0;
+  for(const [k,h] of parts){
+    const el=root.children[i];
+    if(!(el&&el.dataset.k===k&&el._h===h)){
+      const t=document.createElement('template');t.innerHTML=h.trim();const neu=t.content.firstElementChild;neu.dataset.k=k;neu._h=h;
+      if(el&&el.dataset.k===k)root.replaceChild(neu,el);else root.insertBefore(neu,el||null);
+    }
+    i++;
+  }
+  while(root.children.length>parts.length)root.lastElementChild.remove();
+}
+const KIND={page:'Page',image:'Image',video:'Video',pdf:'PDF'};
+const fileUrl=f=>`${A.preview}/${V.sel}${f.path.split('/').map(encodeURIComponent).join('/')}?v=${f.v}`;
+const folderOf=f=>{const cwd=selSession()?.cwd||'',d=f.path.slice(0,f.path.lastIndexOf('/'));return d===cwd?'':d.startsWith(cwd+'/')?d.slice(cwd.length+1):d.replace(/^\/home\/[^/]+/,'~')};
+const SANDBOX='allow-scripts allow-forms allow-same-origin allow-popups allow-modals';
+function thumb(f){
+  const u=esc(fileUrl(f));
+  return f.kind==='page'?`<iframe src="${u}" loading="lazy" tabindex="-1" sandbox="allow-scripts allow-same-origin" title=""></iframe>`
+    :f.kind==='image'?`<img src="${u}" loading="lazy" alt="">`
+    :f.kind==='video'?`<video src="${u}#t=0.5" preload="metadata" muted></video><span class="play">${svg('play')}</span>`
+    :svg('file');
+}
+// A file gets its card under the latest turn that touched it; earlier turns keep only a quiet line.
+function workCards(it,latest){
+  const cards=it.files.filter(f=>latest.get(f.path)===it.n),old=it.files.filter(f=>latest.get(f.path)!==it.n);
+  const show=cards.slice(0,3),rest=cards.length-show.length;
+  return `<div>${show.length?`<div class="hero n${show.length}">${show.map(f=>`<button class="hc" data-open="${esc(f.path)}" title="${esc(f.path)}"><span class="ht k-${f.kind}">${thumb(f)}</span><span class="cap"><b>${esc(f.name)}</b><span>${KIND[f.kind]}${folderOf(f)?' · '+esc(folderOf(f)):''}</span></span></button>`).join('')}</div>`:''}${rest>0?`<button class="morework" data-open="${esc(cards[3].path)}">and ${rest} more</button>`:''}${old.length?`<div class="sknote wk">${svg('file')}<span>Worked on ${old.map(f=>`<button data-open="${esc(f.path)}" title="${esc(f.path)}">${esc(f.name)}</button>`).join(', ')}</span></div>`:''}</div>`;
+}
+function fitThumbs(){document.querySelectorAll('.ht iframe').forEach(f=>{const w=f.parentNode.clientWidth,h=f.parentNode.clientHeight;if(!w)return;const k=w/1280;f.style.transform=`scale(${k})`;f.style.height=Math.ceil(h/k)+'px'})}
+new ResizeObserver(fitThumbs).observe($('thread'));
 function renderThread(){
   const nw=V.isNew,t=$('thread');
   t.hidden=nw;$('hello').hidden=!nw;
   if(nw)return;
-  if(V.loading){t.innerHTML='<div class="loading">Opening…</div>';return}
-  let h=(V.cut?'<div class="sys">Earlier messages are not shown</div>':'')+V.items.map(it=>{
-    if(it.kind==='user')return `<div class="me">${esc(it.text)}</div>`;
-    if(it.kind==='assistant')return `<div class="ai">${md(it.text)}</div>`;
-    if(it.kind==='tools'){const open=V.openTools.has(it.n);return `<div class="acts ${open?'open':''}"><button class="act" data-tools="${it.n}">${svg('chev-r')}${esc(toolSummary(it.tools))}</button>${open?`<div class="w2">${it.tools.map(x=>`<div class="sp"><span>${esc(x.verb)} ${esc(x.what)}</span></div>`).join('')}</div>`:''}</div>`}
-    if(it.kind==='skill')return `<div class="sknote">${svg('zap')}Loaded skill <b>${esc(it.name)}</b></div>`;
-    if(it.kind==='note')return `<div class="sys">${esc(it.text)}</div>`;
-    if(it.kind==='done')return `<div class="tfoot">Worked for ${dur(it.ms)}${it.ts?' · '+clock(it.ts):''}</div>`;
-    return '';
-  }).join('');
-  if(V.run?.status==='working')h+=`<div class="w1"><i class="spin"></i><span class="shim">${esc(V.run.activity||'Working')}</span><span class="el" id="elapsed"></span></div>`;
-  if(!V.items.length&&!V.run)h='<div class="empty">Nothing in this session yet.</div>';
-  t.innerHTML=h;tick();
+  if(V.loading){patch(t,[['loading','<div class="loading">Opening…</div>']]);return}
+  const parts=[],latest=new Map();
+  for(const it of V.items)if(it.kind==='work')for(const f of it.files)latest.set(f.path,it.n);
+  if(V.cut)parts.push(['cut','<div class="sys">Earlier messages are not shown</div>']);
+  for(const it of V.items){
+    let h='';
+    if(it.kind==='user')h=`<div class="me">${esc(it.text)}</div>`;
+    else if(it.kind==='assistant')h=`<div class="ai">${md(it.text)}</div>`;
+    else if(it.kind==='tools'){const open=V.openTools.has(it.n);h=`<div class="acts ${open?'open':''}"><button class="act" data-tools="${it.n}">${svg('chev-r')}${esc(toolSummary(it.tools))}</button>${open?`<div class="w2">${it.tools.map(x=>`<div class="sp"><span>${esc(x.verb)} ${esc(x.what)}</span></div>`).join('')}</div>`:''}</div>`}
+    else if(it.kind==='skill')h=`<div class="sknote">${svg('zap')}Loaded skill <b>${esc(it.name)}</b></div>`;
+    else if(it.kind==='note')h=`<div class="sys">${esc(it.text)}</div>`;
+    else if(it.kind==='done')h=`<div class="tfoot">Worked for ${dur(it.ms)}${it.ts?' · '+clock(it.ts):''}</div>`;
+    else if(it.kind==='work'&&A.preview)h=workCards(it,latest);
+    if(h)parts.push(['i'+it.n,h]);
+  }
+  if(V.run?.status==='working')parts.push(['working',`<div class="w1"><i class="spin"></i><span class="shim">${esc(V.run.activity||'Working')}</span><span class="el" id="elapsed"></span></div>`]);
+  if(!V.items.length&&!V.run)parts.splice(0,parts.length,['empty','<div class="empty">Nothing in this session yet.</div>']);
+  patch(t,parts);tick();fitThumbs();markCards();
 }
-$('thread').onclick=e=>{const b=e.target.closest('[data-tools]');if(!b)return;const n=+b.dataset.tools;V.openTools.has(n)?V.openTools.delete(n):V.openTools.add(n);renderThread()};
+const markCards=()=>document.querySelectorAll('#thread [data-open]').forEach(c=>c.classList.toggle('on',c.dataset.open===V.pv));
+
+/* ---------- side panel: what the agent made ---------- */
+let staged=null;
+function renderPanel(){
+  const i=V.work.findIndex(f=>f.path===V.pv),f=V.work[i],open=!V.isNew&&!!f&&!!A.preview;
+  $('panel').hidden=!open;$('split').classList.toggle('full',open&&V.full);markCards();
+  if(!open){if(staged){staged=null;$('stage').innerHTML=''}$('menu').hidden=true;return}
+  $('pName').textContent=f.name;$('pCnt').textContent=V.work.length>1?`${i+1} of ${V.work.length}`:'';
+  $('pPrev').disabled=$('pNext').disabled=V.work.length<2;
+  $('menu').innerHTML=V.work.map(w=>`<button data-pick="${esc(w.path)}" class="${w.path===V.pv?'cur':''}" title="${esc(w.path)}"><b>${esc(w.name)}</b><span>${w.ts?ago(Date.parse(w.ts)/1000)==='now'?'just now':ago(Date.parse(w.ts)/1000)+' ago':''}</span></button>`).join('');
+  $('bFull').dataset.i=V.full?'min':'max';$('bFull').title=V.full?'Show conversation':'Full width';$('bFull').classList.toggle('on',V.full);hydrate($('bFull').parentNode);
+  const key=f.path+'|'+f.v;
+  if(key!==staged){staged=key;const u=esc(fileUrl(f));
+    $('stage').innerHTML=f.kind==='page'?`<iframe class="pvf" src="${u}" sandbox="${SANDBOX}" title="${esc(f.name)}"></iframe>`
+      :f.kind==='image'?`<div class="pvbox"><img src="${u}" alt="${esc(f.name)}"></div>`
+      :f.kind==='video'?`<div class="pvbox v"><video src="${u}" controls></video></div>`
+      :`<iframe class="pvf" src="${u}" title="${esc(f.name)}"></iframe>`}
+  fitThumbs();
+}
+// A file that changed on disk, whoever changed it, is shown again in its new state.
+async function checkWork(){
+  if(V.isNew||!V.sel||!V.work.length||document.hidden)return;
+  const id=V.sel;let now;try{now=await api(`sessions/${id}/work`)}catch{return}
+  if(id!==V.sel)return;let changed=false;
+  const fix=f=>{const v=now[f.path];if(v&&v!==f.v){f.v=v;changed=true}};
+  V.work.forEach(fix);for(const it of V.items)if(it.kind==='work')it.files.forEach(fix);
+  if(changed){renderThread();renderPanel()}
+}
+// Checked whenever the session reports anything (a step finished, a message arrived). For anything else,
+// such as your own edits, there is the refresh button.
+let workTimer;const checkSoon=()=>{clearTimeout(workTimer);workTimer=setTimeout(checkWork,150)};
+$('bRefresh').onclick=async()=>{staged=null;await checkWork();if(!staged)renderPanel()};
+const showWork=p=>{V.pv=p;renderPanel()};
+const step=d=>()=>{const i=V.work.findIndex(f=>f.path===V.pv),n=V.work.length;if(n)showWork(V.work[(i+d+n)%n].path)};
+$('pPrev').onclick=step(-1);$('pNext').onclick=step(1);
+$('moreBtn').onclick=e=>{e.stopPropagation();const was=$('menu').hidden;closePops();$('menu').hidden=!was};
+$('menu').onclick=e=>{const b=e.target.closest('[data-pick]');if(b)showWork(b.dataset.pick)};
+$('bFull').onclick=()=>{V.full=!V.full;renderPanel()};
+$('bClose').onclick=()=>{V.pv=null;V.full=false;renderPanel()};
+$('bExt').onclick=()=>{const f=V.work.find(w=>w.path===V.pv);if(f)window.open(fileUrl(f),'_blank','noopener')};
+// A turn's new files go to the top of the list; a file written again replaces its older entry.
+function addWork(files){const has=new Set(files.map(f=>f.path));V.work=files.concat(V.work.filter(f=>!has.has(f.path)))}
+$('thread').onclick=e=>{const o=e.target.closest('[data-open]');if(o){showWork(o.dataset.open);return}const b=e.target.closest('[data-tools]');if(!b)return;const n=+b.dataset.tools;V.openTools.has(n)?V.openTools.delete(n):V.openTools.add(n);renderThread()};
 function tick(){const el=$('elapsed');if(el&&V.run?.startedAt)el.textContent=dur(Date.now()-V.run.startedAt)}
 setInterval(tick,1000);
 setInterval(()=>{if(A.ready)renderList()},60000);
@@ -267,7 +349,7 @@ function renderMenus(){
   const opts=(arr,cur,label)=>`<div class="lab">${label}</div>`+arr.map(([v,n,d])=>`<button class="item" data-v="${v}"><span class="nm"><b>${n}</b><span>${d}</span></span>${v===cur?svg('check','ck'):''}</button>`).join('')+`<div class="cap2" style="padding-top:8px">Applies from your next message.</div>`;
   $('mModel').innerHTML=opts(MODELS,V.model,'Model');$('mEffort').innerHTML=opts(EFFORTS,V.effort,'Effort');
 }
-function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('gmenu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
+function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('gmenu').hidden=true;$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
 const toggle=(btn,pop,then)=>e=>{e.stopPropagation();const was=$(pop).hidden;closePops();if(was){V.mk=false;V.find='';renderMenus();$(pop).hidden=false;$(btn).classList.add('open');then?.()}};
 $('pProject').onclick=toggle('pProject','mProject',()=>$('pFind').focus());
 $('pProfile').onclick=toggle('pProfile','mProfile');
@@ -317,7 +399,7 @@ async function sendText(text,asProfile){
 /* ---------- everything together ---------- */
 function render(){
   const nw=V.isNew,s=selSession();
-  renderList();renderThread();renderCard();renderComposer();
+  renderList();renderThread();renderCard();renderComposer();renderPanel();
   document.documentElement.style.setProperty('--hue',hueOf(nw?(A.projects.find(p=>p.cwd===V.project)?.name||'workwood'):(s?.project||'workwood')));
   $('title').textContent=nw?'New session':s?.title||'';
   $('where').innerHTML=nw||!s?'':`${tile(s.project,'s')}</span>${esc(s.project)}${s.branch?svg('branch')+esc(s.branch):''}`;
@@ -342,8 +424,8 @@ function connect(){
     if(V.isNew){if(!V.profile)V.profile=globalProfile()?.name;if(!V.project)V.project=A.projects[0]?.cwd||null}
     render();
   });
-  es.addEventListener('run',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;V.run=d.run;if(d.run?.context)V.context=d.run.context;renderThread();renderCard();renderComposer();toBottom()});
-  es.addEventListener('item',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const i=V.items.findIndex(x=>x.n===d.item.n);if(i>=0)V.items[i]=d.item;else V.items.push(d.item);renderThread();toBottom()});
+  es.addEventListener('run',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;V.run=d.run;if(d.run?.context)V.context=d.run.context;checkSoon();renderThread();renderCard();renderComposer();toBottom()});
+  es.addEventListener('item',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const i=V.items.findIndex(x=>x.n===d.item.n);if(i>=0)V.items[i]=d.item;else V.items.push(d.item);if(d.item.kind==='work'){addWork(d.item.files);renderPanel()}checkSoon();renderThread();toBottom()});
   es.onerror=()=>{};
 }
 hydrate();setTheme(localStorage.getItem('ww.theme')||'dark');render();connect();

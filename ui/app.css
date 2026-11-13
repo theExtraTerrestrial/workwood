@@ -291,6 +291,36 @@
   .video .vb{display:flex;align-items:center;gap:10px;padding:12px 16px;font-size:11.5px;color:#bbb}
   .video .trk{flex:1;height:3px;border-radius:2px;background:#333}.video .trk i{display:block;width:32%;height:100%;border-radius:2px;background:#fff}
 
+  /* real previews: the file itself, shown from the preview address */
+  .hero.n1{grid-template-columns:1fr;grid-template-rows:1fr;height:240px}
+  .hero.n2{grid-template-columns:1fr 1fr;grid-template-rows:1fr;height:190px}
+  .hero.n1 .hc:first-child,.hero.n2 .hc:first-child{grid-row:auto}
+  .hero+.morework{margin:-12px 0 22px}
+  .morework{display:block;color:var(--faint);font-size:12px;padding:2px 4px;border-radius:6px}
+  .morework:hover{color:var(--text)}
+  .sknote.wk{margin:0 0 18px}.hero+.sknote.wk,.morework+.sknote.wk{margin-top:-12px}
+  .sknote.wk button{color:var(--text);border-radius:5px;padding:0 2px}.sknote.wk button:hover{text-decoration:underline}
+  .ht{position:relative;overflow:hidden;background:var(--stage)}
+  .ht.k-page{background:#fff}.ht.k-video{background:#060607}
+  .ht.k-image{background:repeating-conic-gradient(rgba(128,128,128,.10) 0 25%,transparent 0 50%) 0 0/16px 16px}
+  .ht iframe{position:absolute;left:0;top:0;width:1280px;height:800px;border:0;transform-origin:0 0;pointer-events:none;background:#fff}
+  .ht img,.ht video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  .ht video{object-fit:cover}
+  .ht .play{position:relative}
+  .ht>svg{width:26px;height:26px;color:var(--faint)}
+  .menu{max-height:60vh;overflow:auto}
+  .menu button b{font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .menu button span{flex:none}
+  .ptitle i{display:inline-flex}
+  .ib:disabled{opacity:.3;pointer-events:none}
+  .pvf{flex:1;min-width:0;border:0;border-radius:10px;box-shadow:var(--shadow);background:#fff}
+  .pvbox{flex:1;min-width:0;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:auto;
+    background:repeating-conic-gradient(rgba(128,128,128,.10) 0 25%,transparent 0 50%) 0 0/20px 20px}
+  .pvbox img{max-width:100%;max-height:100%;object-fit:contain}
+  .pvbox.v{background:#000;box-shadow:var(--shadow)}
+  .pvbox video{max-width:100%;max-height:100%;outline:0}
+  @media (max-width:1100px){.panel{width:54%}}
+
   /* changes */
   .ctitle{font-weight:600;padding-left:6px}.cstat{margin-left:10px;font-size:12px}
   .plus{color:var(--add)}.minus{color:var(--del)}

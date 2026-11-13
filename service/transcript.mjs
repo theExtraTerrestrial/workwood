@@ -25,6 +25,11 @@ export function describeTool(name, input = {}) {
   }
 }
 
+// Files worth showing rather than describing: what the conversation offers as preview cards.
+const KINDS = { html: 'page', htm: 'page', svg: 'image', png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', avif: 'image',
+  mp4: 'video', webm: 'video', mov: 'video', m4v: 'video', pdf: 'pdf' };
+export const previewKind = p => KINDS[path.extname(String(p)).slice(1).toLowerCase()] || null;
+
 // Text the user never typed: command wrappers, reminders, hook output.
 const isNoise = t => /^\s*(<|Caveat:|\[Request interrupted|This session is being continued)/.test(t);
 
@@ -32,9 +37,10 @@ const isNoise = t => /^\s*(<|Caveat:|\[Request interrupted|This session is being
  * Feed messages in order; collects items:
  *   {kind:'user', text} {kind:'assistant', text} {kind:'tools', tools:[{verb,what,group}]}
  *   {kind:'skill', name} {kind:'note', text} {kind:'done', ms, ts}
+ *   {kind:'work', files:[{path,name,kind,v,ts}]}   previewable files written since the last one
  */
 export class Builder {
-  constructor(seq = 0) { this.items = []; this.context = null; this.lastTool = null; this.seq = seq; }
+  constructor(seq = 0) { this.items = []; this.context = null; this.lastTool = null; this.seq = seq; this.fresh = new Map(); this.groups = []; }
   // Every item gets a number so the view can update one in place (text and tool lists grow during a turn).
   push(it) { it.n = this.seq++; this.items.push(it); return it; }
   user(content, ts) {
@@ -43,12 +49,13 @@ export class Builder {
     for (const p of parts) {
       if (p.type !== 'text' || !p.text) continue;
       if (/^\[Request interrupted/.test(p.text)) out.push(this.push({ kind: 'note', text: 'Interrupted' }));
-      else if (!isNoise(p.text)) out.push(this.push({ kind: 'user', text: p.text, ts }));
+      else if (!isNoise(p.text)) { out.push(...this.flushWork()); out.push(this.push({ kind: 'user', text: p.text, ts })); }
     }
     return out;
   }
-  assistant(message) {
+  assistant(message, ts) {
     const out = [];
+    if (ts) this.lastTs = ts;
     if (message.model === '<synthetic>') return out;
     for (const b of message.content || []) {
       if (b.type === 'text' && b.text.trim()) {
@@ -58,6 +65,8 @@ export class Builder {
       } else if (b.type === 'tool_use') {
         const d = describeTool(b.name, b.input);
         this.lastTool = d;
+        const file = d.group === 'edit' && b.input?.file_path;
+        if (file && path.isAbsolute(file) && previewKind(file)) this.fresh.set(file, this.lastTs || new Date().toISOString());
         if (d.group === 'skill') { out.push(this.push({ kind: 'skill', name: d.what })); continue; }
         if (d.group === 'ask' || d.group === 'plan') continue; // shown as a card, not as a step
         let last = this.items[this.items.length - 1];
@@ -73,7 +82,24 @@ export class Builder {
     return out;
   }
   closeText() { const last = this.items[this.items.length - 1]; if (last && last.kind === 'assistant') last.open = false; }
-  done(ms, ts) { this.closeText(); return this.push({ kind: 'done', ms, ts }); }
+  /** Previewable files written since the last call become one item, shown as cards. Files that are gone are left out. */
+  flushWork() {
+    const files = [];
+    for (const [file, ts] of this.fresh) {
+      try { const st = fs.statSync(file); if (st.isFile()) files.push({ path: file, name: path.basename(file), kind: previewKind(file), v: Math.round(st.mtimeMs), ts }); } catch {}
+    }
+    this.fresh.clear();
+    if (!files.length) return [];
+    this.closeText(); this.groups.push(files);
+    return [this.push({ kind: 'work', files })];
+  }
+  /** Everything previewable from the session: newest turn first, each file once. */
+  work() {
+    const seen = new Set(), out = [];
+    for (let i = this.groups.length - 1; i >= 0; i--) for (const f of this.groups[i]) if (!seen.has(f.path)) { seen.add(f.path); out.push(f); }
+    return out;
+  }
+  done(ms, ts) { const w = this.flushWork(); this.closeText(); return [...w, this.push({ kind: 'done', ms, ts })]; }
 }
 
 const TAIL = 6 * 1024 * 1024;
@@ -81,7 +107,7 @@ const TAIL = 6 * 1024 * 1024;
 /** Reads a transcript file into items. Returns only the newest `limit` items. */
 export async function readTranscript(file, limit = 400) {
   const b = new Builder();
-  if (!fs.existsSync(file)) return { items: [], context: null, total: 0 };
+  if (!fs.existsSync(file)) return { items: [], context: null, total: 0, work: [] };
   // Very long sessions are read from the end only, so opening one stays quick.
   const size = fs.statSync(file).size, start = size > TAIL ? size - TAIL : 0;
   const rl = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf8', start }), crlfDelay: Infinity });
@@ -93,9 +119,10 @@ export async function readTranscript(file, limit = 400) {
     let m; try { m = JSON.parse(line); } catch { continue; }
     if (m.isSidechain || m.isMeta) continue;
     if (m.type === 'user' && m.message) { b.closeText(); b.user(m.message.content, m.timestamp); }
-    else if (m.type === 'assistant' && m.message) b.assistant(m.message);
+    else if (m.type === 'assistant' && m.message) b.assistant(m.message, m.timestamp);
     else if (m.type === 'system' && m.subtype === 'turn_duration') b.done(m.durationMs, m.timestamp);
   }
+  b.flushWork();
   const items = b.items.slice(-limit).map(({ open, ...it }) => it);
-  return { items, context: b.context, total: b.items.length, cut: start > 0 || b.items.length > limit };
+  return { items, context: b.context, total: b.items.length, cut: start > 0 || b.items.length > limit, work: b.work() };
 }

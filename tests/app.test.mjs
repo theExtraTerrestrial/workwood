@@ -47,7 +47,7 @@ test('rejects requests without the token', async () => {
 });
 
 test('lists profiles with the global one first, usage, and the "use next" pick', async () => {
-  const s = await until(async () => { const x = await state(); return x.next && x; }, 'the "use next" pick');
+  const s = await until(async () => { const x = await state(); return x.next && x; }, 'the "use next" pick').catch(e => { throw new Error(e.message + '\nservice said: ' + svc.stderr()); });
   assert.deepEqual(s.profiles.map(p => p.name), ['live', 'full', 'other']);
   assert.equal(s.profiles[0].global, true);
   assert.deepEqual(s.profiles.map(p => p.h5), [34, 100, 12]);
@@ -179,6 +179,40 @@ test('stop interrupts a working turn', async () => {
   const s = await idle(id);
   assert.equal(s.run.status, 'idle');
   assert.ok(readLog(sb).includes('interrupted'));
+});
+
+test('previews: files the agent wrote are listed, and served with their neighbours but nothing else', async () => {
+  const id = await newSession('build a MOCKUP'), dir = path.join(sb.projects.alpha, 'mockups');
+  const s = await idle(id);
+  const card = s.items.find(i => i.kind === 'work');
+  assert.deepEqual(card.files.map(f => [f.name, f.kind]), [['light.html', 'page'], ['dark.html', 'page'], ['shot.png', 'image']]); // the stylesheet is not something to show
+  assert.ok(s.items.indexOf(card) > s.items.findIndex(i => i.kind === 'assistant' && /Both directions/.test(i.text))); // below the reply that presents them
+  assert.deepEqual(s.work.map(f => f.name), ['light.html', 'dark.html', 'shot.png']);
+  const base = (await state()).preview, get = (p, headers) => fetch(`${base}/${id}${p}`, { headers });
+  assert.ok(new URL(base).port !== new URL(svc.address).port); // a different site from the app
+  const page = await get(dir + '/light.html?v=1');
+  assert.equal(page.status, 200); assert.match(page.headers.get('content-type'), /text\/html/); assert.match(await page.text(), /Light direction/);
+  const css = await get(dir + '/style.css'); assert.equal(css.status, 200); assert.match(css.headers.get('content-type'), /text\/css/);
+  const part = await get(dir + '/shot.png', { range: 'bytes=0-7' });
+  assert.equal(part.status, 206); assert.equal((await part.arrayBuffer()).byteLength, 8);
+  fs.writeFileSync(path.join(sb.projects.alpha, '.env'), 'SECRET=1'); fs.writeFileSync(path.join(sb.projects.beta, 'notes.html'), 'beta');
+  fs.symlinkSync(path.join(sb.home, '.claude.json'), path.join(dir, 'link.json'));
+  for (const p of [sb.projects.alpha + '/.env', sb.projects.beta + '/notes.html', sb.home + '/.claude/.credentials.json', dir + '/link.json', dir + '/../../beta/notes.html', '/etc/passwd'])
+    assert.notEqual((await get(p)).status, 200, p);
+  assert.equal((await fetch(`${base.replace(/[^/]+$/, 'wrong-key')}/${id}${dir}/light.html`)).status, 403);
+  assert.equal((await fetch(new URL(`/${base.split('/').pop()}/${id}${dir}/light.html`, svc.address))).status, 404); // not from the app's own address
+  // after the turn the same cards come from the saved history; a deleted file drops out
+  fs.rmSync(path.join(dir, 'dark.html'));
+  await svc.call(`sessions/${id}/send`, { text: 'and now?' }); const later = await idle(id);
+  assert.deepEqual(later.items.find(i => i.kind === 'work').files.map(f => f.name), ['light.html', 'shot.png']);
+  assert.deepEqual(later.work.map(f => f.name), ['light.html', 'shot.png']);
+});
+
+test('previews: cards are there by the time the agent asks about them', async () => {
+  const id = await newSession('a MOCKUP then ASK');
+  await pending(id);
+  assert.equal((await session(id)).items.filter(i => i.kind === 'work').length, 1);
+  await svc.call(`sessions/${id}/stop`, {}); await idle(id);
 });
 
 test('creates a project folder, and refuses odd names', async () => {
@@ -318,6 +352,47 @@ ui('window: stop button', async () => {
   await page.click('#send');
   await page.waitForSelector('.sys:has-text("Interrupted")');
   assert.equal(await page.locator('#send').getAttribute('title'), 'Send');
+});
+
+ui('window: preview cards open the side panel; step, pick from the list, full width, close', async () => {
+  await startNew('please build a MOCKUP');
+  await page.waitForSelector('.hero.n3'); assert.equal(await page.locator('.hero .hc').count(), 3);
+  assert.match(await page.locator('.hero .hc').first().innerText(), /light\.html\s+Page · mockups/);
+  assert.equal(await page.locator('#panel').isHidden(), true);
+  await page.click('.hc:has-text("light.html")');
+  assert.equal(await page.locator('#pName').innerText(), 'light.html'); assert.equal(await page.locator('#pCnt').innerText(), '1 of 3');
+  const shown = page.frameLocator('#stage iframe').locator('h1');
+  assert.equal(await shown.innerText(), 'Light direction');
+  assert.equal(await shown.evaluate(el => getComputedStyle(el).color), 'rgb(1, 2, 3)'); // its stylesheet loaded too
+  assert.equal(await page.locator('.hc.on').count(), 1);
+  const frame = await page.locator('#stage iframe').elementHandle();
+  await page.click('#input'); await page.fill('#input', 'thanks'); await page.press('#input', 'Enter');
+  await page.waitForSelector('.ai:has-text("Echo: thanks")');
+  assert.equal(await page.evaluate(el => el.isConnected, frame), true); // the open preview is not reloaded by new messages
+  // ...but it is shown again when the file itself has changed by the time the next message arrives
+  fs.writeFileSync(await page.locator('.hc.on').getAttribute('data-open'), '<h1>Light, revised</h1>');
+  await send('look again'); // any activity in the session triggers the check
+  await page.frameLocator('#stage iframe').locator('h1:has-text("Light, revised")').waitFor({ timeout: 3000 });
+  // a file worked on again gets its card under the newest turn; the older turn keeps a one-line mention
+  await send('a second MOCKUP round'); await page.waitForSelector('.ai:has-text("Both directions are ready.") >> nth=1');
+  await page.waitForFunction(() => document.querySelectorAll('.hero').length === 1 && document.querySelectorAll('.hero .hc').length === 3);
+  assert.match(await page.locator('.sknote.wk').innerText(), /Worked on light\.html, dark\.html, shot\.png/);
+  assert.equal(await page.evaluate(() => !!(document.querySelector('.sknote.wk').compareDocumentPosition(document.querySelector('.hero')) & Node.DOCUMENT_POSITION_FOLLOWING)), true);
+  await page.click('.sknote.wk button:has-text("light.html")'); assert.equal(await page.locator('#pName').innerText(), 'light.html');
+  await page.click('#pNext'); assert.equal(await page.locator('#pName').innerText(), 'dark.html');
+  assert.equal(await page.frameLocator('#stage iframe').locator('h1').innerText(), 'Dark direction');
+  // refresh picks up what is not watched, here a stylesheet the page uses
+  fs.writeFileSync(path.join(path.dirname(await page.locator('.hc.on').getAttribute('data-open')), 'style.css'), 'h1{color:rgb(9, 9, 9)}');
+  await page.click('#bRefresh');
+  await page.waitForFunction(() => true); await until(async () => await page.frameLocator('#stage iframe').locator('h1').evaluate(el => getComputedStyle(el).color) === 'rgb(9, 9, 9)', 'the refreshed stylesheet', 3000);
+  await page.click('#moreBtn'); assert.deepEqual(await page.locator('#menu b').allInnerTexts(), ['light.html', 'dark.html', 'shot.png']);
+  await page.click('#menu button:has-text("shot.png")');
+  await page.waitForFunction(() => document.querySelector('#stage img')?.naturalWidth === 2);
+  await page.click('#bFull'); assert.equal(await page.locator('#conv').isHidden(), true);
+  await page.click('#bFull'); assert.equal(await page.locator('#conv').isVisible(), true);
+  await page.click('#bClose'); assert.equal(await page.locator('#panel').isHidden(), true);
+  await page.click('.hc:has-text("dark.html")'); await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`);
+  await page.waitForSelector('.ai:has-text("The readme is tidied.")'); assert.equal(await page.locator('#panel').isHidden(), true); // another session, no panel
 });
 
 ui('window: new folder from the project menu', async () => {

@@ -47,6 +47,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, model, effort, c
     const id = randomUUID();
     run.pending = { id, kind, toolName, input, choices, suggestions: suggestions || [], finish };
     run.status = 'waiting'; run.activity = describeTool(toolName, input).verb;
+    if (kind !== 'permission') sayItems(run.builder.flushWork()); // what it made so far is usually what the question is about
     sayState();
     signal?.addEventListener('abort', () => finish({ behavior: 'deny', message: 'Cancelled.' }));
   });
@@ -92,7 +93,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, model, effort, c
             const win = Object.values(m.modelUsage || {}).map(u => u.contextWindow).filter(Boolean).sort((a, b) => b - a)[0];
             if (win && run.context) run.context = { ...run.context, window: win };
             if (m.is_error && !run.stopped) run.stopped = { reason: /limit/i.test(m.result || '') ? 'limit' : 'error', text: m.result || 'The turn ended with an error.' };
-            if (!run.stopped) sayItems([run.builder.done(m.duration_ms, new Date().toISOString())]);
+            sayItems(run.stopped ? run.builder.flushWork() : run.builder.done(m.duration_ms, new Date().toISOString()));
             break;
           }
         }
@@ -104,6 +105,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, model, effort, c
         run.pending = null; run.q = null;
         run.status = run.stopped ? 'stopped' : 'idle';
         run.activity = null;
+        sayItems(run.builder.flushWork());
         if (run.interrupted) sayItems([run.builder.push({ kind: 'note', text: 'Interrupted' })]);
         sayState();
         emit('turn-end', { sessionId: run.sessionId });

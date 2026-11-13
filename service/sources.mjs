@@ -24,14 +24,22 @@ export function cleanEnv(extra = {}) {
   return { ...env, ...extra };
 }
 
-async function json(cmd, args, timeout = 20000) {
-  try {
-    const { stdout } = await run(cmd, args, { timeout, maxBuffer: 64 * 1024 * 1024, env: cleanEnv() });
-    return JSON.parse(stdout);
-  } catch (e) {
-    console.error(`[workwood] ${cmd} ${args.join(' ')} failed: ${String(e.message).split('\n')[0]}`);
-    return null;
+// Runs a command and returns what it printed, or null. Two Claudius commands running at the same moment can
+// collide while tidying a profile's files (both use the same temporary file name), and the loser exits with
+// an error although nothing is wrong. So a failed read is tried once more before it counts as failed.
+async function read(cmd, args, timeout = 20000) {
+  for (let attempt = 1; ; attempt++) {
+    try { return (await run(cmd, args, { timeout, maxBuffer: 64 * 1024 * 1024, env: cleanEnv() })).stdout; }
+    catch (e) {
+      const why = String(e.stderr || e.message).trim().split('\n')[0];
+      if (attempt === 2 || e.killed) { console.error(`[workwood] ${cmd} ${args.join(' ')} failed: ${why}`); return null; }
+      await new Promise(r => setTimeout(r, 150));
+    }
   }
+}
+async function json(cmd, args, timeout) {
+  const out = await read(cmd, args, timeout);
+  try { return out == null ? null : JSON.parse(out); } catch { console.error(`[workwood] ${cmd} ${args.join(' ')} printed something unreadable`); return null; }
 }
 
 /** Profiles from Claudius, global one first. Usage that belongs to a window that has already reset counts as 0. */
@@ -54,8 +62,7 @@ export async function loadProfiles() {
 }
 
 export async function loadNext() {
-  try { const { stdout } = await run('claudius', ['next'], { timeout: 15000, env: cleanEnv() }); return stdout.trim().split('\n').pop() || null; }
-  catch { return null; }
+  return (await read('claudius', ['next'], 15000))?.trim().split('\n').pop() || null;
 }
 
 // Which account last ran a session: the newest "session-owner" record in its transcript.

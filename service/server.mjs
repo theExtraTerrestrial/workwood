@@ -2,6 +2,7 @@
 // It only listens on this machine and every request must carry the start-up token.
 import http from 'node:http';
 import fs from 'node:fs/promises';
+import fss from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -12,16 +13,25 @@ import { runs, startTurn, answer, stop, publicRun } from './runs.mjs';
 
 const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui');
 const TOKEN = process.env.WORKWOOD_TOKEN || randomBytes(24).toString('hex');
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+const PREVIEW_KEY = process.env.WORKWOOD_PREVIEW_KEY || randomBytes(24).toString('hex');
+const TYPES = { '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.map': 'application/json', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8',
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.avif': 'image/avif', '.ico': 'image/x-icon',
+  '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf',
+  '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.pdf': 'application/pdf' };
+let previewBase = null;
 
 // `ready` means there is a list to draw; `fresh` means it has been re-read since this launch.
 const state = { profiles: [], sessions: [], projects: [], live: new Map(), next: null, claude: undefined, ready: false, fresh: false };
 const cached = src.readCache();
 if (cached?.profiles?.length) Object.assign(state, { profiles: cached.profiles, sessions: cached.sessions || [], projects: cached.projects || [], next: cached.next || null, ready: true });
 const clients = new Set();
+const workPaths = new Map(); // session -> every previewable file it is known to have made
+function knownWork(id) { let w = workPaths.get(id); if (!w) workPaths.set(id, w = new Set()); return w; }
 const emit = (type, data) => {
   const msg = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const c of clients) c.write(msg);
+  if (type === 'item' && data.item.kind === 'work') for (const f of data.item.files) knownWork(data.sessionId).add(f.path);
   if (type === 'run') pushState();                                   // the sidebar follows every change of a live turn
   if (type === 'turn-end') setTimeout(() => { refreshAll(); refreshLive(); }, 800); // titles, owners and usage may have changed
 };
@@ -55,7 +65,7 @@ const transcriptFile = (cwd, id) => path.join(src.PROJECTS_ROOT, cwd.replace(/[^
 
 const snapshot = () => ({
   profiles: state.profiles.map(({ account, ...p }) => p), next: state.next, projects: state.projects,
-  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, workspace: src.WORKSPACE,
+  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, workspace: src.WORKSPACE, preview: previewBase,
 });
 let lastSent = '';
 function pushState() { const s = JSON.stringify(snapshot()); if (s !== lastSent) { lastSent = s; emit('state', JSON.parse(s)); } }
@@ -63,9 +73,11 @@ function pushState() { const s = JSON.stringify(snapshot()); if (s !== lastSent)
 let refreshing = null;
 function refreshAll() { return refreshing ||= doRefresh().finally(() => { refreshing = null; }); }
 async function doRefresh() {
-  // The three slow reads run side by side; the list is shown as soon as profiles and sessions are in.
+  // Profiles first and alone: any Claudius command may tidy a profile's files when it lists them, and two
+  // doing that at once collide. After one has run there is nothing left to tidy, so the rest can run side by side.
+  const profiles = await src.loadProfiles();
   const nextP = src.loadNext();
-  const [profiles, list] = await Promise.all([src.loadProfiles(), src.loadSessionList()]);
+  const list = await src.loadSessionList();
   if (profiles) state.profiles = profiles;
   const sessions = await src.tagSessions(list, state.profiles);
   if (sessions) {
@@ -96,10 +108,17 @@ async function api(req, res, url) {
     clients.add(res); req.on('close', () => clients.delete(res));
     return;
   }
+  if (req.method === 'GET' && parts[0] === 'sessions' && parts[2] === 'work') {
+    // When each previewable file last changed, so the window can reload one that was edited, by anyone.
+    const all = knownWork(parts[1]);
+    const out = {};
+    await Promise.all([...all].map(async f => { try { out[f] = Math.round((await fs.stat(f)).mtimeMs); } catch { out[f] = null; } }));
+    return send(res, 200, out);
+  }
   if (req.method === 'GET' && parts[0] === 'sessions' && parts[1]) {
     const s = state.sessions.find(x => x.id === parts[1]);
     if (!s) return send(res, 404, { error: 'No such session.' });
-    const t = s.file ? await readTranscript(s.file) : { items: [], context: null, total: 0 };
+    const t = s.file ? await readTranscript(s.file) : { items: [], context: null, total: 0, work: [] };
     const run = runs.get(s.id);
     if (run && run.status !== 'idle') {
       // The current turn is still in memory: show it from there, not from what has reached the file so far.
@@ -107,6 +126,9 @@ async function api(req, res, url) {
       if (firstUser) for (let i = t.items.length - 1; i >= 0; i--) if (t.items[i].kind === 'user' && t.items[i].text === firstUser.text) { t.items = t.items.slice(0, i); break; }
       t.items = t.items.concat(live);
     }
+    if (run) { const mine = run.builder.work(), has = new Set(mine.map(f => f.path)); t.work = mine.concat(t.work.filter(f => !has.has(f.path))); }
+    for (const f of t.work) previewDirs(s.id).add(path.dirname(f.path));
+    for (const f of t.work) knownWork(s.id).add(f.path);
     return send(res, 200, { ...t, context: run?.context || t.context, run: publicRun(run) });
   }
   if (req.method !== 'POST') return send(res, 404, { error: 'Not found.' });
@@ -152,6 +174,47 @@ async function api(req, res, url) {
   send(res, 404, { error: 'Not found.' });
 }
 
+// ---- previews ----
+// Files an agent made are shown from a second address, so a previewed page is a different
+// site from the app and cannot reach it. A page may load its neighbours (styles, images):
+// anything inside the session's project folder or next to a file the session wrote.
+const dirsBySession = new Map();
+function previewDirs(id) { let d = dirsBySession.get(id); if (!d) dirsBySession.set(id, d = new Set()); return d; }
+const inside = (file, dir) => file === dir || file.startsWith(dir.endsWith(path.sep) ? dir : dir + path.sep);
+const real = async p => { try { return await fs.realpath(p); } catch { return null; } };
+
+const previews = http.createServer(async (req, res) => {
+  const deny = (code = 403) => { res.writeHead(code, { 'content-type': 'text/plain' }); res.end(code === 404 ? 'Not found.' : 'Not available.'); };
+  try {
+    const host = (req.headers.host || '').split(':')[0];
+    if (host !== '127.0.0.1' && host !== 'localhost') return deny();
+    if (req.method !== 'GET' && req.method !== 'HEAD') return deny(405);
+    const [, key, id, ...rest] = new URL(req.url, 'http://localhost').pathname.split('/');
+    const s = key === PREVIEW_KEY && state.sessions.find(x => x.id === id);
+    if (!s || !rest.length) return deny();
+    for (const [sid, run] of runs) if (sid === id) for (const f of run.builder.work()) previewDirs(id).add(path.dirname(f.path)); // written a moment ago
+    const file = await real(path.sep + rest.map(decodeURIComponent).join(path.sep));
+    if (!file) return deny(404);
+    const roots = (await Promise.all([s.cwd, ...previewDirs(id)].map(real))).filter(Boolean);
+    const parts = file.split(path.sep);
+    if (!roots.some(r => inside(file, r)) || parts.includes('.git') || /^\.env/.test(parts[parts.length - 1])) return deny();
+    const st = await fs.stat(file);
+    if (!st.isFile()) return deny(404);
+    const head = { 'content-type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'accept-ranges': 'bytes' };
+    const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');   // videos are fetched in pieces
+    let start = 0, end = st.size - 1, code = 200;
+    if (m && (m[1] || m[2]) && st.size) {
+      if (m[1]) { start = +m[1]; if (m[2]) end = Math.min(end, +m[2]); } else start = Math.max(0, st.size - +m[2]);
+      if (start > end) { res.writeHead(416, { 'content-range': `bytes */${st.size}` }); return res.end(); }
+      code = 206; head['content-range'] = `bytes ${start}-${end}/${st.size}`;
+    }
+    head['content-length'] = st.size ? end - start + 1 : 0;
+    res.writeHead(code, head);
+    if (req.method === 'HEAD' || !st.size) return res.end();
+    fss.createReadStream(file, { start, end }).on('error', () => res.destroy()).pipe(res);
+  } catch (e) { console.error('[workwood] preview:', String(e.message).split('\n')[0]); if (!res.headersSent) deny(404); else res.end(); }
+});
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
@@ -181,6 +244,8 @@ const server = http.createServer(async (req, res) => {
 export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
   state.claude = await src.claudePath();
   await new Promise(r => server.listen(port, '127.0.0.1', r));
+  await new Promise(r => previews.listen(0, '127.0.0.1', r));
+  previewBase = `http://127.0.0.1:${previews.address().port}/${PREVIEW_KEY}`;
   const address = `http://127.0.0.1:${server.address().port}/?token=${TOKEN}`;
   refreshAll(); refreshLive();
   setInterval(refreshLive, 5000).unref();

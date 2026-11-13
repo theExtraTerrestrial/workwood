@@ -29,9 +29,12 @@ On a fresh WSL install the Electron window needs GTK once:
 - Send follow-up messages, stop a turn, pick a model and effort per message.
 - Cards for questions, permissions and plans, and for a turn that stopped on a
   limit, a lost sign-in or an error (with "continue on another profile").
+- Previews: pages, images, videos and PDFs the agent wrote appear as cards under
+  its reply. A card opens the file in a side panel, where you can step through
+  everything the session made, go full width, or open it in your browser.
 - Open the session's folder in VS Code. Dark and light theme (gear, bottom left).
 
-Not built yet: terminal view, previews, changes view, skills menu and panel,
+Not built yet: terminal view, changes view, skills menu and panel,
 attachments, voice, session actions (rename, archive, delete), settings dialog,
 sign-in from the app, the Windows-side project list, the Mac build.
 
@@ -55,6 +58,10 @@ The last test checks that nothing leaked out of the sandbox.
   through `claudius` and `claude agents --json`, and runs turns with the Claude
   Agent SDK. It listens on this machine only, and every request needs the random
   token made at start-up.
+- Previews are served from a second local address with its own random key, so a
+  page an agent made is a different site from the app and cannot reach it. It
+  can load files from the session's project folder and from next to any file the
+  session wrote; `.git` folders and `.env` files are refused.
 - `ui/` is the window's page: plain HTML, CSS and JavaScript, no build step.
 - `shell/main.cjs` is the Electron window; `shell/edge.mjs` is the Edge launcher.
 - `design/mockup.html` is the interactive mockup the app is built to. The other

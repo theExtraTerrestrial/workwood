@@ -1,7 +1,7 @@
 // A stand-in for the `claude` command, used only by the tests. It speaks the same
 // line-by-line JSON protocol the Agent SDK expects and plays a short scripted
-// turn chosen by a keyword in the message (ASK, PERMISSION, EDIT, PLAN, LIMIT,
-// AUTH, SLOW). It also records which account it was started under.
+// turn chosen by a keyword in the message (MOCKUP, ASK, PERMISSION, EDIT, PLAN,
+// LIMIT, AUTH, SLOW). It also records which account it was started under.
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -56,7 +56,7 @@ async function turn(prompt) {
     out({ type: 'assistant', error: 'authentication_failed', message: { id: 'm', type: 'message', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: 'OAuth session expired and could not be refreshed' }] }, parent_tool_use_id: null, session_id: sessionId });
     return finish('Failed to authenticate', { is_error: true });
   }
-  if (/\bASK\b/.test(prompt)) {
+  if (/\bASK\b/.test(prompt) && !/\bMOCKUP\b/.test(prompt)) {
     const input = { questions: [
       { question: 'Which direction should I take?', header: 'Direction', multiSelect: false, options: [{ label: 'Light', description: 'Minimal.' }, { label: 'Dark', description: 'Matches the dashboard.' }] },
       { question: 'What else should it include?', header: 'Scope', multiSelect: true, options: [{ label: 'Tests', description: 'Update specs.' }, { label: 'Docs', description: 'Update the readme.' }, { label: 'Mobile', description: 'Small screens.' }] }] };
@@ -78,6 +78,23 @@ async function turn(prompt) {
   if (/\bPLAN\b/.test(prompt)) {
     const r = await ask('ExitPlanMode', { plan: '## Plan\n\n1. Read the parser.\n2. Split it in two.\n3. Add tests.' });
     text(r.behavior === 'allow' ? 'PLAN APPROVED' : 'PLAN REJECTED ' + r.message);
+    return finish('ok');
+  }
+  if (/\bMOCKUP\b/.test(prompt)) {
+    // writes two pages that share a stylesheet, and a picture; MOCKUP ASK then stops to ask about them
+    const dir = path.join(cwd, 'mockups'); fs.mkdirSync(dir, { recursive: true });
+    const page = name => `<!doctype html><link rel="stylesheet" href="style.css"><h1>${name} direction</h1><img src="shot.png">`;
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8Dwn4GBgYGJAQoAHxcCAr7WqXkAAAAASUVORK5CYII=', 'base64');
+    const files = [['light.html', page('Light')], ['dark.html', page('Dark')], ['style.css', 'h1{color:rgb(1, 2, 3)}'], ['shot.png', png]];
+    say([{ type: 'text', text: 'Building the mockups.' }, ...files.map(([name, body], i) => {
+      fs.writeFileSync(path.join(dir, name), body);
+      return { type: 'tool_use', id: 'toolu_w' + i, name: 'Write', input: { file_path: path.join(dir, name), content: typeof body === 'string' ? body : '' } };
+    })]);
+    record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: files.map((f, i) => ({ type: 'tool_result', tool_use_id: 'toolu_w' + i, content: 'ok' })) } });
+    if (/\bASK\b/.test(prompt)) {
+      const r = await ask('AskUserQuestion', { questions: [{ question: 'Which mockup?', header: 'Pick', multiSelect: false, options: [{ label: 'Light', description: '' }, { label: 'Dark', description: '' }] }] });
+      text('PICKED ' + JSON.stringify(r.updatedInput?.answers || r.message));
+    } else text('Both directions are ready.');
     return finish('ok');
   }
   if (/\bSLOW\b/.test(prompt)) {

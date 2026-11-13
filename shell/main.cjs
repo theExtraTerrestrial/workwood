@@ -8,6 +8,7 @@ let win = null;
 
 async function open() {
   require('electron').ipcMain.on('env:get', e => { e.returnValue = null; });   // one place only here; the Windows window has two
+  require('electron').ipcMain.handle('folder:pick', async () => { const r = await require('electron').dialog.showOpenDialog(win, { title: 'Choose a project folder', properties: ['openDirectory'] }); return r.canceled ? null : r.filePaths[0] || null; });
   const { start } = await import(pathToFileURL(path.join(__dirname, '..', 'service', 'server.mjs')).href);
   const { address } = await start();
   Menu.setApplicationMenu(null);

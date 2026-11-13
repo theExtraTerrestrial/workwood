@@ -77,6 +77,13 @@ async function turn(prompt, said = prompt) {
     out({ type: 'assistant', error: 'authentication_failed', message: { id: 'm', type: 'message', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: 'OAuth session expired and could not be refreshed' }] }, parent_tool_use_id: null, session_id: sessionId });
     return finish('Failed to authenticate', { is_error: true });
   }
+  if (/\bSNIPPETS\b/.test(prompt)) {   // a question whose options carry their own text to look at
+    const r = await ask('AskUserQuestion', { questions: [{ question: 'Which layout?', header: 'Layout', multiSelect: false, options: [
+      { label: 'Stacked', description: 'One column.', preview: '+-------+\n| top   |\n| below |\n+-------+' },
+      { label: 'Split', description: 'Two columns.', preview: '+----+----+\n| a  | b  |\n+----+----+' }] }] });
+    text('PICKED ' + JSON.stringify(r.updatedInput?.answers || r.message));
+    return finish('ok');
+  }
   if (/\bASK\b/.test(prompt) && !/\bMOCKUP\b/.test(prompt)) {
     const input = { questions: [
       { question: 'Which direction should I take?', header: 'Direction', multiSelect: false, options: [{ label: 'Light', description: 'Minimal.' }, { label: 'Dark', description: 'Matches the dashboard.' }] },

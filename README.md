@@ -24,6 +24,20 @@ The window has a switch at the top of the sidebar for where sessions run:
   window closes; this is the full set-up with Claudius profiles. Its output
   goes to `~/.cache/workwood/workwood.log`.
 
+Agents on the side you are not looking at keep working. A dot on the other
+side's button shows when one is working (green) or waiting for you (amber).
+
+Each side has its own settings. Under Settings, General, "Project folders"
+lists the folders that hold your projects (for example `F:\workspace` on
+Windows); the new-session menu offers what is inside them, and new folders are
+made in the first one. Left empty, it is `~/workspace`.
+
+For a Windows PC without WSL, run `npm run package` here. It makes
+`dist/Workwood-windows-x64.zip` (about 290 MB). On the other PC, unzip it and
+double-click "Install Workwood.cmd"; nothing else needs installing except
+Claude Code for Windows. Only the Windows side exists there. "Remove
+Workwood.cmd" takes it away again.
+
 Run `npm run shortcut` again after pulling changes (the Windows side is a copy);
 `npm run shortcut -- --remove` takes it all away. `npm start` still opens the
 Linux window through WSLg.
@@ -51,6 +65,12 @@ On a fresh WSL install the Electron window needs GTK once:
   The context meter uses that model's window size.
 - Cards for questions, permissions and plans, and for a turn that stopped on a
   limit, a lost sign-in or an error (with "continue on another profile").
+- Compare: when the agent asks a question about things it made in the same
+  turn, they open next to the question. Each option is matched to the file its
+  wording names (or to the text the agent attached to the option); picking an
+  option shows its file, the tabs above the file pick the option, and "Side by
+  side" shows up to three at once. If nothing can be matched by name, the
+  turn's files are offered under their own names.
 - Previews: pages, images, videos and PDFs the agent wrote appear as cards under
   its reply. A card opens the file in a side panel, where you can step through
   everything the session made, go full width, or open it in your browser.

@@ -58,7 +58,7 @@ const V={sel:null,isNew:false,items:[],run:null,context:null,loading:false,     
   project:null,profile:null,mk:false,find:'',
   used:{model:'',effort:''},pick:{},def:{model:'',effort:''},   // what the open session last ran on; what you chose instead, per session ('new' for one not started)
   shut:JSON.parse(localStorage.getItem('ww.shut')||'{}'),more:{},openTools:new Set(),
-  q:{id:null,step:0,picks:{},typed:{}},dismissed:null,busy:false,
+  q:{id:null,step:0,picks:{},typed:{},show:{},auto:null},dismissed:null,busy:false,
   work:[],pv:null,full:false,
   att:[],                                                                          // files waiting to go with the next message
   ch:null,side:null,sk:{key:null,list:null,err:null},chFile:null,chDiff:null,                                    // changed files in the project; the changes panel
@@ -195,13 +195,13 @@ $('dim').onclick=async e=>{
 $('newBtn').onclick=()=>newSession();
 
 function newSession(){
-  V.isNew=true;V.sel=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.dismissed=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
+  V.isNew=true;V.sel=null;V.q.auto=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.dismissed=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
   V.profile=startProfile()?.name; // every new session starts on your default profile (the global one unless you chose another); the project stays as last chosen
   V.project=V.project&&A.projects.some(p=>p.cwd===V.project)?V.project:A.projects[0]?.cwd||null;
   render();$('input').focus();loadDefaults();
 }
 async function openSession(id){
-  V.isNew=false;V.sel=id;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.loading=true;V.dismissed=null;V.openTools.clear();V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
+  V.isNew=false;V.sel=id;V.q.auto=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.loading=true;V.dismissed=null;V.openTools.clear();V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
   render();
   try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.used={model:d.model||'',effort:d.effort||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||''}}
   catch(e){oops(e.message)}
@@ -277,22 +277,57 @@ const markCards=()=>document.querySelectorAll('#thread [data-open]').forEach(c=>
 /* ---------- side panel: what the agent made ---------- */
 let staged=null;
 function renderPanel(){
-  const i=V.work.findIndex(f=>f.path===V.pv),f=V.work[i],open=!V.isNew&&!!f&&!!A.preview,ch=!V.isNew&&V.side==='changes'&&!!V.ch?.repo,sk=!V.isNew&&V.side==='skills';
-  $('panel').hidden=!open&&!ch&&!sk;$('pvw').hidden=!open;$('chw').hidden=open||!ch;$('skw').hidden=open||!sk;renderChanges();renderSkills();
-  $('split').classList.toggle('full',open&&V.full);markCards();
+  const i=V.work.findIndex(f=>f.path===V.pv),f=V.work[i],open=!V.isNew&&!!f&&!!A.preview,ch=!V.isNew&&V.side==='changes'&&!!V.ch?.repo,sk=!V.isNew&&V.side==='skills',cm=!open&&V.side==='compare'?compareSet():null;
+  $('panel').hidden=!open&&!ch&&!sk&&!cm;$('pvw').hidden=!open;$('cmw').hidden=!cm;renderCompare(cm);$('chw').hidden=open||!ch;$('skw').hidden=open||!sk;renderChanges();renderSkills();
+  $('split').classList.toggle('full',!!(open||cm)&&V.full);markCards();
   if(!open){if(staged){staged=null;$('stage').innerHTML=''}$('menu').hidden=true;return}
   $('pName').textContent=f.name;$('pCnt').textContent=V.work.length>1?`${i+1} of ${V.work.length}`:'';
   $('pPrev').disabled=$('pNext').disabled=V.work.length<2;
   $('menu').innerHTML=V.work.map(w=>`<button data-pick="${esc(w.path)}" class="${w.path===V.pv?'cur':''}" title="${esc(w.path)}"><b>${esc(w.name)}</b><span>${w.ts?ago(Date.parse(w.ts)/1000)==='now'?'just now':ago(Date.parse(w.ts)/1000)+' ago':''}</span></button>`).join('');
   $('bFull').dataset.i=V.full?'min':'max';$('bFull').title=V.full?'Show conversation':'Full width';$('bFull').classList.toggle('on',V.full);hydrate($('bFull').parentNode);
   const key=f.path+'|'+f.v;
-  if(key!==staged){staged=key;const u=esc(fileUrl(f));
-    $('stage').innerHTML=f.kind==='page'?`<iframe class="pvf" src="${u}" sandbox="${SANDBOX}" title="${esc(f.name)}"></iframe>`
-      :f.kind==='image'?`<div class="pvbox"><img src="${u}" alt="${esc(f.name)}"></div>`
-      :f.kind==='video'?`<div class="pvbox v"><video src="${u}" controls></video></div>`
-      :`<iframe class="pvf" src="${u}" title="${esc(f.name)}"></iframe>`}
+  if(key!==staged){staged=key;$('stage').innerHTML=stageOf(f)}
   fitThumbs();
 }
+const stageOf=f=>{const u=esc(fileUrl(f));
+  return f.kind==='page'?`<iframe class="pvf" src="${u}" sandbox="${SANDBOX}" title="${esc(f.name)}"></iframe>`
+    :f.kind==='image'?`<div class="pvbox"><img src="${u}" alt="${esc(f.name)}"></div>`
+    :f.kind==='video'?`<div class="pvbox v"><video src="${u}" controls></video></div>`
+    :`<iframe class="pvf" src="${u}" title="${esc(f.name)}"></iframe>`};
+
+/* ---------- compare: a question about things the agent just made, with those things next to it ---------- */
+// Each option is shown with the text the agent attached to it, or with the file from this turn that its wording names.
+// When nothing can be told apart that way, this turn's files are offered under their own names instead.
+const plainWords=s=>' '+String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()+' ';
+function compareSet(){
+  const p=V.run?.pending;if(V.isNew||p?.kind!=='question')return null;
+  const qs=p.input.questions,q=qs[Math.min(V.q.step,qs.length-1)];
+  let files=[];
+  if(A.preview)for(let j=V.items.length-1;j>=0&&V.items[j].kind!=='user';j--)if(V.items[j].kind==='work')files=V.items[j].files.concat(files);
+  files=files.filter((f,i)=>files.findIndex(x=>x.path===f.path)===i).map(f=>V.work.find(w=>w.path===f.path)||f);
+  const used=new Set(),of=q.options.map(o=>typeof o.preview==='string'&&o.preview.trim()?{text:o.preview}:null);
+  for(const words of [o=>o.label,o=>o.label+' '+(o.description||'')])q.options.forEach((o,k)=>{if(of[k])return;const t=plainWords(words(o));
+    const f=files.find(f=>!used.has(f.path)&&(t.includes(plainWords(f.name))||t.includes(plainWords(f.name.replace(/\.[^.]+$/,'')))));if(f){used.add(f.path);of[k]={file:f}}});
+  let tabs=of.map((x,k)=>x&&{...x,opt:k,label:q.options[k].label}).filter(Boolean);
+  if(!tabs.length&&files.length>1&&files.length<=4)tabs=files.map(f=>({file:f,opt:null,label:f.name}));
+  return tabs.length>1?{q,tabs}:null;
+}
+let cmStaged=null;
+function renderCompare(set){
+  if(!set){if(cmStaged){cmStaged=null;$('cmStage').innerHTML=''}return}
+  const n=set.tabs.length,want=V.q.show[V.q.step]??0,all=want==='all'&&n<=3,cur=all?-1:Math.min(+want||0,n-1);
+  $('cmSeg').innerHTML=set.tabs.map((t,i)=>`<button data-cmp="${i}" class="${i===cur?'on':''}" data-tip="${esc(t.file?t.file.path:t.label)}">${esc(t.label)}</button>`).join('')+(n<=3?`<button data-cmp="all" class="${all?'on':''}">Side by side</button>`:'');
+  $('cmFull').dataset.i=V.full?'min':'max';$('cmFull').dataset.tip=V.full?'Show conversation':'Full width';$('cmFull').classList.toggle('on',V.full);hydrate($('cmFull').parentNode);
+  const shown=all?set.tabs:[set.tabs[cur]],key=V.q.id+'|'+V.q.step+'|'+shown.map(t=>t.file?t.file.path+'|'+t.file.v:'t'+t.opt).join('|');
+  if(key!==cmStaged){cmStaged=key;$('cmStage').innerHTML=shown.map(t=>`<div class="cmcol">${all?`<div class="cmlab">${esc(t.label)}</div>`:''}${t.file?stageOf(t.file):`<div class="cmtext mono">${esc(t.text)}</div>`}</div>`).join('')}
+}
+const shownOpt=set=>{const w=V.q.show[V.q.step]??0;return set&&V.side==='compare'&&!V.pv&&w!=='all'?set.tabs[Math.min(+w||0,set.tabs.length-1)].opt:null};
+$('cmSeg').onclick=e=>{const b=e.target.closest('[data-cmp]'),set=compareSet();if(!b||!set)return;
+  const i=V.q.step,w=b.dataset.cmp==='all'?'all':+b.dataset.cmp;V.q.show[i]=w;
+  const t=set.tabs[w];if(t&&t.opt!==null&&!set.q.multiSelect){V.q.picks[i]=[t.opt];V.q.typed[i]=''}
+  renderCard()};
+$('cmFull').onclick=()=>{V.full=!V.full;renderPanel()};
+$('cmClose').onclick=()=>{V.side=null;V.full=false;renderCard()};
 // A file that changed on disk, whoever changed it, is shown again in its new state.
 async function checkWork(){
   if(V.isNew||!V.sel||!V.work.length||document.hidden)return;
@@ -306,7 +341,7 @@ async function checkWork(){
 // such as your own edits, there is the refresh button.
 let workTimer;const checkSoon=()=>{clearTimeout(workTimer);workTimer=setTimeout(checkWork,150)};
 $('bRefresh').onclick=async()=>{staged=null;await checkWork();if(!staged)renderPanel()};
-const showWork=p=>{V.pv=p;V.side=null;renderPanel()};
+const showWork=p=>{V.pv=p;V.side=null;renderPanel();if(V.run?.pending?.kind==='question')renderCard()};
 const step=d=>()=>{const i=V.work.findIndex(f=>f.path===V.pv),n=V.work.length;if(n)showWork(V.work[(i+d+n)%n].path)};
 $('pPrev').onclick=step(-1);$('pNext').onclick=step(1);
 $('moreBtn').onclick=e=>{e.stopPropagation();const was=$('menu').hidden;closePops();$('menu').hidden=!was};
@@ -530,7 +565,7 @@ function renderSettings(){
     <div class="srow"><span>Default profile<small>New sessions start on this profile.</small></span><select class="sval" id="sProf"><option value="">The global one (${esc(globalProfile()?.name||'')})</option>${A.profiles.map(p=>`<option value="${esc(p.name)}" ${pf.defaultProfile===p.name?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
     <div class="srow"><span>Archived sessions<small>Show archived sessions in the sidebar.</small></span><i class="stog ${V.showArch?'on':''}" data-set="arch"></i></div>
     <div class="srow"><span>Dictation language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>
-    <div class="srow"><span>Projects folder<small>Where the project menu looks first.</small></span><span class="sstate">${esc((A.workspace||'').replace(/^\/home\/[^/]+/,'~'))}</span></div>`;
+    <div class="srow"><span>Project folders<small>Folders that hold your projects. Separate several with a semicolon.</small></span><input class="sval sin mono" id="sFolders" spellcheck="false" autocomplete="off" value="${esc((pf.folders||[]).map(short).join('; '))}" placeholder="${esc(short((A.folders||[])[0]||''))}">${window.workwood?.pickFolder?'<button class="sval" id="sBrowse" data-tip="Choose a folder to add">Add…</button>':''}</div>`;
   else if(stab===1)pg.innerHTML=`<div class="pgh">Profiles</div>`+A.profiles.map(p=>`<div class="srow"><span>${esc(p.name)}${p.global?' <span class="pill">global</span>':''}<small>${[p.plan?cap(p.plan):null,p.h5!=null?`5h ${p.h5}%`:null,p.d7!=null?`7d ${p.d7}%`:null].filter(Boolean).join(' · ')}</small></span><button class="sval" data-login="${esc(p.name)}">Sign in again</button></div>`).join('')
     +`<div class="cap2" style="padding:10px 8px">${A.plain?'This is the account Claude Code is signed in to on this computer.':'Profiles come from Claudius. Add or remove them there. Signing in again keeps the profile and its history.'}</div>`;
   else if(stab===2){needSkills();const all=skillList();pg.innerHTML=`<div class="pgh">Skills</div>`+(!all?'<div class="cap2">Loading skills…</div>':V.sk.err?`<div class="cap2">${esc(V.sk.err)}</div>`:all.map(s=>`<div class="srow" data-tip="${esc(s.about)}"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">/${esc(s.name)}</span><span class="sstate">${s.from}</span></div>`).join('')+`<div class="cap2" style="padding:10px 8px">As Claude Code reports them for ${V.isNew?'a new session here':'the open session'}.</div>`)}
@@ -562,23 +597,31 @@ $('gAll').onclick=()=>openSettings(0);
 $('dClose').onclick=closeSettings;
 $('sdim').addEventListener('pointerdown',e=>{if(e.target===$('sdim'))closeSettings()});
 $('stabs').onclick=e=>{const b=e.target.closest('[data-st]');if(!b)return;dropLogin(true);stab=+b.dataset.st;renderSettings()};
-$('spage').onclick=e=>{
+$('spage').onclick=async e=>{
   const s=e.target.closest('[data-set]'),l=e.target.closest('[data-login]');
   if(e.target.closest('#lgBack')){dropLogin(true);renderSettings();return}
   if(l){startLogin(l.dataset.login);return}
+  if(e.target.closest('#sBrowse')){const f=await window.workwood.pickFolder();if(!f)return;
+    try{A.prefs=await api('settings',{folders:[...(A.prefs.folders||[]),f]});renderSettings()}catch(err){oops(err.message)}return}
   if(s?.dataset.set==='theme'){setTheme(root.dataset.theme==='dark'?'light':'dark');renderSettings()}
   if(s?.dataset.set==='arch'){setArch(!V.showArch);const cur=selSession();!V.showArch&&cur?.archived?leave(cur.id):render();renderSettings()}
 };
 $('spage').onchange=async e=>{
   try{if(e.target.id==='sProf')A.prefs=await api('settings',{defaultProfile:e.target.value||null});
-    if(e.target.id==='sLang')A.prefs=await api('settings',{language:e.target.value})}catch(err){oops(err.message)}
+    if(e.target.id==='sLang')A.prefs=await api('settings',{language:e.target.value});
+    if(e.target.id==='sFolders'){A.prefs=await api('settings',{folders:e.target.value.split(';').map(x=>x.trim()).filter(Boolean)});e.target.value=(A.prefs.folders||[]).map(short).join('; ')}}catch(err){oops(err.message)}
   e.target.blur();
 };
 
 /* ---------- Windows window only: where sessions run, Windows or WSL ---------- */
 {const e=window.workwood?.env;if(e&&e.list.length>1){$('envs').hidden=false;
   $('envs').innerHTML=e.list.map(x=>`<button data-env="${esc(x.id)}" class="${x.id===e.current?'on':''}" data-tip="Sessions that run ${x.id==='wsl'?'inside WSL':'on Windows itself'}">${esc(x.label)}</button>`).join('');
-  $('envs').onclick=ev=>{const b=ev.target.closest('[data-env]');if(b&&!b.classList.contains('on')){$('envs').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));window.workwood.setEnv(b.dataset.env)}}}}
+  $('envs').onclick=ev=>{const b=ev.target.closest('[data-env]');if(b&&!b.classList.contains('on')){$('envs').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));window.workwood.setEnv(b.dataset.env)}};
+  // A dot on the other side's button while an agent there is working (green) or waiting for you (amber).
+  window.workwood.onEnvStatus?.(st=>{$('envs').querySelectorAll('button').forEach(b=>{const s=st[b.dataset.env],x=e.list.find(l=>l.id===b.dataset.env);b.querySelector('.edot')?.remove();
+    const side=x.id==='wsl'?'inside WSL':'on Windows itself';let tip=`Sessions that run ${side}`;
+    if(s&&(s.wait||s.work)){const d=document.createElement('span');d.className='edot'+(s.wait?' wait':'');b.appendChild(d);tip=s.wait?`${s.wait} session${s.wait>1?'s':''} ${side} waiting for you`:`${s.work} session${s.work>1?'s':''} working ${side}`}
+    b.dataset.tip=tip})})}}
 
 /* ---------- hover notes: a fixed-width box that always stays inside the window ---------- */
 let tipFor=null,tipTimer;
@@ -645,14 +688,19 @@ function renderCard(){
   const c=$('qcard'),p=V.run?.pending,st=V.run?.status==='stopped'&&V.dismissed!==V.run.startedAt?V.run.stopped:null;
   const show=!V.isNew&&(p||st);
   c.hidden=!show;$('box').hidden=!!show;
+  if(V.side==='compare'&&p?.kind!=='question'){V.side=null;renderPanel()}
   if(!show)return;
   if(st){c.innerHTML=stoppedCard(st);return}
-  if(V.q.id!==p.id)V.q={id:p.id,step:0,picks:{},typed:{}};
+  if(V.q.id!==p.id)V.q={id:p.id,step:0,picks:{},typed:{},show:{},auto:null};
   if(p.kind==='question'){
     const qs=p.input.questions,i=Math.min(V.q.step,qs.length-1),q=qs[i],picked=V.q.picks[i]||[];
+    const set=compareSet();
+    if(set&&V.q.auto!==i){V.q.auto=i;V.side='compare';V.pv=null}       // opens once by itself; after that it is yours to close
+    if(set||V.side==='compare')renderPanel();
+    const eye=shownOpt(set);
     c.innerHTML=`<div class="steps2">${qs.map((x,k)=>`<span class="qhd ${k===i?'':'off'}">${esc(x.header||'Question '+(k+1))}</span>`).join('')}${qs.length>1?`<span class="cnt">${i+1} of ${qs.length}</span>`:''}</div>
       <div class="qq">${esc(q.question)}${q.multiSelect?'<small>Pick any</small>':''}</div>
-      <div class="qgrid ${q.options.length>4?'one':''}">${q.options.map((o,k)=>`<button class="qopt ${picked.includes(k)?'on':''}" data-opt="${k}"><span class="mark ${q.multiSelect?'sq':''}">${svg('check')}</span><span><b>${esc(o.label)}</b><span class="d">${esc(o.description||'')}</span></span></button>`).join('')}</div>
+      <div class="qgrid ${q.options.length>4||set?.tabs[0].opt!=null?'one':''}">${q.options.map((o,k)=>`<button class="qopt ${picked.includes(k)?'on':''}" data-opt="${k}"><span class="mark ${q.multiSelect?'sq':''}">${svg('check')}</span><span><b>${esc(o.label)}</b><span class="d">${esc(o.description||'')}</span></span>${eye===k?'<span class="eye">shown →</span>':''}</button>`).join('')}</div>
       ${typeBox('Or type your own answer…')}
       <div class="qfoot"><span class="gap"></span>${i>0?'<button class="qbtn" data-act="back">Back</button>':''}<button class="qbtn pri" data-act="${i<qs.length-1?'next':'send'}">${i<qs.length-1?'Next':qs.length>1?'Send answers':'Send answer'}</button></div>`;
     $('qText').value=V.q.typed[i]||'';
@@ -696,7 +744,9 @@ $('qcard').onclick=async e=>{
   if(a?.dataset.act==='term'){api(`sessions/${V.sel}/stop`,{}).catch(err=>oops(err.message));setView(V.sel,'term');return}
   if(!p)return;
   if(o){const i=V.q.step,k=+o.dataset.opt,multi=p.input.questions[i].multiSelect,cur=V.q.picks[i]||[];
-    V.q.picks[i]=multi?(cur.includes(k)?cur.filter(x=>x!==k):[...cur,k]):[k];V.q.typed[i]='';renderCard();return}
+    V.q.picks[i]=multi?(cur.includes(k)?cur.filter(x=>x!==k):[...cur,k]):[k];V.q.typed[i]='';
+    const t=compareSet()?.tabs.findIndex(x=>x.opt===k);if(t>=0){V.q.show[i]=t;V.side='compare';V.pv=null}
+    renderCard();return}
   if(!a)return;
   const act=a.dataset.act,text=($('qText')?.value||'').trim();
   if(act==='next'){V.q.step++;renderCard();return}
@@ -730,13 +780,14 @@ function renderComposer(){
   $('pCtx').textContent=c?`${pct}% · ${k(c.used)} of ${k(c.window)}`:'';
   $('ctxBar').style.visibility=c?'visible':'hidden';$('ctxBar').firstElementChild.style.width=pct+'%';
 }
+const short=p=>A.home&&p&&p.startsWith(A.home)?'~'+p.slice(A.home.length):p||'';
 function renderMenus(){
   const f=V.find.toLowerCase(),list=A.projects.filter(p=>!f||p.name.toLowerCase().includes(f)||p.cwd.toLowerCase().includes(f));
   const row=p=>`<button class="item" data-proj="${esc(p.cwd)}">${tile(p.name)}</span><span class="nm"><b>${esc(p.name)}</b><span class="mono">${esc(p.cwd.replace(/^\/home\/[^/]+/,'~'))}</span></span>${p.cwd===V.project?svg('check','ck'):''}</button>`;
   const rec=list.filter(p=>p.recent),rest=list.filter(p=>!p.recent);
   $('mProject').innerHTML=`<div class="find">${svg('search')}<input id="pFind" placeholder="Find a project" value="${esc(V.find)}" autocomplete="off"></div>
-    ${rec.length?'<div class="lab">Recent</div>'+rec.map(row).join(''):''}${rest.length?'<div class="lab">In ~/workspace</div>'+rest.map(row).join(''):''}${!list.length?'<div class="lab">Nothing matches.</div>':''}
-    <div class="sep"></div>${V.mk?`<div class="mk"><span class="mono">~/workspace/</span><input id="mkName" placeholder="folder-name" autocomplete="off"><button data-create>Create</button></div>`:`<button class="item" data-mk>${svg('folder-plus')}<span class="nm"><b>New folder…</b></span></button>`}`;
+    ${rec.length?'<div class="lab">Recent</div>'+rec.map(row).join(''):''}${rest.length?`<div class="lab">${(A.folders||[]).length===1?'In '+esc(short(A.folders[0])):'In your project folders'}</div>`+rest.map(row).join(''):''}${!list.length?'<div class="lab">Nothing matches.</div>':''}
+    <div class="sep"></div>${V.mk?`<div class="mk"><span class="mono">${esc(short((A.folders||[])[0]||'')+(/\\/.test((A.folders||[])[0]||'')?'\\':'/'))}</span><input id="mkName" placeholder="folder-name" autocomplete="off"><button data-create>Create</button></div>`:`<button class="item" data-mk>${svg('folder-plus')}<span class="nm"><b>New folder…</b></span></button>`}`;
   const lvl=v=>v>=80?'hot':v>=60?'mid':'';
   $('mProfile').innerHTML=A.profiles.map(p=>`<button class="prow" data-prof="${esc(p.name)}">
     <span class="p1"><b>${esc(p.name)}</b>${p.global?'<span class="pill">global</span>':''}${p.name===A.next?`<span class="pill sug">${svg('spark')}use next</span>`:''}${p.name===V.profile?svg('check','ck'):''}</span>

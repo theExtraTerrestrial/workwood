@@ -449,11 +449,11 @@ test('dictation: a recording comes back as text, and only with the token', async
 });
 
 test('settings: default profile and dictation language are kept; sign-in again runs Claudius in a terminal', async () => {
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian' });
-  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian' });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [] });
+  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [] });
   const kept = JSON.parse(fs.readFileSync(path.join(sb.home, '.config', 'workwood', 'state.json'), 'utf8'));
   assert.deepEqual([kept.defaultProfile, kept.language, Array.isArray(kept.archived)], ['other', 'latvian', true]);
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [] });
   const a = (await svc.call('about')).body;
   assert.deepEqual([a.version, a.claude, typeof a.speech.model], ['0.1.0', '2.1.322', 'string']);
   assert.equal((await svc.call('profiles/nobody/login', {})).status, 404);
@@ -494,6 +494,26 @@ test('without Claudius (as on Windows): one account, sessions read straight from
     assert.equal(r.status, 200);
     await until(async () => { const s = (await plain.call('sessions/' + r.body.sessionId)).body; return s.run?.status === 'idle' && /Echo: Hello from plain/.test(lastText(s)); }, 'the turn to end');
   } finally { plain.stop(); }
+});
+
+test('project folders: the menu offers what is inside them, new folders go into the first, a wrong one is refused', async () => {
+  const extra = path.join(sb.home, 'elsewhere'); fs.mkdirSync(path.join(extra, 'zeta'), { recursive: true });
+  try {
+    assert.deepEqual((await state()).folders, [path.join(sb.home, 'workspace')]);
+    const bad = await svc.call('settings', { folders: [path.join(sb.home, 'nowhere')] });
+    assert.equal(bad.status, 400); assert.match(bad.body.error, /no folder/);
+    assert.equal((await svc.call('settings', { folders: ['relative/path'] })).status, 400);
+    const ok = await svc.call('settings', { folders: ['~/elsewhere', path.join(sb.home, 'workspace')] });
+    assert.deepEqual(ok.body.folders, [extra, path.join(sb.home, 'workspace')]);
+    const st = await state();
+    assert.ok(st.projects.some(p => p.cwd === path.join(extra, 'zeta') && !p.recent));
+    assert.ok(st.projects.some(p => p.cwd === sb.projects.alpha));
+    assert.equal((await svc.call('projects', { name: 'eta' })).status, 200);
+    assert.ok(fs.statSync(path.join(extra, 'eta')).isDirectory());
+    const status = (await svc.call('status')).body;
+    assert.equal(typeof status.wait, 'number'); assert.equal(typeof status.work, 'number');
+  } finally { await svc.call('settings', { folders: [] }); }
+  assert.ok(!(await state()).projects.some(p => p.cwd === path.join(extra, 'zeta')));
 });
 
 test('creates a project folder, and refuses odd names', async () => {
@@ -614,6 +634,48 @@ ui('window: plan card', async () => {
   await page.waitForSelector('.planbody:has-text("Split it in two")');
   await page.click('.qbtn:has-text("Approve and start")');
   await page.waitForSelector('.ai:has-text("PLAN APPROVED")');
+});
+
+ui('window: a question about mockups opens them next to it; options and tabs follow each other; side by side', async () => {
+  await startNew('a MOCKUP then ASK');
+  await page.waitForSelector('#qcard:has-text("Which mockup?")');
+  await page.waitForSelector('#cmw:not([hidden]) #cmSeg');                       // opens by itself
+  assert.deepEqual(await page.locator('#cmSeg button').allInnerTexts(), ['Light', 'Dark', 'Side by side']);
+  assert.equal(await page.frameLocator('#cmStage iframe').locator('h1').innerText(), 'Light direction');
+  assert.equal(await page.locator('#qcard .qopt:has(.eye) b').innerText(), 'Light');
+  await page.click('#qcard .qopt:has-text("Dark")');                            // picking an option shows its mockup
+  await page.waitForSelector('#cmSeg button.on:has-text("Dark")');
+  assert.equal(await page.frameLocator('#cmStage iframe').locator('h1').innerText(), 'Dark direction');
+  await page.click('#cmSeg button:has-text("Light")');                          // and a tab picks its option
+  await page.waitForSelector('#qcard .qopt.on:has-text("Light")');
+  await page.click('#cmSeg button:has-text("Side by side")');
+  await page.waitForFunction(() => document.querySelectorAll('#cmStage iframe').length === 2);
+  assert.deepEqual(await page.locator('#cmStage .cmlab').allInnerTexts(), ['Light', 'Dark']);
+  assert.equal(await page.locator('#qcard .eye').count(), 0);
+  await page.click('.hc:has-text("shot.png")');                                  // any other file from the turn can still be opened
+  await page.waitForSelector('#pvw:not([hidden])'); assert.equal(await page.locator('#cmw').isHidden(), true);
+  await page.click('#qcard .qopt:has-text("Dark")');                            // an option brings the comparison back
+  await page.waitForSelector('#cmw:not([hidden]) #cmSeg button.on:has-text("Dark")');
+  await page.click('#cmClose'); await page.waitForSelector('#panel', { state: 'hidden' });
+  assert.equal(await page.locator('#qcard').isVisible(), true);                  // closing it leaves the question
+  await page.click('#qcard [data-act="send"]');
+  await page.waitForSelector('.ai:has-text("PICKED")'); assert.match(await page.locator('.ai:has-text("PICKED")').innerText(), /Dark/);
+  assert.equal(await page.locator('#cmw').isHidden(), true);
+});
+
+ui('window: a question whose options carry their own text shows that text; a plain question opens nothing', async () => {
+  await startNew('show me SNIPPETS');
+  await page.waitForSelector('#cmw:not([hidden]) .cmtext:has-text("top")');
+  await page.click('#qcard .qopt:has-text("Split")');
+  await page.waitForSelector('#cmStage .cmtext:has-text("| a  | b  |")');
+  await page.click('#qcard [data-act="send"]'); await page.waitForSelector('.ai:has-text("PICKED")');
+  await page.waitForSelector('#panel', { state: 'hidden' });
+  await startNew('just ASK me');
+  await page.waitForSelector('#qcard:has-text("Which direction")');
+  assert.equal(await page.locator('#panel').isHidden(), true);
+  await page.click('#qcard .qopt:has-text("Light")'); await page.click('#qcard [data-act="next"]');
+  await page.click('#qcard .qopt:has-text("Tests")'); await page.click('#qcard [data-act="send"]');
+  await page.waitForSelector('.ai:has-text("ANSWERS")');
 });
 
 ui('window: limit card continues on another profile; the session moves groups', async () => {
@@ -976,6 +1038,12 @@ ui('window: the settings dialog: tabs, default profile for new sessions, sign in
   await page.selectOption('#sProf', 'other');
   await page.selectOption('#sLang', 'german');
   await until(async () => { const p = (await state()).prefs; return p.defaultProfile === 'other' && p.language === 'german'; }, 'the settings to be saved');
+  await page.fill('#sFolders', '/nowhere/at/all'); await page.press('#sFolders', 'Enter');
+  await page.waitForSelector('text=There is no folder at');
+  await page.fill('#sFolders', '~/workspace; ~/.claude'); await page.press('#sFolders', 'Enter');
+  await until(async () => (await state()).prefs.folders.length === 2, 'the project folders to be saved');
+  await page.fill('#sFolders', ''); await page.press('#sFolders', 'Enter');
+  await until(async () => (await state()).prefs.folders.length === 0, 'the project folders to be cleared');
   await page.click('#stabs [data-st="3"]');
   await page.waitForSelector('#spage .srow:has-text("Claude Code") .sstate:has-text("2.1.322")');
   await page.click('#stabs [data-st="2"]');

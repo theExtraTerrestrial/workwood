@@ -5,5 +5,7 @@ let env = null; try { env = ipcRenderer.sendSync('env:get'); } catch {}
 contextBridge.exposeInMainWorld('workwood', {
   pathFor: file => { try { return webUtils.getPathForFile(file) || ''; } catch { return ''; } },
   env: env && env.list ? env : null,
+  pickFolder: () => ipcRenderer.invoke('folder:pick'),
   setEnv: id => ipcRenderer.invoke('env:set', id),
+  onEnvStatus: fn => ipcRenderer.on('env:status', (e, s) => fn(s)),
 });

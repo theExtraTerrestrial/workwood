@@ -10,7 +10,8 @@
     "edge": "node shell/edge.mjs",
     "shortcut": "node shell/windows-shortcut.mjs",
     "service": "node service/server.mjs",
-    "test": "node --test tests/app.test.mjs"
+    "test": "node --test tests/app.test.mjs",
+    "package": "node shell/windows-package.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.323",

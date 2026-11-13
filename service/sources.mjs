@@ -9,7 +9,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const run = promisify(execFile);
-const HOME = os.homedir();
+export const HOME = os.homedir();
 export const PROFILE_ROOT = path.join(HOME, '.claude-profiles');
 export const PROJECTS_ROOT = path.join(HOME, '.claude', 'projects');
 export const WORKSPACE = process.env.WORKWOOD_WORKSPACE || path.join(HOME, 'workspace');
@@ -228,22 +228,40 @@ export async function loadLive() {
   return map;
 }
 
-/** Folders offered in the project menu: ones with past sessions first, then the rest of ~/workspace. */
-export async function loadProjects(sessions) {
+/** Folders offered in the project menu: ones with past sessions first, then what is inside your project folders. */
+export async function loadProjects(sessions, folders = [WORKSPACE]) {
   const seen = new Map();
   for (const s of sessions || []) if (!seen.has(s.cwd)) seen.set(s.cwd, { cwd: s.cwd, name: s.project, recent: true });
-  try {
-    for (const d of await fs.readdir(WORKSPACE, { withFileTypes: true })) {
-      const cwd = path.join(WORKSPACE, d.name);
-      if (d.isDirectory() && !d.name.startsWith('.') && !seen.has(cwd)) seen.set(cwd, { cwd, name: d.name, recent: false });
-    }
-  } catch {}
+  for (const folder of folders) {
+    try {
+      for (const d of await fs.readdir(folder, { withFileTypes: true })) {
+        const cwd = path.join(folder, d.name);
+        if (d.isDirectory() && !d.name.startsWith('.') && !d.name.startsWith('$') && !seen.has(cwd)) seen.set(cwd, { cwd, name: d.name, recent: false });
+      }
+    } catch {}
+  }
   return [...seen.values()];
 }
 
-export async function createProject(name) {
+/** Checks the project folders typed into the settings dialog; returns them tidied, or throws naming the one that is wrong. */
+export async function checkFolders(list) {
+  const out = [];
+  for (const raw of Array.isArray(list) ? list.slice(0, 12) : []) {
+    let f = String(raw || '').trim().replace(/^~(?=$|[\\/])/, HOME);
+    if (!f) continue;
+    if (!WIN) f = fromWindows(f);   // a folder picked in the Windows window while it shows the WSL side
+    if (!path.isAbsolute(f)) throw new Error(`"${raw}" is not a full path.`);
+    f = path.resolve(f);
+    let st; try { st = await fs.stat(f); } catch {}
+    if (!st?.isDirectory()) throw new Error(`There is no folder at ${f}.`);
+    if (!out.includes(f)) out.push(f);
+  }
+  return out;
+}
+
+export async function createProject(name, folder = WORKSPACE) {
   if (!/^[\w][\w.-]{0,63}$/.test(name)) throw new Error('Use letters, digits, dots, dashes or underscores for the folder name.');
-  const cwd = path.join(WORKSPACE, name);
+  const cwd = path.join(folder, name);
   await fs.mkdir(cwd, { recursive: false });
   return { cwd, name, recent: false };
 }

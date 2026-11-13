@@ -34,7 +34,8 @@ const state = { profiles: [], sessions: [], projects: [], live: new Map(), next:
 const cached = src.readCache();
 if (cached?.profiles?.length) Object.assign(state, { profiles: cached.profiles, sessions: cached.sessions || [], projects: cached.projects || [], next: cached.next || null, ready: true });
 const kept = src.readKept(), archived = new Set(kept.archived || []);
-const prefs = { defaultProfile: kept.defaultProfile || null, language: kept.language || null };   // your choices in the settings dialog
+const prefs = { defaultProfile: kept.defaultProfile || null, language: kept.language || null, folders: Array.isArray(kept.folders) ? kept.folders : [] };   // your choices in the settings dialog
+const folders = () => prefs.folders.length ? prefs.folders : [src.WORKSPACE];   // where the project menu looks
 const keep = () => src.writeKept({ archived: [...archived], ...prefs });
 const renamed = new Map();   // session -> [when, name], for a list that was being read while you renamed
 const deleted = new Set();   // gone, but a list read a moment earlier may still name them
@@ -80,7 +81,7 @@ const transcriptFile = (cwd, id) => path.join(src.PROJECTS_ROOT, cwd.replace(/[^
 
 const snapshot = () => ({
   profiles: state.profiles.map(({ account, ...p }) => p), next: state.next, projects: state.projects,
-  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, prefs, plain: src.PLAIN, workspace: src.WORKSPACE, preview: previewBase,
+  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, prefs, plain: src.PLAIN, folders: folders(), home: src.HOME, preview: previewBase,
 });
 let lastSent = '';
 function pushState() { const s = JSON.stringify(snapshot()); if (s !== lastSent) { lastSent = s; emit('state', JSON.parse(s)); } }
@@ -106,7 +107,7 @@ async function doRefresh() {
     }
     state.sessions = sessions;
   }
-  state.projects = await src.loadProjects(state.sessions);
+  state.projects = await src.loadProjects(state.sessions, folders());
   state.ready = true; state.fresh = !!(profiles && sessions);
   pushState();
   state.next = await nextP;
@@ -126,6 +127,10 @@ async function api(req, res, url) {
     res.write(`event: state\ndata: ${JSON.stringify(snapshot())}\n\n`);
     clients.add(res); req.on('close', () => clients.delete(res));
     return;
+  }
+  if (req.method === 'GET' && parts[0] === 'status') {    // for the Windows window: is anything here working or waiting, while you look at the other side?
+    const all = state.sessions.map(decorate).filter(s => !s.outside && !s.term);
+    return send(res, 200, { wait: all.filter(s => s.status === 'wait').length, work: all.filter(s => s.status === 'work').length });
   }
   if (req.method === 'GET' && parts[0] === 'defaults') return send(res, 200, await src.defaultsFor(url.searchParams.get('cwd'), url.searchParams.get('profile'), state.profiles));
   if (req.method === 'GET' && parts[0] === 'about') {
@@ -202,6 +207,10 @@ async function api(req, res, url) {
   if (parts[0] === 'settings') {
     if ('defaultProfile' in b) prefs.defaultProfile = state.profiles.some(p => p.name === b.defaultProfile) ? b.defaultProfile : null;
     if ('language' in b) prefs.language = /^[a-z]{3,20}$/.test(b.language || '') ? b.language : null;
+    if ('folders' in b) {
+      try { prefs.folders = await src.checkFolders(b.folders); } catch (e) { return send(res, 400, { error: e.message }); }
+      state.projects = await src.loadProjects(state.sessions, folders());
+    }
     await keep(); pushState();
     return send(res, 200, prefs);
   }
@@ -294,14 +303,14 @@ async function api(req, res, url) {
       deleted.add(s.id); runs.delete(s.id); workPaths.delete(s.id); dirsBySession.delete(s.id);
       if (archived.delete(s.id)) await keep();
       state.sessions = state.sessions.filter(x => x.id !== s.id);
-      state.projects = await src.loadProjects(state.sessions);
+      state.projects = await src.loadProjects(state.sessions, folders());
       src.writeCache({ profiles: state.profiles, sessions: state.sessions, projects: state.projects, next: state.next });
     }
     pushState();
     return send(res, 200, { ok: true });
   }
   if (parts[0] === 'projects') {
-    const p = await src.createProject(String(b.name || '').trim());
+    const p = await src.createProject(String(b.name || '').trim(), folders()[0]);
     state.projects.push(p); pushState();
     return send(res, 200, p);
   }

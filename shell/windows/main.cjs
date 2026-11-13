@@ -68,7 +68,18 @@ async function open() {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!/^http:\/\/127\.0\.0\.1:\d+\//.test(url)) { e.preventDefault(); shell.openExternal(url); } else ours(url).then(ok => { if (!ok) win?.webContents.stop(); }); });
   ipcMain.on('env:get', e => { e.returnValue = { current, list: envs }; });
+  ipcMain.handle('folder:pick', async () => { const r = await dialog.showOpenDialog(win, { title: 'Choose a project folder', properties: ['openDirectory'] }); return r.canceled ? null : r.filePaths[0] || null; });
   ipcMain.handle('env:set', (e, id) => { if (envs.some(x => x.id === id) && id !== current) show(id); });
+  // While you look at one side, ask the other (if it was started) whether an agent there is working or waiting for you.
+  setInterval(async () => {
+    if (!win || quitting) return;
+    const out = {};
+    for (const id of Object.keys(started)) {
+      if (id === current) continue;
+      try { const u = new URL(await started[id]); const r = await fetch(`${u.origin}/api/status`, { headers: { 'x-workwood-token': u.searchParams.get('token') }, signal: AbortSignal.timeout(3000) }); if (r.ok) out[id] = await r.json(); } catch {}
+    }
+    try { win?.webContents.send('env:status', out); } catch {}
+  }, 4000);
   let first = envs[0]?.id; try { const want = JSON.parse(fs.readFileSync(remembered, 'utf8')).env; if (envs.some(x => x.id === want)) first = want; } catch {}
   if (!first) { dialog.showErrorBox('Workwood could not start', 'Nothing is installed to run sessions with. Run "npm run shortcut" again.'); return app.quit(); }
   await show(first);

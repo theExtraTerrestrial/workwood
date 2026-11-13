@@ -55,15 +55,31 @@ async function api(path,body){
 /* ---------- state ---------- */
 const A={profiles:[],sessions:[],projects:[],next:null,ready:false,fresh:false,preview:null};           // from the service
 const V={sel:null,isNew:false,items:[],run:null,context:null,loading:false,     // what the window shows
-  project:null,profile:null,model:'',effort:'',mk:false,find:'',
+  project:null,profile:null,mk:false,find:'',
+  used:{model:'',effort:''},pick:{},def:{model:'',effort:''},   // what the open session last ran on; what you chose instead, per session ('new' for one not started)
   shut:JSON.parse(localStorage.getItem('ww.shut')||'{}'),more:{},openTools:new Set(),
   q:{id:null,step:0,picks:{},typed:{}},dismissed:null,busy:false,
   work:[],pv:null,full:false,
+  views:{},                                                                        // session -> 'chat' or 'term'
   showArch:localStorage.getItem('ww.arch')==='1',menuFor:null,renaming:null,renameText:'',caret:0};  // session actions                                                    // files the agent made; the one shown in the side panel
-const MODELS=[['','Default','Whatever this project is set to use'],['claude-fable-5-2','Fable 5.2','Most capable'],['claude-opus-5-5','Opus 5.5','Strong, lighter on your limit'],['claude-sonnet-5-5','Sonnet 5.5','Fast, for everyday work'],['claude-haiku-5-5','Haiku 5.5','Fastest']];
-const EFFORTS=[['','Default','Whatever this project is set to use'],['low','Low','Quick answers, least of your limit'],['medium','Medium','A balance for routine work'],['high','High','Thinks longer on each step'],['xhigh','Extra','For hard problems'],['max','Max','Slowest, uses the most of your limit']];
+const MODELS=[['','Default','Whatever Claude Code picks'],['claude-fable-5-2','Fable 5.2','Most capable'],['claude-opus-5-5','Opus 5.5','Strong, lighter on your limit'],['claude-sonnet-5-5','Sonnet 5.5','Fast, for everyday work'],['claude-haiku-5-5','Haiku 5.5','Fastest']];
+const EFFORTS=[['','Default','Whatever Claude Code picks'],['low','Low','Quick answers, least of your limit'],['medium','Medium','A balance for routine work'],['high','High','Thinks longer on each step'],['xhigh','Extra','For hard problems'],['max','Max','Slowest, uses the most of your limit']];
 
 /* ---------- small helpers ---------- */
+// The model and effort the next message goes out with: your choice for this session if you made one, else what it last used.
+const pickKey=()=>V.isNew?'new':V.sel;
+const curModel=()=>V.pick[pickKey()]?.model??(V.isNew?'':V.used.model||'');
+const curEffort=()=>V.pick[pickKey()]?.effort??(V.isNew?'':V.used.effort||'');
+const choose=(k,v)=>{V.pick[pickKey()]={...V.pick[pickKey()],[k]:v}};
+// What the pickers show: always the real model and effort. A leading * marks the default, the one your Claude Code settings give.
+const shownModel=()=>curModel()||V.def.model||'',shownEffort=()=>curEffort()||V.def.effort||'';
+const star=(v,d)=>!v||v===d?'*':'';
+async function loadDefaults(){ // for a session not started yet: depends on the project and the profile
+  const key=V.project+'|'+V.profile;try{const d=await api(`defaults?cwd=${encodeURIComponent(V.project||'')}&profile=${encodeURIComponent(V.profile||'')}`);if(V.isNew&&key===V.project+'|'+V.profile){V.def={model:d.model||'',effort:d.effort||''};renderComposer()}}catch{}
+}
+// "claude-opus-5-5[1m]" reads as "Opus 5.5 (1M)"
+const modelName=id=>{const known=MODELS.find(m=>m[0]===id);if(known)return known[1];const big=/\[1m\]/i.test(id),p=id.replace(/\[1m\]/i,'').replace(/^claude-/,'').replace(/-\d{8}$/,'').split('-');
+  const nums=p.filter(x=>/^\d+$/.test(x)),words=p.filter(x=>!/^\d+$/.test(x));return (words.map(w=>w[0].toUpperCase()+w.slice(1)).join(' ')+(nums.length?' '+nums.join('.'):'')+(big?' (1M)':'')).trim()||id};
 const hueOf=name=>{let h=0;for(const c of String(name))h=(h*31+c.charCodeAt(0))>>>0;return h%360};
 const monogram=name=>{const p=String(name).replace(/^\.+/,'').split(/[^A-Za-z0-9]+/).filter(Boolean);return ((p.length>1?p[0][0]+p[1][0]:(p[0]||'?').slice(0,2))).toUpperCase()};
 const tile=(name,c='')=>`<span class="tile ${c}" style="--h:${hueOf(name)}">${esc(monogram(name))}`;
@@ -112,7 +128,7 @@ function drawList(){
       (full?`<div class="sub"><span class="st">${full}</span></div>`:'')+(shut?'':
       (V.isNew&&p.name===V.profile?`<button class="sess sel"><span class="tile new">${svg('plus')}</span><span class="txt"><span class="l1"><b>New session</b></span><span class="l2"><span>Not started</span></span></span></button>`:'')+
       all.slice(0,cap).map(s=>s.id===V.renaming?`<div class="sess ren ${!V.isNew&&s.id===V.sel?'sel':''}" data-id="${s.id}" style="--h:${hueOf(s.project)}">${tile(s.project)}</span><input id="renIn" maxlength="120" autocomplete="off" spellcheck="false" aria-label="Session name"></div>`
-        :`<button class="sess ${s.status} ${!V.isNew&&s.id===V.sel?'sel':''} ${s.archived?'arch':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}" style="--h:${hueOf(s.project)}" title="${esc(s.cwd)}">${tile(s.project)}${s.outside?`<em class="xb">${svg('term')}</em>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b><time>${ago(s.mts)}</time><span class="sact"><span data-arch title="${s.archived?'Unarchive':'Archive'}">${svg('archive')}</span><span data-dots title="More">${svg('dots')}</span></span></span><span class="l2"><em>${esc(s.project)}</em><span>${esc(s.line)}</span></span></span></button>`).join('')+
+        :`<button class="sess ${s.status} ${!V.isNew&&s.id===V.sel?'sel':''} ${s.archived?'arch':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}" style="--h:${hueOf(s.project)}" title="${esc(s.cwd)}">${tile(s.project)}${s.outside||s.term?`<em class="xb">${svg('term')}</em>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b><time>${ago(s.mts)}</time><span class="sact"><span data-arch title="${s.archived?'Unarchive':'Archive'}">${svg('archive')}</span><span data-dots title="More">${svg('dots')}</span></span></span><span class="l2"><em>${esc(s.project)}</em><span>${esc(s.line)}</span></span></span></button>`).join('')+
       (all.length>cap?`<button class="more" data-more="${esc(p.name)}">Show ${all.length-cap} older</button>`:'')+
       (!all.length&&!(V.isNew&&p.name===V.profile)?'<div class="none">No sessions yet</div>':''));
   }).join('');
@@ -176,15 +192,15 @@ $('dim').onclick=async e=>{
 $('newBtn').onclick=()=>newSession();
 
 function newSession(){
-  V.isNew=true;V.sel=null;V.items=[];V.run=null;V.context=null;V.dismissed=null;V.work=[];V.pv=null;V.full=false;
+  V.isNew=true;V.sel=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.dismissed=null;V.work=[];V.pv=null;V.full=false;
   V.profile=globalProfile()?.name; // every new session starts on the global profile; the project stays as last chosen
   V.project=V.project&&A.projects.some(p=>p.cwd===V.project)?V.project:A.projects[0]?.cwd||null;
-  render();$('input').focus();
+  render();$('input').focus();loadDefaults();
 }
 async function openSession(id){
-  V.isNew=false;V.sel=id;V.items=[];V.run=null;V.context=null;V.loading=true;V.dismissed=null;V.openTools.clear();V.work=[];V.pv=null;V.full=false;
+  V.isNew=false;V.sel=id;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.loading=true;V.dismissed=null;V.openTools.clear();V.work=[];V.pv=null;V.full=false;
   render();
-  try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[]}
+  try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.used={model:d.model||'',effort:d.effort||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||''}}
   catch(e){oops(e.message)}
   V.loading=false;render();toBottom(true);
 }
@@ -290,7 +306,7 @@ const showWork=p=>{V.pv=p;renderPanel()};
 const step=d=>()=>{const i=V.work.findIndex(f=>f.path===V.pv),n=V.work.length;if(n)showWork(V.work[(i+d+n)%n].path)};
 $('pPrev').onclick=step(-1);$('pNext').onclick=step(1);
 $('moreBtn').onclick=e=>{e.stopPropagation();const was=$('menu').hidden;closePops();$('menu').hidden=!was};
-$('menu').onclick=e=>{const b=e.target.closest('[data-pick]');if(b)showWork(b.dataset.pick)};
+$('menu').onclick=e=>{const b=e.target.closest('[data-pick]');if(b){closePops();showWork(b.dataset.pick)}};
 $('bFull').onclick=()=>{V.full=!V.full;renderPanel()};
 $('bClose').onclick=()=>{V.pv=null;V.full=false;renderPanel()};
 $('bExt').onclick=()=>{const f=V.work.find(w=>w.path===V.pv);if(f)window.open(fileUrl(f),'_blank','noopener')};
@@ -301,6 +317,49 @@ function tick(){const el=$('elapsed');if(el&&V.run?.startedAt)el.textContent=dur
 setInterval(tick,1000);
 setInterval(()=>{if(A.ready)renderList()},60000);
 function toBottom(force){const s=$('scroll');if(force||s.scrollHeight-s.scrollTop-s.clientHeight<160)s.scrollTop=s.scrollHeight}
+
+/* ---------- terminal view: the session's real Claude Code terminal ---------- */
+const view=()=>V.isNew||!V.sel?'chat':V.views[V.sel]||'chat';
+const turnBusy=()=>!!V.run&&(V.run.status==='working'||V.run.status==='waiting');
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const termTheme=()=>({background:css('--term'),foreground:css('--term-text'),cursor:css('--term-text'),selectionBackground:'rgba(128,128,128,.35)'});
+let T=null; // the terminal on screen: {id, term, es, ro} or {id, wait} while a chat turn still holds the session
+function tnote(html){$('tnote').innerHTML=html||'';$('tnote').hidden=!html}
+function dropTerm(){if(!T)return;T.es?.close();T.ro?.disconnect();T.term?.dispose();T=null;$('xt').innerHTML='';tnote('')}
+function setView(id,v){V.views[id]=v;if(id!==V.sel)return;v==='chat'?openSession(id):render()} // back in the chat, read what the terminal added
+function renderTerm(){
+  const v=view();
+  $('seg').hidden=V.isNew||!V.sel;$('vChat').classList.toggle('on',v==='chat');$('vTerm').classList.toggle('on',v==='term');
+  $('conv').hidden=v!=='chat';$('term').hidden=v!=='term';
+  if(v!=='term')return dropTerm();
+  if(T&&T.id===V.sel&&!(T.wait&&!turnBusy()))return;
+  dropTerm();startTerm(V.sel);
+}
+async function startTerm(id){
+  if(turnBusy()){T={id,wait:true};tnote('<p>The agent is working in the chat. The terminal opens when this turn ends.</p><button class="qbtn" data-stopterm>Stop the turn and open the terminal</button>');return}
+  const term=new Terminal({fontFamily:'"Cascadia Code","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace',fontSize:13,cursorBlink:true,scrollback:5000,theme:termTheme()});
+  const fit=new FitAddon.FitAddon();term.loadAddon(fit);term.open($('xt'));try{fit.fit()}catch{}
+  const me=T={id,term};
+  const closed=text=>{if(T===me)tnote(`<p>${esc(text)}</p><button class="qbtn" data-again>Start again</button>`)};
+  try{await api(`sessions/${id}/term`,{cols:term.cols,rows:term.rows})}catch(e){return closed(e.message)}
+  if(T!==me)return;
+  const es=me.es=new EventSource(`/api/sessions/${id}/term?token=${TOKEN}`);
+  es.addEventListener('data',e=>term.write(JSON.parse(e.data)));
+  es.addEventListener('exit',e=>{es.close();if(T!==me)return;JSON.parse(e.data).code===0?setView(id,'chat'):closed('The terminal closed.')});
+  es.onerror=()=>{if(es.readyState===2)closed('The terminal closed.')};
+  let q=Promise.resolve();
+  term.onData(d=>{q=q.then(()=>api(`sessions/${id}/term/input`,{data:d}).catch(()=>{}))});
+  term.onResize(({cols,rows})=>api(`sessions/${id}/term/resize`,{cols,rows}).catch(()=>{}));
+  term.attachCustomKeyEventHandler(e=>{if(e.type==='keydown'&&e.ctrlKey&&e.shiftKey&&e.code==='KeyC'){navigator.clipboard?.writeText(term.getSelection());return false}return true});
+  me.ro=new ResizeObserver(()=>{if(!$('term').hidden)try{fit.fit()}catch{}});me.ro.observe($('xt'));
+  term.focus();
+}
+$('vChat').onclick=()=>{if(view()!=='chat')setView(V.sel,'chat')};
+$('vTerm').onclick=()=>{if(view()!=='term')setView(V.sel,'term')};
+$('tnote').onclick=e=>{
+  if(e.target.closest('[data-stopterm]'))api(`sessions/${V.sel}/stop`,{}).catch(err=>oops(err.message));
+  else if(e.target.closest('[data-again]')){dropTerm();renderTerm()}
+};
 
 /* ---------- cards: questions, permissions, plans, stops ---------- */
 const typeBox=ph=>`<div class="qtype"><input id="qText" placeholder="${esc(ph)}" autocomplete="off"></div>`;
@@ -326,7 +385,7 @@ function renderCard(){
   }else if(p.kind==='unknown'){
     c.innerHTML=`<div class="steps2"><span class="qhd">Needs you</span></div><div class="qq">The agent is asking something this app can't show properly yet</div>
       <div class="why">Here is what could be read from it:</div><div class="raw">${esc(JSON.stringify(p.input,null,1).slice(0,900))}</div>${typeBox('Answer in your own words…')}
-      <div class="qfoot"><span class="gap"></span><button class="qbtn pri" data-act="deny">Send</button></div>`;
+      <div class="qfoot"><button class="qbtn" data-act="term" title="Stops this turn. Ask the agent to put the question again there.">Continue in the terminal</button><span class="gap"></span><button class="qbtn pri" data-act="deny">Send</button></div>`;
   }else{
     const inp=p.input||{},edit=/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(p.toolName);
     let detail;
@@ -355,6 +414,7 @@ $('qcard').onclick=async e=>{
   const p=V.run?.pending,o=e.target.closest('[data-opt]'),a=e.target.closest('[data-act]'),go=e.target.closest('[data-go]');
   if(go){sendText('Continue where you left off.',go.dataset.go);return}
   if(a?.dataset.act==='dismiss'){V.dismissed=V.run.startedAt;render();return}
+  if(a?.dataset.act==='term'){api(`sessions/${V.sel}/stop`,{}).catch(err=>oops(err.message));setView(V.sel,'term');return}
   if(!p)return;
   if(o){const i=V.q.step,k=+o.dataset.opt,multi=p.input.questions[i].multiSelect,cur=V.q.picks[i]||[];
     V.q.picks[i]=multi?(cur.includes(k)?cur.filter(x=>x!==k):[...cur,k]):[k];V.q.typed[i]='';renderCard();return}
@@ -385,8 +445,8 @@ function renderComposer(){
   $('pProject').innerHTML=pr?`${tile(pr.name,'s')}</span><span>${esc(pr.name)}</span>${svg('chev-d','cv')}`:`${svg('folder')}<span>Pick a project</span>${svg('chev-d','cv')}`;
   const cur=profile(V.profile);
   $('pProfile').innerHTML=`${svg('user')}<span>${esc(cur?.name||'Profile')}</span>${cur?.h5!=null?`<small>${cur.h5}%</small>`:''}${svg('chev-d','cv')}`;
-  $('pModel').innerHTML=`<span>${MODELS.find(m=>m[0]===V.model)[1]==='Default'?'Default model':MODELS.find(m=>m[0]===V.model)[1]}</span>${svg('chev-d','cv')}`;
-  $('pEffort').innerHTML=`<span>${EFFORTS.find(m=>m[0]===V.effort)[1]==='Default'?'Default effort':EFFORTS.find(m=>m[0]===V.effort)[1]}</span>${svg('chev-d','cv')}`;
+  $('pModel').innerHTML=`<span>${star(shownModel(),V.def.model)}${shownModel()?esc(modelName(shownModel())):'Default model'}</span>${svg('chev-d','cv')}`;
+  $('pEffort').innerHTML=`<span>${star(shownEffort(),V.def.effort)}${esc(EFFORTS.find(m=>m[0]===shownEffort())?.[1]||shownEffort()).replace(/^Default$/,'Default effort')}</span>${svg('chev-d','cv')}`;
   const c=!nw&&V.context,pct=c?Math.min(100,Math.round(c.used/c.window*100)):0,k=n=>n>=1e6?(n/1e6).toFixed(n%1e6?1:0)+'M':Math.round(n/1000)+'k';
   $('pCtx').textContent=c?`${pct}% · ${k(c.used)} of ${k(c.window)}`:'';
   $('ctxBar').style.visibility=c?'visible':'hidden';$('ctxBar').firstElementChild.style.width=pct+'%';
@@ -402,8 +462,9 @@ function renderMenus(){
   $('mProfile').innerHTML=A.profiles.map(p=>`<button class="prow" data-prof="${esc(p.name)}">
     <span class="p1"><b>${esc(p.name)}</b>${p.global?'<span class="pill">global</span>':''}${p.name===A.next?`<span class="pill sug">${svg('spark')}use next</span>`:''}${p.name===V.profile?svg('check','ck'):''}</span>
     <span class="p2"><span class="meter ${lvl(p.h5)}">5h<span class="bar"><i style="width:${Math.min(100,p.h5||0)}%"></i></span><b>${p.h5??'–'}%</b></span><span class="meter ${lvl(p.d7)}">7d<span class="bar"><i style="width:${Math.min(100,p.d7||0)}%"></i></span><b>${p.d7??'–'}%</b></span>${p.r5?`<span class="rs">resets ${until(p.r5)}</span>`:''}</span></button>`).join('');
-  const opts=(arr,cur,label)=>`<div class="lab">${label}</div>`+arr.map(([v,n,d])=>`<button class="item" data-v="${v}"><span class="nm"><b>${n}</b><span>${d}</span></span>${v===cur?svg('check','ck'):''}</button>`).join('')+`<div class="cap2" style="padding-top:8px">Applies from your next message.</div>`;
-  $('mModel').innerHTML=opts(MODELS,V.model,'Model');$('mEffort').innerHTML=opts(EFFORTS,V.effort,'Effort');
+  const opts=(arr,cur,label,def)=>`<div class="lab">${label}</div>`+arr.filter(x=>x[0]||!def).map(([v,n,d])=>`<button class="item" data-v="${esc(v)}"><span class="nm"><b>${v&&v===def?'*':''}${n}</b><span>${d}</span></span>${v===cur?svg('check','ck'):''}</button>`).join('')+`<div class="cap2" style="padding-top:8px">Applies from your next message.${def?' * is your default.':''}</div>`;
+  const extra=[[V.used.model,'Used in this session'],[V.def.model,'Your default']].filter(([m],i,a)=>m&&!MODELS.some(x=>x[0]===m)&&a.findIndex(y=>y[0]===m)===i).map(([m,d])=>[m,esc(modelName(m)),d]);
+  $('mModel').innerHTML=opts([MODELS[0],...extra,...MODELS.slice(1)],shownModel(),'Model',V.def.model);$('mEffort').innerHTML=opts(EFFORTS,shownEffort(),'Effort',V.def.effort);
 }
 function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('gmenu').hidden=true;$('smenu').hidden=true;V.menuFor=null;document.querySelectorAll('.sess.mopen').forEach(b=>b.classList.remove('mopen'));$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
 const toggle=(btn,pop,then)=>e=>{e.stopPropagation();const was=$(pop).hidden;closePops();if(was){V.mk=false;V.find='';renderMenus();$(pop).hidden=false;$(btn).classList.add('open');then?.()}};
@@ -411,19 +472,21 @@ $('pProject').onclick=toggle('pProject','mProject',()=>$('pFind').focus());
 $('pProfile').onclick=toggle('pProfile','mProfile');
 $('pModel').onclick=toggle('pModel','mModel');
 $('pEffort').onclick=toggle('pEffort','mEffort');
-document.addEventListener('click',closePops);
+// Menus close when you press anywhere outside them. (Listening for a click instead let a second click event, which some
+// windows deliver for one press, close a menu the moment it opened.)
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('.pop,.fmenu,.menu,.pick,#bGear,#moreBtn,[data-dots]'))closePops()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePops();$('dim').hidden=true}});
 $('mProject').addEventListener('input',e=>{if(e.target.id==='pFind'){V.find=e.target.value;const at=e.target.selectionStart;renderMenus();const i=$('pFind');i.focus();i.setSelectionRange(at,at)}});
 $('mProject').addEventListener('keydown',e=>{if(e.target.id==='mkName'&&e.key==='Enter')$('mProject').querySelector('[data-create]').click()});
 $('mProject').onclick=async e=>{
   e.stopPropagation();const t=e.target.closest('button');if(!t)return;
-  if(t.dataset.proj){V.project=t.dataset.proj;closePops();render()}
+  if(t.dataset.proj){V.project=t.dataset.proj;closePops();render();loadDefaults()}
   else if('mk' in t.dataset){V.mk=true;renderMenus();$('mkName').focus()}
   else if('create' in t.dataset){try{const p=await api('projects',{name:$('mkName').value.trim()});if(!A.projects.some(x=>x.cwd===p.cwd))A.projects.push(p);V.project=p.cwd;closePops();render()}catch(err){oops(err.message)}}
 };
-$('mProfile').onclick=e=>{e.stopPropagation();const t=e.target.closest('[data-prof]');if(t){V.profile=t.dataset.prof;closePops();render()}};
-$('mModel').onclick=e=>{e.stopPropagation();const t=e.target.closest('[data-v]');if(t){V.model=t.dataset.v;closePops();renderComposer()}};
-$('mEffort').onclick=e=>{e.stopPropagation();const t=e.target.closest('[data-v]');if(t){V.effort=t.dataset.v;closePops();renderComposer()}};
+$('mProfile').onclick=e=>{e.stopPropagation();const t=e.target.closest('[data-prof]');if(t){V.profile=t.dataset.prof;closePops();render();loadDefaults()}};
+$('mModel').onclick=e=>{e.stopPropagation();const t=e.target.closest('[data-v]');if(t){choose('model',t.dataset.v);closePops();renderComposer()}};
+$('mEffort').onclick=e=>{e.stopPropagation();const t=e.target.closest('[data-v]');if(t){choose('effort',t.dataset.v);closePops();renderComposer()}};
 
 const input=$('input');
 const grow=()=>{input.style.height='auto';input.style.height=Math.min(220,input.scrollHeight)+'px'};
@@ -441,11 +504,12 @@ async function sendText(text,asProfile){
     if(V.isNew){
       if(!V.project){oops('Pick a project first.');return false}
       $('hello').textContent='Starting…';
-      const r=await api('sessions',{cwd:V.project,profile:V.profile,text,model:V.model,effort:V.effort});
+      const r=await api('sessions',{cwd:V.project,profile:V.profile,text,model:curModel(),effort:curEffort()});
+      if(V.pick.new){V.pick[r.sessionId]=V.pick.new;delete V.pick.new}
       await openSession(r.sessionId);
     }else{
       V.dismissed=null;
-      await api(`sessions/${V.sel}/send`,{text,profile:asProfile,model:V.model,effort:V.effort});
+      await api(`sessions/${V.sel}/send`,{text,profile:asProfile,model:curModel(),effort:curEffort()});
     }
     return true;
   }catch(e){oops(e.message);return false}
@@ -455,7 +519,7 @@ async function sendText(text,asProfile){
 /* ---------- everything together ---------- */
 function render(){
   const nw=V.isNew,s=selSession();
-  renderList();renderThread();renderCard();renderComposer();renderPanel();
+  renderList();renderThread();renderCard();renderComposer();renderPanel();renderTerm();
   document.documentElement.style.setProperty('--hue',hueOf(nw?(A.projects.find(p=>p.cwd===V.project)?.name||'workwood'):(s?.project||'workwood')));
   $('title').textContent=nw?'New session':s?.title||'';
   $('where').innerHTML=nw||!s?'':`${tile(s.project,'s')}</span>${esc(s.project)}${s.branch?svg('branch')+esc(s.branch):''}`;
@@ -465,8 +529,9 @@ function render(){
 $('bCode').onclick=()=>api('open-editor',{sessionId:V.sel}).catch(e=>oops(e.message));
 
 const root=document.documentElement;
-const setTheme=t=>{root.dataset.theme=t;localStorage.setItem('ww.theme',t);$('gThemeV').textContent=t==='dark'?'Dark':'Light'};
-$('bGear').onclick=e=>{e.stopPropagation();const was=$('gmenu').hidden;closePops();if(was){const r=$('bGear').getBoundingClientRect(),m=$('gmenu');m.hidden=false;m.style.left=r.left+'px';m.style.top='auto';m.style.bottom=(innerHeight-r.top+6)+'px';$('bGear').classList.add('on')}};
+const setTheme=t=>{root.dataset.theme=t;localStorage.setItem('ww.theme',t);$('gThemeV').textContent=t==='dark'?'Dark':'Light';if(T?.term)T.term.options.theme=termTheme()};
+let gearAt=-1e9;
+$('bGear').onclick=e=>{e.stopPropagation();if(e.timeStamp-gearAt<350)return;gearAt=e.timeStamp;$('bGear').blur();const was=$('gmenu').hidden;closePops();if(was){const r=$('bGear').getBoundingClientRect(),m=$('gmenu');m.hidden=false;m.style.left=r.left+'px';m.style.top='auto';m.style.bottom=(innerHeight-r.top+6)+'px';$('bGear').classList.add('on')}};
 $('gmenu').onclick=e=>e.stopPropagation();
 $('gTheme').onclick=()=>setTheme(root.dataset.theme==='dark'?'light':'dark');
 const setArch=on=>{V.showArch=on;localStorage.setItem('ww.arch',on?'1':'0');$('gArchV').textContent=on?'Shown':'Hidden'};
@@ -483,7 +548,7 @@ function connect(){
     if(V.isNew){if(!V.profile)V.profile=globalProfile()?.name;if(!V.project)V.project=A.projects[0]?.cwd||null}
     render();
   });
-  es.addEventListener('run',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;V.run=d.run;if(d.run?.context)V.context=d.run.context;checkSoon();renderThread();renderCard();renderComposer();toBottom()});
+  es.addEventListener('run',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;V.run=d.run;if(d.run?.context)V.context=d.run.context;if(d.run?.model)V.used.model=d.run.model;if(d.run?.effort)V.used.effort=d.run.effort;checkSoon();renderThread();renderCard();renderComposer();renderTerm();toBottom()});
   es.addEventListener('item',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const i=V.items.findIndex(x=>x.n===d.item.n);if(i>=0)V.items[i]=d.item;else V.items.push(d.item);if(d.item.kind==='work'){addWork(d.item.files);renderPanel()}checkSoon();renderThread();toBottom()});
   es.onerror=()=>{};
 }

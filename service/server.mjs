@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 import * as src from './sources.mjs';
 import { readTranscript } from './transcript.mjs';
 import { runs, startTurn, answer, stop, publicRun } from './runs.mjs';
+import { terms, openTerm, attach, typeInto, resize, closeTerm, closeAll } from './terminals.mjs';
+import { createRequire } from 'node:module';
 
 const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui');
 const TOKEN = process.env.WORKWOOD_TOKEN || randomBytes(24).toString('hex');
@@ -20,6 +22,9 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset
   '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf',
   '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.pdf': 'application/pdf' };
 let previewBase = null;
+// The terminal view's drawing library, served from where npm put it.
+const lib = createRequire(import.meta.url);
+const VENDOR = { 'xterm.js': '@xterm/xterm/lib/xterm.js', 'xterm.css': '@xterm/xterm/css/xterm.css', 'addon-fit.js': '@xterm/addon-fit/lib/addon-fit.js' };
 
 // `ready` means there is a list to draw; `fresh` means it has been re-read since this launch.
 const state = { profiles: [], sessions: [], projects: [], live: new Map(), next: null, claude: undefined, ready: false, fresh: false };
@@ -43,19 +48,21 @@ const emit = (type, data) => {
 function decorate(s) {
   const run = runs.get(s.id), live = state.live.get(s.id);
   const mine = run && (run.status === 'working' || run.status === 'waiting');
-  const outside = !mine && !!live;
+  const term = !mine && terms.has(s.id);                 // open in this app's terminal view
+  const outside = !mine && !term && !!live;
+  const elsewhere = where => { status = live?.status === 'busy' ? 'work' : live?.status === 'waiting' ? 'wait' : 'idle';
+    line = where + ' · ' + (live?.status === 'busy' ? 'working' : live?.status === 'waiting' ? 'waiting for you' : 'idle'); };
   let status = 'idle', line = '';
   if (mine) {
     status = run.status === 'waiting' ? 'wait' : 'work';
     line = run.status === 'waiting' ? waitingLine(run.pending) : (run.activity || 'Working');
+  } else if (term) {
+    elsewhere('In the terminal view');
   } else if (run?.status === 'stopped') {
     status = 'wait'; line = { auth: 'Paused · sign-in needed', limit: 'Stopped · limit reached' }[run.stopped.reason] || 'Stopped · something went wrong';
-  } else if (outside) {
-    status = live.status === 'busy' ? 'work' : live.status === 'waiting' ? 'wait' : 'idle';
-    line = 'In a terminal · ' + (live.status === 'busy' ? 'working' : live.status === 'waiting' ? 'waiting for you' : 'idle');
-  }
+  } else if (outside) elsewhere('In a terminal');
   return { id: s.id, title: s.title, project: s.project, cwd: s.cwd, branch: s.branch, mts: s.mts,
-    profile: run?.profile || s.profile, status, line, outside, locked: outside && live.status !== 'idle', archived: archived.has(s.id) };
+    profile: run?.profile || s.profile, status, line, outside, term, locked: (outside || term) && !!live && live.status !== 'idle', archived: archived.has(s.id) };
 }
 const waitingLine = p => !p ? 'Waiting for you'
   : p.kind === 'question' ? (p.input.questions.length === 1 ? '1 question for you' : `${p.input.questions.length} questions for you`)
@@ -114,6 +121,7 @@ async function api(req, res, url) {
     clients.add(res); req.on('close', () => clients.delete(res));
     return;
   }
+  if (req.method === 'GET' && parts[0] === 'defaults') return send(res, 200, await src.defaultsFor(url.searchParams.get('cwd'), url.searchParams.get('profile'), state.profiles));
   if (req.method === 'GET' && parts[0] === 'sessions' && parts[2] === 'work') {
     // When each previewable file last changed, so the window can reload one that was edited, by anyone.
     const all = knownWork(parts[1]);
@@ -121,10 +129,16 @@ async function api(req, res, url) {
     await Promise.all([...all].map(async f => { try { out[f] = Math.round((await fs.stat(f)).mtimeMs); } catch { out[f] = null; } }));
     return send(res, 200, out);
   }
+  if (req.method === 'GET' && parts[0] === 'sessions' && parts[2] === 'term') {
+    if (!terms.has(parts[1])) return send(res, 404, { error: 'No terminal is open for this session.' });
+    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+    attach(parts[1], res);
+    return;
+  }
   if (req.method === 'GET' && parts[0] === 'sessions' && parts[1]) {
     const s = state.sessions.find(x => x.id === parts[1]);
     if (!s) return send(res, 404, { error: 'No such session.' });
-    const t = s.file ? await readTranscript(s.file) : { items: [], context: null, total: 0, work: [] };
+    const t = s.file ? await readTranscript(s.file) : { items: [], context: null, total: 0, work: [], model: null, effort: null };
     const run = runs.get(s.id);
     if (run && run.status !== 'idle') {
       // The current turn is still in memory: show it from there, not from what has reached the file so far.
@@ -135,7 +149,8 @@ async function api(req, res, url) {
     if (run) { const mine = run.builder.work(), has = new Set(mine.map(f => f.path)); t.work = mine.concat(t.work.filter(f => !has.has(f.path))); }
     for (const f of t.work) previewDirs(s.id).add(path.dirname(f.path));
     for (const f of t.work) knownWork(s.id).add(f.path);
-    return send(res, 200, { ...t, context: run?.context || t.context, run: publicRun(run) });
+    return send(res, 200, { ...t, context: run?.context || t.context, model: run?.builder.model || t.model, effort: run?.effort || t.effort,
+      defaults: await src.defaultsFor(s.cwd, run?.profile || s.profile, state.profiles), run: publicRun(run) });
   }
   if (req.method !== 'POST') return send(res, 404, { error: 'Not found.' });
   const b = await body(req);
@@ -156,7 +171,12 @@ async function api(req, res, url) {
     const s = state.sessions.find(x => x.id === parts[1]);
     if (!s) return send(res, 404, { error: 'No such session.' });
     if (!b.text?.trim()) return send(res, 400, { error: 'Type a message first.' });
-    const live = state.live.get(s.id), run = runs.get(s.id);
+    if (terms.has(s.id)) {                               // one owner at a time: writing here ends the terminal view's hold
+      await refreshLive();
+      if (state.live.get(s.id) && state.live.get(s.id).status !== 'idle') return send(res, 409, { error: 'This session is working in the terminal view.' });
+      await closeTerm(s.id);
+    }
+    const live = terms.has(s.id) ? null : state.live.get(s.id), run = runs.get(s.id);
     if (live && live.status !== 'idle' && !(run && run.q)) return send(res, 409, { error: 'This session is in use in a terminal.' });
     const profile = state.profiles.find(p => p.name === b.profile)?.name || run?.profile || s.profile;
     const env = await src.envForProfile(profile, state.profiles);
@@ -166,6 +186,24 @@ async function api(req, res, url) {
   }
   if (parts[0] === 'sessions' && parts[2] === 'answer') { answer(parts[1], b); pushState(); return send(res, 200, { ok: true }); }
   if (parts[0] === 'sessions' && parts[2] === 'stop') { await stop(parts[1]); return send(res, 200, { ok: true }); }
+  if (parts[0] === 'sessions' && parts[2] === 'term') {
+    const s = state.sessions.find(x => x.id === parts[1]);
+    if (!s) return send(res, 404, { error: 'No such session.' });
+    if (parts[3] === 'input') return send(res, typeInto(s.id, b.data ?? '') ? 200 : 404, {});
+    if (parts[3] === 'resize') return send(res, resize(s.id, b.cols, b.rows) ? 200 : 404, {});
+    if (parts[3] === 'close') { await closeTerm(s.id); return send(res, 200, { ok: true }); }
+    if (!terms.has(s.id)) {
+      const run = runs.get(s.id);
+      if (run && (run.status === 'working' || run.status === 'waiting')) return send(res, 409, { error: 'The agent is working in the chat.', busy: true });
+      if (state.live.get(s.id)) return send(res, 409, { error: 'This session is open in another terminal.' });
+      const profile = run?.profile || s.profile;
+      const env = await src.envForProfile(profile, state.profiles);
+      runs.delete(s.id);                                 // the chat's last turn is over; from here the history file is the record
+      const again = () => { pushState(); setTimeout(() => { refreshAll(); refreshLive(); }, 800); };
+      openTerm({ sessionId: s.id, cwd: s.cwd, file: state.claude || 'claude', args: ['--resume', s.id], env, cols: b.cols, rows: b.rows, onChange: again });
+    } else resize(s.id, b.cols, b.rows);
+    return send(res, 200, { ok: true });
+  }
   if (parts[0] === 'sessions' && ['rename', 'archive', 'delete', 'terminal'].includes(parts[2])) {
     const s = state.sessions.find(x => x.id === parts[1]);
     if (!s) return send(res, 404, { error: 'No such session.' });
@@ -180,13 +218,17 @@ async function api(req, res, url) {
       s.title = title; if (run) run.title = title; renamed.set(s.id, [Date.now(), title]);
     } else if (parts[2] === 'terminal') {
       if (busy) return send(res, 409, { error: 'This session is working here. Stop it or let it finish, then open it in a terminal.' });
+      if (terms.has(s.id)) return send(res, 409, { error: 'This session is already open in the terminal view.' });
       if (live) return send(res, 409, { error: 'This session is already open in a terminal.' });
       const profile = run?.profile || s.profile, p = state.profiles.find(x => x.name === profile);
       await src.openTerminal(s.cwd, !p || p.global ? ['claude', '--resume', s.id] : ['claudius', 'run', profile, '--resume', s.id]);
       setTimeout(refreshLive, 2500);
     } else {
       if (busy) return send(res, 409, { error: 'This session is working. Stop it before deleting it.' });
-      if (live) return send(res, 409, { error: 'This session is open in a terminal. Close it there before deleting it.' });
+      if (terms.has(s.id)) {
+        if (live && live.status !== 'idle') return send(res, 409, { error: 'This session is working in the terminal view. Stop it before deleting it.' });
+        await closeTerm(s.id);
+      } else if (live) return send(res, 409, { error: 'This session is open in a terminal. Close it there before deleting it.' });
       await src.deleteSession(s.file, s.id);
       deleted.add(s.id); runs.delete(s.id); workPaths.delete(s.id); dirsBySession.delete(s.id);
       if (archived.delete(s.id)) await src.writeKept({ archived: [...archived] });
@@ -268,6 +310,10 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': TYPES['.html'], 'cache-control': 'no-store' }); return res.end(html);
     }
     const name = path.basename(url.pathname);
+    if (url.pathname === '/vendor/' + name && VENDOR[name]) {
+      res.writeHead(200, { 'content-type': TYPES[path.extname(name)], 'cache-control': 'max-age=86400' });
+      return res.end(await fs.readFile(lib.resolve(VENDOR[name])));
+    }
     if (!['app.js', 'app.css'].includes(name)) { res.writeHead(404); return res.end(); }
     res.writeHead(200, { 'content-type': TYPES[path.extname(name)], 'cache-control': 'no-store' });
     res.end(await fs.readFile(path.join(UI, name)));
@@ -287,6 +333,7 @@ export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
   refreshAll(); refreshLive();
   setInterval(refreshLive, 5000).unref();
   setInterval(refreshAll, 30000).unref();
+  process.on('exit', closeAll);
   return { address };
 }
 

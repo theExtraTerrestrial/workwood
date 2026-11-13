@@ -2,7 +2,7 @@
 // session, streams what the agent does, and pauses whenever it needs you.
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { randomUUID } from 'node:crypto';
-import { Builder, describeTool } from './transcript.mjs';
+import { Builder, describeTool, learnWindow } from './transcript.mjs';
 
 export const runs = new Map(); // sessionId -> run
 let liveSeq = 1_000_000;        // live items are numbered above anything read from a file
@@ -17,7 +17,7 @@ export function publicRun(r) {
   return {
     status: r.status, activity: r.activity, startedAt: r.startedAt, profile: r.profile, context: r.context,
     pending: r.pending && { id: r.pending.id, kind: r.pending.kind, toolName: r.pending.toolName, input: r.pending.input, choices: r.pending.choices },
-    stopped: r.stopped,
+    stopped: r.stopped, model: r.builder.model || null, effort: r.effort || null,
   };
 }
 
@@ -30,7 +30,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, model, effort, c
   if (existing && existing.status !== 'idle' && existing.status !== 'stopped') throw new Error('This session is still working.');
 
   const run = { sessionId: sessionId || null, cwd, profile, status: 'working', activity: 'Starting', startedAt: Date.now(),
-    pending: null, stopped: null, context: existing?.context || null, q: null, builder: new Builder(liveSeq) };
+    pending: null, stopped: null, effort: effort || existing?.effort || null, context: existing?.context || null, q: null, builder: new Builder(liveSeq) };
   liveSeq += 100_000;
   if (sessionId) runs.set(sessionId, run);
 
@@ -90,6 +90,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, model, effort, c
             run.builder.closeText();
             if (run.status === 'working') { run.activity = 'Thinking'; sayState(); }
           } else if (m.type === 'result') {
+            for (const [name, u] of Object.entries(m.modelUsage || {})) learnWindow(name, u.contextWindow);
             const win = Object.values(m.modelUsage || {}).map(u => u.contextWindow).filter(Boolean).sort((a, b) => b - a)[0];
             if (win && run.context) run.context = { ...run.context, window: win };
             if (m.is_error && !run.stopped) run.stopped = { reason: /limit/i.test(m.result || '') ? 'limit' : 'error', text: m.result || 'The turn ended with an error.' };

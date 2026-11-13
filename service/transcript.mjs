@@ -39,6 +39,15 @@ const isNoise = t => /^\s*(<|Caveat:|\[Request interrupted|This session is being
  *   {kind:'skill', name} {kind:'note', text} {kind:'done', ms, ts}
  *   {kind:'work', files:[{path,name,kind,v,ts}]}   previewable files written since the last one
  */
+// How much a model can hold. Sizes a finished turn reported win; otherwise the model's name tells, and as a
+// last resort a conversation already longer than 200k must be on the large window.
+const learned = new Map();
+export function learnWindow(model, size) { if (model && size > 0) learned.set(model, size); }
+export function windowFor(model, used = 0) {
+  if (learned.has(model)) return Math.max(learned.get(model), used > 200000 ? 1000000 : 0);
+  return /\[1m\]/i.test(model || '') || /^claude-(fable|mythos)-/.test(model || '') || used > 200000 ? 1000000 : 200000;
+}
+
 export class Builder {
   constructor(seq = 0) { this.items = []; this.context = null; this.lastTool = null; this.seq = seq; this.fresh = new Map(); this.groups = []; }
   // Every item gets a number so the view can update one in place (text and tool lists grow during a turn).
@@ -53,10 +62,12 @@ export class Builder {
     }
     return out;
   }
-  assistant(message, ts) {
+  assistant(message, ts, effort) {
     const out = [];
     if (ts) this.lastTs = ts;
     if (message.model === '<synthetic>') return out;
+    if (message.model) this.model = message.model;   // what the session last ran on, shown and reused for the next message
+    if (effort) this.effort = effort;
     for (const b of message.content || []) {
       if (b.type === 'text' && b.text.trim()) {
         const last = this.items[this.items.length - 1];
@@ -77,7 +88,7 @@ export class Builder {
     const u = message.usage;
     if (u) {
       const used = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.output_tokens || 0);
-      if (used) this.context = { used, window: Math.max(this.context?.window || 0, used > 200000 ? 1000000 : 200000) };
+      if (used) this.context = { used, window: windowFor(message.model, used) };
     }
     return out;
   }
@@ -119,10 +130,10 @@ export async function readTranscript(file, limit = 400) {
     let m; try { m = JSON.parse(line); } catch { continue; }
     if (m.isSidechain || m.isMeta) continue;
     if (m.type === 'user' && m.message) { b.closeText(); b.user(m.message.content, m.timestamp); }
-    else if (m.type === 'assistant' && m.message) b.assistant(m.message, m.timestamp);
+    else if (m.type === 'assistant' && m.message) b.assistant(m.message, m.timestamp, typeof m.effort === 'string' ? m.effort : null);
     else if (m.type === 'system' && m.subtype === 'turn_duration') b.done(m.durationMs, m.timestamp);
   }
   b.flushWork();
   const items = b.items.slice(-limit).map(({ open, ...it }) => it);
-  return { items, context: b.context, total: b.items.length, cut: start > 0 || b.items.length > limit, work: b.work() };
+  return { items, context: b.context, total: b.items.length, cut: start > 0 || b.items.length > limit, work: b.work(), model: b.model || null, effort: b.effort || null };
 }

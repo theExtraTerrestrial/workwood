@@ -553,3 +553,9 @@
   .ask p b{color:var(--text);font-weight:600}
   .ask .qrow{justify-content:flex-end;margin:0}
   .qbtn.danger{background:var(--hot);border-color:transparent;color:#fff}
+  /* terminal view */
+  .term{position:relative;display:flex;padding:14px 4px 10px 18px;overflow:hidden;white-space:normal;font-size:13px;line-height:normal}
+  .xt{flex:1;min-width:0;min-height:0}
+  .term .xterm-viewport{background:transparent!important}
+  .tnote{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:var(--term);color:var(--dim);font-size:13px;text-align:center;padding:24px;font-family:Manrope,system-ui,sans-serif}
+  .tnote p{margin:0;max-width:420px;line-height:1.5}

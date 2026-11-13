@@ -27,7 +27,7 @@ export function makeSandbox() {
   for (const d of ['agents', 'commands', 'skills', 'plans', 'tasks', 'sessions', 'file-history', 'plugins']) fs.mkdirSync(path.join(home, '.claude', d), { recursive: true });
   w(path.join(home, '.claude', 'CLAUDE.md'), '');
   w(path.join(home, '.claude', 'history.jsonl'), '');
-  w(path.join(home, '.claude', 'settings.json'), '{}');
+  w(path.join(home, '.claude', 'settings.json'), JSON.stringify({ model: 'sonnet', effortLevel: 'high' }));
   w(path.join(home, '.claude', '.credentials.json'), creds('live'), 0o600);
   w(path.join(home, '.claude.json'), ident('live'));
 
@@ -47,6 +47,7 @@ export function makeSandbox() {
   const sb = { root, home, bin, projects, log: path.join(root, 'claude.log'), agents: path.join(root, 'agents.json'), sessions: {} };
   sb.sessions.alphaLive = addSession(sb, 'alpha', 'live', 'Tidy the alpha readme', 'The readme is tidied.', 300);
   sb.sessions.betaOther = addSession(sb, 'beta', 'other', 'Add a beta changelog', 'The changelog is added.', 7200);
+  sb.sessions.betaFable = addSession(sb, 'beta', 'other', 'Plan the beta launch', 'Planned.', 9000, { model: 'claude-fable-5-2', effort: 'xhigh' });
   sb.sessions.alphaOutside = addSession(sb, 'alpha', 'live', 'Refactor the alpha parser', 'Working on it.', 60);
   w(sb.agents, JSON.stringify([{ pid: 1, cwd: projects.alpha, kind: 'interactive', sessionId: sb.sessions.alphaOutside, name: 'outside', status: 'busy' }]));
   w(sb.log, '');
@@ -67,7 +68,7 @@ export function makeSandbox() {
 
 let counter = 0;
 /** Writes a small finished session into the pool, owned by one of the accounts. */
-export function addSession(sb, project, owner, prompt, reply, ageSeconds = 0) {
+export function addSession(sb, project, owner, prompt, reply, ageSeconds = 0, ran = {}) {
   const id = `00000000-0000-4000-8000-${String(++counter).padStart(12, '0')}`;
   const cwd = sb.projects[project], dir = path.join(sb.home, '.claude', 'projects', cwd.replace(/[^A-Za-z0-9]/g, '-'));
   const ts = new Date(Date.now() - ageSeconds * 1000).toISOString();
@@ -75,7 +76,7 @@ export function addSession(sb, project, owner, prompt, reply, ageSeconds = 0) {
   const lines = [
     { type: 'session-owner', accountUuid: ACCOUNTS[owner], sessionId: id },
     { ...base, type: 'user', uuid: id + '-u', parentUuid: null, message: { role: 'user', content: prompt } },
-    { ...base, type: 'assistant', uuid: id + '-a', parentUuid: id + '-u', message: { role: 'assistant', model: 'claude-test', content: [{ type: 'tool_use', id: 't1', name: 'Read', input: { file_path: path.join(cwd, 'README.md') } }, { type: 'text', text: reply }], usage: { input_tokens: 40000, output_tokens: 2000 } } },
+    { ...base, type: 'assistant', uuid: id + '-a', parentUuid: id + '-u', ...(ran.effort ? { effort: ran.effort } : {}), message: { role: 'assistant', model: ran.model || 'claude-test', content: [{ type: 'tool_use', id: 't1', name: 'Read', input: { file_path: path.join(cwd, 'README.md') } }, { type: 'text', text: reply }], usage: { input_tokens: 40000, output_tokens: 2000 } } },
     { ...base, type: 'system', subtype: 'turn_duration', durationMs: 192000, uuid: id + '-s' },
   ];
   const file = path.join(dir, id + '.jsonl');

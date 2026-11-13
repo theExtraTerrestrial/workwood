@@ -199,6 +199,23 @@ export async function envForProfile(profile, profiles) {
   return cleanEnv({ CLAUDE_CONFIG_DIR: dir });
 }
 
+// What a session gets when you choose nothing: the model and effort from Claude Code's own settings,
+// the project's over the profile's, as Claude Code reads them. Null where no setting says.
+const ALIAS = { fable: 'claude-fable-5-2', opus: 'claude-opus-5-5', sonnet: 'claude-sonnet-5-5', haiku: 'claude-haiku-5-5' };
+export async function defaultsFor(cwd, profile, profiles) {
+  const p = profiles.find(x => x.name === profile), home = !p || p.global ? path.join(HOME, '.claude') : path.join(PROFILE_ROOT, profile);
+  const files = [path.join(home, 'settings.json'), ...(cwd ? [path.join(cwd, '.claude', 'settings.json'), path.join(cwd, '.claude', 'settings.local.json')] : [])];
+  let model = null, effort = null;
+  for (const f of files) {
+    let s; try { s = JSON.parse(await fs.readFile(f, 'utf8')); } catch { continue; }
+    if (typeof s.model === 'string' && s.model) model = s.model;
+    if (typeof s.effortLevel === 'string' && s.effortLevel) effort = s.effortLevel;
+  }
+  const m = model && /^([a-z]+)(\[1m\])?$/i.exec(model);
+  if (m && ALIAS[m[1].toLowerCase()]) model = ALIAS[m[1].toLowerCase()] + (m[2] || '');
+  return { model, effort };
+}
+
 export async function claudePath() {
   try { const { stdout } = await run('which', ['claude']); return stdout.trim() || undefined; } catch { return undefined; }
 }

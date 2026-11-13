@@ -26,7 +26,12 @@ On a fresh WSL install the Electron window needs GTK once:
   any terminal (these carry a terminal badge, and are locked while busy).
 - Open a session to read its conversation. Very long ones show the recent part.
 - Start a new session: pick a project and a profile, type, send.
-- Send follow-up messages, stop a turn, pick a model and effort per message.
+- Send follow-up messages and stop a turn. The model and effort menus show what
+  the session last ran on (read from its history, wherever it was run) and the
+  next message uses the same unless you pick another; the choice is per session.
+  A leading `*` marks your default, taken from your Claude Code settings (the
+  project's settings win over the profile's).
+  The context meter uses that model's window size.
 - Cards for questions, permissions and plans, and for a turn that stopped on a
   limit, a lost sign-in or an error (with "continue on another profile").
 - Previews: pages, images, videos and PDFs the agent wrote appear as cards under
@@ -43,9 +48,15 @@ On a fresh WSL install the Electron window needs GTK once:
   - Delete: after a confirmation, removes the session's transcript and its
     subagents' transcripts from `~/.claude/projects`. This cannot be undone.
     A session that is working, or open in a terminal, cannot be deleted.
+- Terminal view: the switch in the header (chat / terminal) shows the session's
+  real Claude Code terminal inside the window. It keeps running while you look
+  at other sessions. A session has one owner at a time: the terminal waits for
+  a chat turn to end (or you stop it), and sending a message in the chat closes
+  an idle terminal. Leaving Claude Code (`/exit`) returns you to the chat.
+  Ctrl+Shift+C copies the selection.
 - Dark and light theme (gear, bottom left).
 
-Not built yet: terminal view, changes view, skills menu and panel,
+Not built yet: changes view, skills menu and panel,
 attachments, voice, settings dialog,
 sign-in from the app, the Windows-side project list, the Mac build.
 
@@ -55,7 +66,7 @@ sign-in from the app, the Windows-side project list, the Mac build.
 npm test
 ```
 
-About 15 seconds, 31 tests. They run the real service and the real `claudius`
+About 40 seconds, 51 tests. They run the real service and the real `claudius`
 inside a throwaway home folder (the same idea as Claudius's own tests), with a
 scripted stand-in for `claude` (`tests/fake-claude.mjs`). No real account is
 used and nothing is sent to Anthropic. Half of the tests drive the window with

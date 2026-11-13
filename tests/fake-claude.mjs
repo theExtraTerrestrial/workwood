@@ -19,6 +19,27 @@ const home = process.env.HOME, configDir = process.env.CLAUDE_CONFIG_DIR || null
 const identity = JSON.parse(fs.readFileSync(configDir ? path.join(configDir, '.claude.json') : path.join(home, '.claude.json'), 'utf8')).oauthAccount;
 const sessionId = arg('--resume') || randomUUID();
 const cwd = process.cwd();
+// Typed into directly (the terminal view): a tiny prompt that answers each line, so the tests can see a real terminal at work.
+if (process.stdin.isTTY && !args.some(a => a.startsWith('--input-format'))) {
+  const w = t => process.stdout.write(t), dims = () => `${process.stdout.columns}x${process.stdout.rows}`;
+  const file = path.join(home, '.claude', 'projects', cwd.replace(/[^A-Za-z0-9]/g, '-'), sessionId + '.jsonl');
+  const add = o => fs.appendFileSync(file, JSON.stringify({ cwd, sessionId, timestamp: new Date().toISOString(), gitBranch: 'main', isSidechain: false, ...o }) + '\n');
+  log(`terminal account=${identity.emailAddress} config=${configDir ? path.basename(configDir) : 'global'} resume=${arg('--resume') || 'no'}`);
+  w(`Fake Claude Code, resumed ${sessionId}, ${dims()}\r\n> `);
+  process.stdout.on('resize', () => w(`[size ${dims()}]\r\n> `));
+  for await (const line of readline.createInterface({ input: process.stdin })) {
+    const said = line.trim();
+    if (said === '/exit') process.exit(0);
+    if (said === 'crash') process.exit(3);
+    if (said) {
+      add({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: said } });
+      add({ type: 'assistant', uuid: randomUUID(), message: { id: 'msg_' + randomUUID(), type: 'message', role: 'assistant', model: 'claude-test', content: [{ type: 'text', text: 'TERMINAL REPLY to ' + said }], usage: { input_tokens: 50000, output_tokens: 1000 } } });
+      w(`you said: ${said}\r\n`);
+    }
+    w('> ');
+  }
+  process.exit(0);
+}
 log(`session account=${identity.emailAddress} config=${configDir ? path.basename(configDir) : 'global'} resume=${arg('--resume') || 'no'} model=${arg('--model') || 'default'} effort=${arg('--effort') || 'default'}`);
 
 const out = o => process.stdout.write(JSON.stringify(o) + '\n');

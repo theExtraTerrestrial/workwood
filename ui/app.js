@@ -60,6 +60,7 @@ const V={sel:null,isNew:false,items:[],run:null,context:null,loading:false,     
   shut:JSON.parse(localStorage.getItem('ww.shut')||'{}'),more:{},openTools:new Set(),
   q:{id:null,step:0,picks:{},typed:{}},dismissed:null,busy:false,
   work:[],pv:null,full:false,
+  ch:null,chOpen:false,chFile:null,chDiff:null,                                    // changed files in the project; the changes panel
   views:{},                                                                        // session -> 'chat' or 'term'
   showArch:localStorage.getItem('ww.arch')==='1',menuFor:null,renaming:null,renameText:'',caret:0};  // session actions                                                    // files the agent made; the one shown in the side panel
 const MODELS=[['','Default','Whatever Claude Code picks'],['claude-fable-5-2','Fable 5.2','Most capable'],['claude-opus-5-5','Opus 5.5','Strong, lighter on your limit'],['claude-sonnet-5-5','Sonnet 5.5','Fast, for everyday work'],['claude-haiku-5-5','Haiku 5.5','Fastest']];
@@ -192,17 +193,17 @@ $('dim').onclick=async e=>{
 $('newBtn').onclick=()=>newSession();
 
 function newSession(){
-  V.isNew=true;V.sel=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.dismissed=null;V.work=[];V.pv=null;V.full=false;
+  V.isNew=true;V.sel=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.dismissed=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.chOpen=false;V.chFile=null;V.chDiff=null;
   V.profile=globalProfile()?.name; // every new session starts on the global profile; the project stays as last chosen
   V.project=V.project&&A.projects.some(p=>p.cwd===V.project)?V.project:A.projects[0]?.cwd||null;
   render();$('input').focus();loadDefaults();
 }
 async function openSession(id){
-  V.isNew=false;V.sel=id;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.loading=true;V.dismissed=null;V.openTools.clear();V.work=[];V.pv=null;V.full=false;
+  V.isNew=false;V.sel=id;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:''};V.loading=true;V.dismissed=null;V.openTools.clear();V.work=[];V.pv=null;V.full=false;V.ch=null;V.chOpen=false;V.chFile=null;V.chDiff=null;
   render();
   try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.used={model:d.model||'',effort:d.effort||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||''}}
   catch(e){oops(e.message)}
-  V.loading=false;render();toBottom(true);
+  V.loading=false;render();toBottom(true);loadChanges();
 }
 
 /* ---------- conversation ---------- */
@@ -274,8 +275,9 @@ const markCards=()=>document.querySelectorAll('#thread [data-open]').forEach(c=>
 /* ---------- side panel: what the agent made ---------- */
 let staged=null;
 function renderPanel(){
-  const i=V.work.findIndex(f=>f.path===V.pv),f=V.work[i],open=!V.isNew&&!!f&&!!A.preview;
-  $('panel').hidden=!open;$('split').classList.toggle('full',open&&V.full);markCards();
+  const i=V.work.findIndex(f=>f.path===V.pv),f=V.work[i],open=!V.isNew&&!!f&&!!A.preview,ch=!V.isNew&&V.chOpen&&!!V.ch?.repo;
+  $('panel').hidden=!open&&!ch;$('pvw').hidden=!open;$('chw').hidden=open||!ch;renderChanges();
+  $('split').classList.toggle('full',open&&V.full);markCards();
   if(!open){if(staged){staged=null;$('stage').innerHTML=''}$('menu').hidden=true;return}
   $('pName').textContent=f.name;$('pCnt').textContent=V.work.length>1?`${i+1} of ${V.work.length}`:'';
   $('pPrev').disabled=$('pNext').disabled=V.work.length<2;
@@ -302,7 +304,7 @@ async function checkWork(){
 // such as your own edits, there is the refresh button.
 let workTimer;const checkSoon=()=>{clearTimeout(workTimer);workTimer=setTimeout(checkWork,150)};
 $('bRefresh').onclick=async()=>{staged=null;await checkWork();if(!staged)renderPanel()};
-const showWork=p=>{V.pv=p;renderPanel()};
+const showWork=p=>{V.pv=p;V.chOpen=false;renderPanel()};
 const step=d=>()=>{const i=V.work.findIndex(f=>f.path===V.pv),n=V.work.length;if(n)showWork(V.work[(i+d+n)%n].path)};
 $('pPrev').onclick=step(-1);$('pNext').onclick=step(1);
 $('moreBtn').onclick=e=>{e.stopPropagation();const was=$('menu').hidden;closePops();$('menu').hidden=!was};
@@ -317,6 +319,43 @@ function tick(){const el=$('elapsed');if(el&&V.run?.startedAt)el.textContent=dur
 setInterval(tick,1000);
 setInterval(()=>{if(A.ready)renderList()},60000);
 function toBottom(force){const s=$('scroll');if(force||s.scrollHeight-s.scrollTop-s.clientHeight<160)s.scrollTop=s.scrollHeight}
+
+/* ---------- changes: the project's working tree against its last commit, read only ---------- */
+function renderChanges(){
+  const c=V.ch,b=$('bChanges');
+  b.hidden=!c?.repo;$('chN').textContent=c?.count||'';b.classList.toggle('on',V.chOpen&&!V.pv);
+  if($('chw').hidden)return;
+  $('chT').textContent=c.count===1?'1 changed file':`${c.count} changed files`;
+  $('chS').innerHTML=c.count?`<span class="plus">+${c.add}</span> <span class="minus">−${c.del}</span>`:'';
+  $('files').hidden=!c.count;
+  $('files').innerHTML=c.files.map(f=>`<button class="file ${f.path===V.chFile?'on':''}" data-file="${esc(f.path)}" title="${esc(f.path)}"><b>${esc(f.path)}</b>${f.kind==='changed'?'':`<i>${f.kind}</i>`}${f.binary?'':`<span class="plus">+${f.add}</span><span class="minus">−${f.del}</span>`}</button>`).join('')
+    +(c.count>c.files.length?`<div class="note">and ${c.count-c.files.length} more</div>`:'');
+  const d=V.chDiff;
+  $('diff').innerHTML=!c.count?'<div class="note">Nothing has changed since the last commit.</div>'
+    :!d||d.path!==V.chFile?''
+    :d.binary?'<div class="note">This file is not text, so there is nothing to show.</div>'
+    :!d.lines.length?'<div class="note">No lines changed.</div>'
+    :d.lines.map(l=>`<div class="${l.t}">${esc(l.s)||' '}</div>`).join('')+(d.cut?'<div class="note">The rest of this change is too long to show here.</div>':'');
+}
+async function loadChanges(){
+  if(V.isNew||!V.sel)return;const id=V.sel;let c;
+  try{c=await api(`sessions/${id}/changes`)}catch{return}
+  if(id!==V.sel)return;V.ch=c;
+  if(!c.files.some(f=>f.path===V.chFile)){V.chFile=c.files[0]?.path||null;V.chDiff=null}
+  renderPanel();if(V.chOpen&&V.chFile)loadDiff();
+}
+async function loadDiff(){
+  const id=V.sel,p=V.chFile;let d;
+  try{d=await api(`sessions/${id}/changes/file?path=${encodeURIComponent(p)}`)}catch{d={path:p,lines:[],binary:false}}
+  if(id!==V.sel||p!==V.chFile)return;
+  const keep=V.chDiff?.path===p?$('diff').scrollTop:0;V.chDiff=d;renderChanges();$('diff').scrollTop=keep;
+}
+let chTimer;const changesSoon=()=>{clearTimeout(chTimer);chTimer=setTimeout(loadChanges,900)};
+$('bChanges').onclick=()=>{V.chOpen=!(V.chOpen&&!V.pv);V.pv=null;V.full=false;renderPanel();if(V.chOpen)loadChanges()};
+$('chClose').onclick=()=>{V.chOpen=false;renderPanel()};
+$('chRefresh').onclick=()=>loadChanges();
+$('files').onclick=e=>{const f=e.target.closest('[data-file]');if(!f||f.dataset.file===V.chFile)return;V.chFile=f.dataset.file;V.chDiff=null;renderChanges();loadDiff()};
+addEventListener('focus',()=>changesSoon());
 
 /* ---------- terminal view: the session's real Claude Code terminal ---------- */
 const view=()=>V.isNew||!V.sel?'chat':V.views[V.sel]||'chat';
@@ -548,8 +587,8 @@ function connect(){
     if(V.isNew){if(!V.profile)V.profile=globalProfile()?.name;if(!V.project)V.project=A.projects[0]?.cwd||null}
     render();
   });
-  es.addEventListener('run',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;V.run=d.run;if(d.run?.context)V.context=d.run.context;if(d.run?.model)V.used.model=d.run.model;if(d.run?.effort)V.used.effort=d.run.effort;checkSoon();renderThread();renderCard();renderComposer();renderTerm();toBottom()});
-  es.addEventListener('item',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const i=V.items.findIndex(x=>x.n===d.item.n);if(i>=0)V.items[i]=d.item;else V.items.push(d.item);if(d.item.kind==='work'){addWork(d.item.files);renderPanel()}checkSoon();renderThread();toBottom()});
+  es.addEventListener('run',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;V.run=d.run;if(d.run?.context)V.context=d.run.context;if(d.run?.model)V.used.model=d.run.model;if(d.run?.effort)V.used.effort=d.run.effort;checkSoon();changesSoon();renderThread();renderCard();renderComposer();renderTerm();toBottom()});
+  es.addEventListener('item',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const i=V.items.findIndex(x=>x.n===d.item.n);if(i>=0)V.items[i]=d.item;else V.items.push(d.item);if(d.item.kind==='work'){addWork(d.item.files);renderPanel()}checkSoon();changesSoon();renderThread();toBottom()});
   es.onerror=()=>{};
 }
 hydrate();setTheme(localStorage.getItem('ww.theme')||'dark');setArch(V.showArch);render();connect();

@@ -322,6 +322,10 @@
   @media (max-width:1100px){.panel{width:54%}}
 
   /* changes */
+  .pwrap{display:contents}.pwrap[hidden]{display:none}
+  .ib.wide[hidden]{display:none}
+  .diff .note{color:var(--faint);padding:14px 16px;white-space:normal;font-family:inherit}
+  .file i{font-style:normal;color:var(--faint);flex:none}
   .ctitle{font-weight:600;padding-left:6px}.cstat{margin-left:10px;font-size:12px}
   .plus{color:var(--add)}.minus{color:var(--del)}
   .files{padding:6px;border-bottom:1px solid var(--line);flex:none;max-height:38%;overflow:auto}

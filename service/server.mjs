@@ -11,6 +11,7 @@ import * as src from './sources.mjs';
 import { readTranscript } from './transcript.mjs';
 import { runs, startTurn, answer, stop, publicRun } from './runs.mjs';
 import { terms, openTerm, attach, typeInto, resize, closeTerm, closeAll } from './terminals.mjs';
+import { changesFor, changeOf } from './changes.mjs';
 import { createRequire } from 'node:module';
 
 const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui');
@@ -128,6 +129,13 @@ async function api(req, res, url) {
     const out = {};
     await Promise.all([...all].map(async f => { try { out[f] = Math.round((await fs.stat(f)).mtimeMs); } catch { out[f] = null; } }));
     return send(res, 200, out);
+  }
+  if (req.method === 'GET' && parts[0] === 'sessions' && parts[2] === 'changes') {
+    const s = state.sessions.find(x => x.id === parts[1]);
+    if (!s) return send(res, 404, { error: 'No such session.' });
+    if (parts[3] !== 'file') return send(res, 200, await changesFor(s.cwd));
+    const d = await changeOf(s.cwd, url.searchParams.get('path'));
+    return d ? send(res, 200, d) : send(res, 404, { error: 'No such file.' });
   }
   if (req.method === 'GET' && parts[0] === 'sessions' && parts[2] === 'term') {
     if (!terms.has(parts[1])) return send(res, 404, { error: 'No terminal is open for this session.' });

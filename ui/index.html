@@ -26,6 +26,7 @@
           <button class="ib on" id="vChat" title="Chat" data-i="chat"></button>
           <button class="ib" id="vTerm" title="Terminal" data-i="term"></button>
         </div>
+        <button class="ib wide" id="bChanges" title="Changes" hidden><i data-i="diff"></i><span id="chN"></span></button>
         <button class="ib" id="bCode" title="Open in VS Code" data-i="code"></button>
       </div>
     </header>
@@ -59,6 +60,7 @@
       </section>
       <section class="term" id="term" hidden><div class="xt" id="xt"></div><div class="tnote" id="tnote" hidden></div></section>
       <aside class="panel" id="panel" hidden>
+        <div class="pwrap" id="pvw">
         <div class="phead">
           <button class="ib" id="pPrev" title="Previous" data-i="chev-l"></button><button class="ib" id="pNext" title="Next" data-i="chev-r"></button>
           <button class="ptitle" id="moreBtn" title="All work from this session"><span id="pName"></span><i data-i="chev-d"></i></button><span class="pcnt" id="pCnt"></span>
@@ -70,6 +72,12 @@
           <div class="menu" id="menu" hidden></div>
         </div>
         <div class="stage" id="stage"></div>
+        </div>
+        <div class="pwrap" id="chw" hidden>
+          <div class="phead"><span class="ctitle" id="chT"></span><span class="cstat mono" id="chS"></span><span class="gap"></span><button class="ib" id="chRefresh" title="Refresh" data-i="refresh"></button><button class="ib" id="chClose" title="Close" data-i="x"></button></div>
+          <div class="files mono" id="files"></div>
+          <div class="diff mono" id="diff"></div>
+        </div>
       </aside>
     </div>
   </section>

@@ -44,6 +44,13 @@ export function makeSandbox() {
   // two projects with past sessions
   const projects = {};
   for (const p of ['alpha', 'beta']) { projects[p] = path.join(home, 'workspace', p); fs.mkdirSync(projects[p], { recursive: true }); }
+  // beta is a git repository with a commit, and then some changes on top of it
+  const g = (...args) => execFileSync('git', ['-C', projects.beta, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', ...args],
+    { env: { ...process.env, HOME: home, GIT_CONFIG_NOSYSTEM: '1' }, stdio: 'ignore' });
+  w(path.join(projects.beta, 'notes.txt'), 'one\ntwo\nthree\n'); w(path.join(projects.beta, 'old.txt'), 'gone soon\n');
+  g('init', '-q', '-b', 'main'); g('add', '-A'); g('commit', '-q', '-m', 'start');
+  w(path.join(projects.beta, 'notes.txt'), 'one\n2\nthree\nfour\n'); fs.rmSync(path.join(projects.beta, 'old.txt'));
+  w(path.join(projects.beta, 'fresh.md'), '# Fresh\nA new file.\n'); fs.writeFileSync(path.join(projects.beta, 'pic.bin'), Buffer.from([1, 0, 2, 0, 3]));
   const sb = { root, home, bin, projects, log: path.join(root, 'claude.log'), agents: path.join(root, 'agents.json'), sessions: {} };
   sb.sessions.alphaLive = addSession(sb, 'alpha', 'live', 'Tidy the alpha readme', 'The readme is tidied.', 300);
   sb.sessions.betaOther = addSession(sb, 'beta', 'other', 'Add a beta changelog', 'The changelog is added.', 7200);

@@ -351,6 +351,28 @@ test('terminal view: runs under the session\'s own profile', async () => {
   await svc.call(`sessions/${id}/term/close`, {}); await until(() => t.exit, 'the terminal to close');
 });
 
+test('changes: what differs from the last commit, file by file, and nothing outside the project', async () => {
+  const id = sb.sessions.betaOther, c = (await svc.call(`sessions/${id}/changes`)).body;
+  assert.equal(c.repo, true);
+  const f = Object.fromEntries(c.files.map(x => [x.path, x]));
+  assert.deepEqual([f['notes.txt'].add, f['notes.txt'].del, f['notes.txt'].kind], [2, 1, 'changed']);
+  assert.deepEqual([f['old.txt'].del, f['old.txt'].kind], [1, 'deleted']);
+  assert.deepEqual([f['fresh.md'].add, f['fresh.md'].kind], [2, 'new']);
+  assert.equal(f['pic.bin'].binary, true);
+  assert.equal(c.count, c.files.length);
+  assert.equal(c.add, c.files.reduce((n, x) => n + x.add, 0));
+  const diff = async p => (await svc.call(`sessions/${id}/changes/file?path=${encodeURIComponent(p)}`));
+  const notes = (await diff('notes.txt')).body;
+  assert.equal(notes.lines[0].t, 'hd');
+  assert.deepEqual(notes.lines.filter(l => l.t !== 'hd' && l.t !== 'c').map(l => l.s), ['-two', '+2', '+four']);
+  assert.deepEqual((await diff('fresh.md')).body.lines.filter(l => l.t === 'p').map(l => l.s), ['+# Fresh', '+A new file.']);
+  assert.equal((await diff('pic.bin')).body.binary, true);
+  assert.equal((await diff('../../.claude/settings.json')).status, 404);
+  assert.equal((await diff(path.join(sb.home, '.claude', 'settings.json'))).status, 404);
+  // a folder that is not a repository has no changes view
+  assert.equal((await svc.call(`sessions/${sb.sessions.alphaLive}/changes`)).body.repo, false);
+});
+
 test('creates a project folder, and refuses odd names', async () => {
   const ok = await svc.call('projects', { name: 'gamma' });
   assert.equal(ok.status, 200); assert.ok(fs.statSync(path.join(sb.home, 'workspace', 'gamma')).isDirectory());
@@ -682,6 +704,31 @@ ui('window: the settings menu stays open when one press arrives as two clicks', 
 });
 
 /* ---------- last: nothing leaked out of the sandbox ---------- */
+
+ui('window: the changes panel lists changed files and shows each one\'s diff', async () => {
+  await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`);
+  await page.waitForSelector('.me:has-text("Tidy the alpha readme")');
+  assert.equal(await page.isVisible('#bChanges'), false);               // alpha is not a repository
+  await page.click(`.sess[data-id="${sb.sessions.betaOther}"]`);
+  await page.waitForSelector('#bChanges:visible');
+  assert.match(await page.innerText('#chN'), /^\d+$/);
+  await page.click('#bChanges');
+  await page.waitForSelector('#chT:has-text("changed files")');
+  await page.click('#files [data-file="notes.txt"]');
+  await page.waitForSelector('#diff .m:has-text("-two")');
+  assert.deepEqual(await page.locator('#diff .p').allInnerTexts(), ['+2', '+four']);
+  await page.click('#files [data-file="fresh.md"]');
+  await page.waitForSelector('#diff .p:has-text("+# Fresh")');
+  await page.click('#files [data-file="pic.bin"]');
+  await page.waitForSelector('#diff .note:has-text("not text")');
+  // a change made behind the app's back shows after a refresh
+  fs.writeFileSync(path.join(sb.projects.beta, 'later.txt'), 'x\n');
+  await page.click('#chRefresh');
+  await page.waitForSelector('#files [data-file="later.txt"]');
+  fs.rmSync(path.join(sb.projects.beta, 'later.txt'));
+  await page.click('#chClose');
+  assert.equal(await page.isVisible('#panel'), false);
+});
 
 test('sandbox containment', () => {
   assert.deepEqual(assertContained(sb), []);

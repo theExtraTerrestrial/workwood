@@ -54,9 +54,14 @@ On a fresh WSL install the Electron window needs GTK once:
   a chat turn to end (or you stop it), and sending a message in the chat closes
   an idle terminal. Leaving Claude Code (`/exit`) returns you to the chat.
   Ctrl+Shift+C copies the selection.
+- Changes view: the "±" button in the header (with the number of changed files)
+  opens a read-only list of what differs from the project's last commit, new
+  files included, and each file's diff. It shows only for projects that are git
+  repositories, and updates as the agent works; the refresh button picks up
+  changes made elsewhere.
 - Dark and light theme (gear, bottom left).
 
-Not built yet: changes view, skills menu and panel,
+Not built yet: skills menu and panel,
 attachments, voice, settings dialog,
 sign-in from the app, the Windows-side project list, the Mac build.
 
@@ -66,7 +71,7 @@ sign-in from the app, the Windows-side project list, the Mac build.
 npm test
 ```
 
-About 40 seconds, 51 tests. They run the real service and the real `claudius`
+About 40 seconds, 53 tests. They run the real service and the real `claudius`
 inside a throwaway home folder (the same idea as Claudius's own tests), with a
 scripted stand-in for `claude` (`tests/fake-claude.mjs`). No real account is
 used and nothing is sent to Anthropic. Half of the tests drive the window with

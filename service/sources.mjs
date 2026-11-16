@@ -1,4 +1,4 @@
-// Reads what already exists on this machine: Claudius profiles and their usage,
+// Reads what already exists on this machine: the profiles and their usage (kept as Claudius keeps them),
 // the shared pool of Claude Code sessions, and which sessions are live right now.
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -7,6 +7,7 @@ import fss from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import * as prof from './profiles.mjs';
 
 const run = promisify(execFile);
 export const HOME = os.homedir();
@@ -48,24 +49,21 @@ async function json(cmd, args, timeout) {
   try { return out == null ? null : JSON.parse(out); } catch { console.error(`[workwood] ${cmd} ${args.join(' ')} printed something unreadable`); return null; }
 }
 
-/** Profiles from Claudius, global one first. Usage that belongs to a window that has already reset counts as 0. */
+/** The profiles, global one first. Usage that belongs to a window that has already reset counts as 0. */
 export async function loadProfiles() {
   if (PLAIN) {
     let who = null; try { who = JSON.parse(await fs.readFile(path.join(HOME, '.claude.json'), 'utf8')).oauthAccount || null; } catch {}
     const name = String(who?.emailAddress || '').split('@')[0].replace(/[^\w.-]/g, '') || 'claude';
-    return [{ name, global: true, account: who?.accountUuid || null, plan: null, lapsed: false, h5: null, d7: null, r5: null, r7: null }];
+    return [{ name, global: true, account: who?.accountUuid || null, email: who?.emailAddress || '', org: who?.organizationName || '', plan: null, lapsed: false, h5: null, d7: null, r5: null, r7: null, at: null }];
   }
-  const list = await json('claudius', ['list', '--json']);
-  if (!list) return null;
+  const list = await prof.list();
   const now = Date.now() / 1000;
   const out = [];
   for (const p of list) {
-    let account = null;
-    try { account = JSON.parse(await fs.readFile(path.join(PROFILE_ROOT, p.name, '.claude.json'), 'utf8')).oauthAccount?.accountUuid || null; } catch {}
     out.push({
-      name: p.name, global: !!p.active, account, plan: p.sub || null, lapsed: !!p.expired,
+      name: p.name, global: !!p.active, account: p.account, email: p.email || '', org: p.org || '', plan: p.sub || null, lapsed: !!p.expired,
       h5: p.r5 && p.r5 < now ? 0 : (p.u5 ?? null), d7: p.r7 && p.r7 < now ? 0 : (p.u7 ?? null),
-      r5: p.r5 && p.r5 > now ? p.r5 : null, r7: p.r7 && p.r7 > now ? p.r7 : null,
+      r5: p.r5 && p.r5 > now ? p.r5 : null, r7: p.r7 && p.r7 > now ? p.r7 : null, at: p.uts || null,
     });
   }
   out.sort((a, b) => (b.global - a.global) || a.name.localeCompare(b.name));
@@ -74,7 +72,7 @@ export async function loadProfiles() {
 
 export async function loadNext() {
   if (PLAIN) return null;
-  return (await read('claudius', ['next'], 15000))?.trim().split('\n').pop() || null;
+  return prof.next(await prof.list());
 }
 
 // What a transcript says about its session: which account last ran it (the newest "session-owner" record)
@@ -125,32 +123,78 @@ export async function deleteSession(file, id) {
   metaCache.delete(file);
 }
 
-/** The shared session pool as Claudius reports it, newest first. Slow part of loading; needs nothing else. */
-export const loadSessionList = () => PLAIN ? scanSessions() : json('claudius', ['sessions', '--json', '--limit', '400'], 30000);
+/** The shared session pool, newest first. Slow part of loading; needs nothing else. */
+export const loadSessionList = () => scanSessions();
 
-// The same list Claudius gives, read from the history folder: the newest 400 sessions, each with its folder,
-// branch and first message. Only the start of each file is read.
+// The list `claudius sessions` gives, read from the history folder the same way: the newest 400 sessions, each with
+// the folder to resume it in, its branch and a name. Only the start of each file and its last 64 KB are read.
 const headCache = new Map();
-async function headOf(file, mtimeMs) {
+async function headObjs(fh, want = 120) {   // the first complete lines, until the opening user turn has been answered
+  const out = []; let pos = 0, rest = '';
+  while (pos < 8 * 1048576) {
+    const buf = Buffer.alloc(262144), { bytesRead } = await fh.read(buf, 0, buf.length, pos);
+    if (!bytesRead) break;
+    pos += bytesRead;
+    const lines = (rest + buf.toString('utf8', 0, bytesRead)).split('\n'); rest = lines.pop();
+    for (const line of lines) {
+      if (line.length > 1e6) continue;   // file-history snapshots: megabytes, and never what we are looking for
+      let o; try { o = JSON.parse(line); } catch { continue; }
+      out.push(o);
+      if (out.length >= want || (o.type === 'assistant' && out.some(h => h.type === 'user'))) return out;
+    }
+  }
+  if (rest) try { out.push(JSON.parse(rest)); } catch {}
+  return out;
+}
+async function tailObjs(fh, size) {
+  const len = Math.min(size, 65536), buf = Buffer.alloc(len);
+  await fh.read(buf, 0, len, size - len);
+  const lines = buf.toString('utf8').split('\n').filter(Boolean);
+  if (size > 65536 && lines.length > 1) lines.shift();   // half a line
+  return lines.reverse().map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+}
+const pick = (objs, key) => { for (const o of objs) if (typeof o[key] === 'string' && o[key]) return o[key]; return null; };
+const msgText = o => { const c = o.message?.content; return typeof c === 'string' ? c : Array.isArray(c) ? c.filter(b => b?.type === 'text').map(b => b.text).filter(Boolean).join(' ') : null; };
+const WRAPPER = /^\s*<\/?(?:local-command-caveat|local-command-stdout|local-command-stderr|system-reminder|user-prompt-submit-hook|ide[_-][a-z]+)[\s>/]/;
+function firstPrompt(objs) {   // [what the conversation opened with, or a slash command if that is all there is]
+  let prose = null, cmd = null;
+  for (const o of objs) {
+    if (o.type !== 'user' || o.isMeta === true || o.message?.role !== 'user') continue;
+    const t = msgText(o); if (!t || !t.trim()) continue;
+    const m = /<command-name>\s*([^<]{1,60}?)\s*<\/command-name>/.exec(t);
+    if (m) { if (!cmd) { const a = (/<command-args>\s*([^<]{0,80}?)\s*<\/command-args>/.exec(t)?.[1] || '').trim(); cmd = a ? `${m[1].trim()} ${a}` : m[1].trim(); } continue; }
+    if (WRAPPER.test(t)) continue;
+    prose = t; break;
+  }
+  return [prose, cmd];
+}
+function labelOf(head, tail) {   // Claude Code's title for it, else its slug, the opening prompt, the last prompt, a command
+  const [prose, cmd] = firstPrompt(head);
+  const c = [[pick(tail, 'aiTitle') || pick(head, 'aiTitle'), 'title'], [pick(tail, 'slug') || pick(head, 'slug'), 'slug'], [prose, 'prompt'],
+    [pick(tail, 'lastPrompt') || pick(head, 'lastPrompt'), 'last'], [cmd, 'command']].find(([v]) => typeof v === 'string' && v.trim());
+  if (!c) return null;
+  let t = c[0].replace(/[\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (c[1] === 'slug' && /^[a-z0-9-]+$/.test(t)) t = t.replace(/-/g, ' ');
+  return !t ? null : t.length > 72 ? t.slice(0, 71) + '…' : t;
+}
+async function headOf(file, mtimeMs, dirkey) {
   const had = headCache.get(file);
-  if (had && had.cwd && had.at === mtimeMs) return had;
-  const out = { at: mtimeMs, cwd: null, branch: null, label: null };
+  if (had && had.at === mtimeMs) return had;
+  const out = { at: mtimeMs, cwd: null, branch: null, label: null, side: false };
   let fh;
   try {
     fh = await fs.open(file, 'r');
-    const buf = Buffer.alloc(262144), { bytesRead } = await fh.read(buf, 0, buf.length, 0);
-    for (const line of buf.toString('utf8', 0, bytesRead).split('\n')) {
-      if (!line.includes('"cwd"')) continue;
-      let m; try { m = JSON.parse(line); } catch { continue; }
-      if (m.isSidechain) continue;
-      if (!out.cwd && m.cwd) { out.cwd = m.cwd; out.branch = m.gitBranch || null; }
-      if (!out.label && m.type === 'user' && !m.isMeta) {
-        const c = m.message?.content, t = (typeof c === 'string' ? c : (c || []).find(b => b.type === 'text')?.text || '').trim();
-        const cmd = /<command-name>(\/[^<\s]+)<\/command-name>/.exec(t);
-        if (cmd && !/<local-command-stdout>/.test(t)) out.label = (cmd[1] + ' ' + (/<command-args>([\s\S]*?)<\/command-args>/.exec(t)?.[1] || '')).trim().split('\n')[0].slice(0, 80);
-        else if (t && !/^(<|Caveat:|\[Request interrupted|This session is being continued)/.test(t)) out.label = t.split('\n')[0].slice(0, 80);
-      }
-      if (out.cwd && out.label) break;
+    const head = await headObjs(fh);
+    if (head.length) {
+      out.side = head.some(o => o.isSidechain === true);   // a subagent's transcript is not a session to resume
+      const tail = await tailObjs(fh, (await fh.stat()).size);
+      // The folder to resume in is the one Claude Code filed the session under: every character of its path
+      // that is not a letter or digit became '-'. A session moves while it runs (into a worktree, a subfolder),
+      // so neither its first nor its last folder is reliably that one.
+      const cands = [...new Set([...head, ...tail].map(o => o.cwd).filter(Boolean))];
+      out.cwd = cands.find(c => c.replace(/[^a-zA-Z0-9]/g, '-') === dirkey) || cands[0] || null;
+      out.branch = pick([...tail, ...head], 'gitBranch');
+      out.label = labelOf(head, tail);
     }
   } catch {} finally { await fh?.close().catch(() => {}); }
   headCache.set(file, out);
@@ -161,15 +205,15 @@ async function scanSessions() {
   const files = [];
   await Promise.all(dirs.filter(d => d.isDirectory()).map(async d => {
     let names; try { names = await fs.readdir(path.join(PROJECTS_ROOT, d.name)); } catch { return; }
-    await Promise.all(names.filter(n => /^[0-9a-f-]{36}\.jsonl$/.test(n)).map(async n => {
+    await Promise.all(names.filter(n => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/.test(n)).map(async n => {
       try { const st = await fs.stat(path.join(PROJECTS_ROOT, d.name, n)); files.push({ dirkey: d.name, id: n.slice(0, 36), mtimeMs: st.mtimeMs }); } catch {}
     }));
   }));
   files.sort((a, b) => b.mtimeMs - a.mtimeMs);
   const out = [];
   for (const f of files.slice(0, 400)) {
-    const h = await headOf(path.join(PROJECTS_ROOT, f.dirkey, f.id + '.jsonl'), f.mtimeMs);
-    if (!h.cwd) continue;
+    const h = await headOf(path.join(PROJECTS_ROOT, f.dirkey, f.id + '.jsonl'), f.mtimeMs, f.dirkey);
+    if (!h.cwd || h.side) continue;
     out.push({ id: f.id, dirkey: f.dirkey, cwd: h.cwd, branch: h.branch, label: h.label, mts: Math.floor(f.mtimeMs / 1000), exists: fss.existsSync(h.cwd) });
   }
   return out;
@@ -184,9 +228,56 @@ export async function tagSessions(list, profiles) {
   return Promise.all(keep.map(async s => {
     const file = path.join(PROJECTS_ROOT, s.dirkey, s.id + '.jsonl');
     const { account, title } = await metaOf(file, s.mts);
-    return { id: s.id, title: title || s.label || 'Untitled session', cwd: s.cwd, project: path.basename(s.cwd),
+    const place = await placeOf(s.cwd);   // a session in a worktree belongs to the project the worktree was made from
+    return { id: s.id, title: title || s.label || 'Untitled session', cwd: s.cwd, project: path.basename(place.root), root: place.root,
       branch: s.branch && s.branch !== 'HEAD' ? s.branch : null, mts: s.mts, file, profile: byAccount.get(account) || fallback };
   }));
+}
+
+// Where a folder sits in git: the main checkout it belongs to, the worktree's name when it is one, and the branch
+// checked out right now. Read from the files git keeps; no git command is run.
+const placeCache = new Map();
+export async function placeOf(cwd) {
+  const had = placeCache.get(cwd);
+  if (had && Date.now() - had.at < 4000) return had.v;
+  const v = { root: cwd, worktree: null, branch: null };
+  try {
+    let dir = cwd, dot = null;
+    for (let i = 0; i < 8 && !dot; i++) {
+      try { await fs.stat(path.join(dir, '.git')); dot = path.join(dir, '.git'); } catch { const up = path.dirname(dir); if (up === dir) break; dir = up; }
+    }
+    if (dot) {
+      let gitdir = dot;
+      if ((await fs.stat(dot)).isFile()) {
+        const m = /^gitdir:\s*(.+)$/m.exec(await fs.readFile(dot, 'utf8'));
+        if (m) {
+          gitdir = path.resolve(dir, m[1].trim());
+          const w = /^(.*)[\\/]\.git[\\/]worktrees[\\/]([^\\/]+)$/.exec(gitdir);
+          if (w) { v.root = w[1]; v.worktree = path.basename(dir); }
+        }
+      }
+      const head = (await fs.readFile(path.join(gitdir, 'HEAD'), 'utf8')).trim(), b = /^ref:\s*refs\/heads\/(.+)$/.exec(head);
+      v.branch = b ? b[1] : head.slice(0, 7);
+    }
+  } catch {}
+  placeCache.set(cwd, { at: Date.now(), v });
+  return v;
+}
+// The folder a session is working in now. An agent may have moved into a worktree after it started, so this is
+// read from the end of its history, not the beginning.
+export async function lastCwd(file, fallback) {
+  let fh;
+  try {
+    fh = await fs.open(file, 'r');
+    const { size } = await fh.stat(), len = Math.min(size, 131072), buf = Buffer.alloc(len);
+    await fh.read(buf, 0, len, size - len);
+    const lines = buf.toString('utf8').split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].includes('"cwd"')) continue;
+      try { const m = JSON.parse(lines[i]); if (m.cwd && !m.isSidechain) return m.cwd; } catch {}
+    }
+  } catch {} finally { await fh?.close().catch(() => {}); }
+  return fallback;
 }
 
 // The last list we showed, kept on disk so the next launch has something to draw at once.
@@ -198,7 +289,7 @@ async function writeJson(file, data) {
 export const readCache = () => readJson(CACHE);
 export const writeCache = data => writeJson(CACHE, data);
 
-// What only Workwood knows and must not lose: which sessions you archived.
+// What only Workwood knows and must not lose: which sessions are yours here, which are done, and your settings.
 const KEPT = path.join(HOME, '.config', 'workwood', 'state.json');
 export const readKept = () => readJson(KEPT) || {};
 export const writeKept = data => writeJson(KEPT, data);
@@ -231,7 +322,7 @@ export async function loadLive() {
 /** Folders offered in the project menu: ones with past sessions first, then what is inside your project folders. */
 export async function loadProjects(sessions, folders = [WORKSPACE]) {
   const seen = new Map();
-  for (const s of sessions || []) if (!seen.has(s.cwd)) seen.set(s.cwd, { cwd: s.cwd, name: s.project, recent: true });
+  for (const s of sessions || []) if (!seen.has(s.cwd)) seen.set(s.cwd, { cwd: s.cwd, name: path.basename(s.cwd), recent: true });
   for (const folder of folders) {
     try {
       for (const d of await fs.readdir(folder, { withFileTypes: true })) {
@@ -266,34 +357,68 @@ export async function createProject(name, folder = WORKSPACE) {
   return { cwd, name, recent: false };
 }
 
+let version;   // Claude Code's, read once
 /** Environment for a session on a given profile. The global profile is simply ~/.claude. */
 export async function envForProfile(profile, profiles) {
   const p = profiles.find(x => x.name === profile);
   if (!p || p.global) return cleanEnv();
   const dir = path.join(PROFILE_ROOT, profile);
   if (!fss.existsSync(path.join(dir, '.credentials.json'))) throw new Error(`Profile ${profile} has no saved sign-in.`);
-  // Let Claudius renew the token and wire the shared history, exactly as `claudius run` would.
-  try { await run('claudius', ['refresh', profile], { timeout: 30000, env: cleanEnv() }); } catch (e) { console.error('[workwood] claudius refresh:', String(e.message).split('\n')[0]); }
-  try { await run('claudius', ['link', profile], { timeout: 30000, env: cleanEnv() }); } catch (e) { console.error('[workwood] claudius link:', String(e.message).split('\n')[0]); }
+  // Wire the shared history, as `claudius run` would, and bring a copy of the live sign-in up to date. A lapsed
+  // token is left for Claude Code to renew when it starts: it takes the same renewal lock as Workwood and Claudius.
+  try { await prof.link(profile, version ??= await claudeVersion(CLAUDE)); } catch (e) { console.error('[workwood] link:', String(e.message).split('\n')[0]); }
+  await prof.adoptLive(p);
   return cleanEnv({ CLAUDE_CONFIG_DIR: dir });
 }
 
-// What a session gets when you choose nothing: the model and effort from Claude Code's own settings,
+// What a session gets when you choose nothing: the model, effort and permission mode from Claude Code's own settings,
 // the project's over the profile's, as Claude Code reads them. Null where no setting says.
 const ALIAS = { fable: 'claude-fable-5-2', opus: 'claude-opus-5-5', sonnet: 'claude-sonnet-5-5', haiku: 'claude-haiku-5-5' };
+const homeOf = (profile, profiles) => { const p = profiles.find(x => x.name === profile); return !p || p.global ? path.join(HOME, '.claude') : path.join(PROFILE_ROOT, profile); };
 export async function defaultsFor(cwd, profile, profiles) {
-  const p = profiles.find(x => x.name === profile), home = !p || p.global ? path.join(HOME, '.claude') : path.join(PROFILE_ROOT, profile);
-  const files = [path.join(home, 'settings.json'), ...(cwd ? [path.join(cwd, '.claude', 'settings.json'), path.join(cwd, '.claude', 'settings.local.json')] : [])];
-  let model = null, effort = null;
+  const own = path.join(homeOf(profile, profiles), 'settings.json');
+  const files = [own, ...(cwd ? [path.join(cwd, '.claude', 'settings.json'), path.join(cwd, '.claude', 'settings.local.json')] : [])];
+  let model = null, effort = null, mode = null, bad = null;
   for (const f of files) {
-    let s; try { s = JSON.parse(await fs.readFile(f, 'utf8')); } catch { continue; }
+    let s; try { s = JSON.parse(await fs.readFile(f, 'utf8')); } catch (e) { if (f === own && e.code !== 'ENOENT') bad = own; continue; }
     if (typeof s.model === 'string' && s.model) model = s.model;
     if (typeof s.effortLevel === 'string' && s.effortLevel) effort = s.effortLevel;
+    if (typeof s.permissions?.defaultMode === 'string' && MODES.includes(s.permissions.defaultMode)) mode = s.permissions.defaultMode;
   }
   const m = model && /^([a-z]+)(\[1m\])?$/i.exec(model);
   if (m && ALIAS[m[1].toLowerCase()]) model = ALIAS[m[1].toLowerCase()] + (m[2] || '');
-  return { model, effort };
+  return { model, effort, mode, ...(bad ? { bad } : {}) };
 }
+
+export const MODES = ['default', 'acceptEdits', 'plan', 'auto', 'bypassPermissions'];
+
+export const MODELS = Object.values(ALIAS), EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+/**
+ * A profile's own Claude Code defaults, in its settings.json: `model`, `effortLevel` and `permissions.defaultMode`.
+ * A key given as null or '' is taken out, so Claude Code picks again. Keys not given are left alone.
+ */
+export async function setProfileDefaults(profile, profiles, { model, effort, mode } = {}) {
+  if (mode !== undefined && mode && !MODES.includes(mode)) throw new Error('No such mode.');
+  if (model !== undefined && model && !MODELS.includes(String(model).replace(/\[1m\]$/, ''))) throw new Error('No such model.');
+  if (effort !== undefined && effort && !EFFORTS.includes(effort)) throw new Error('No such effort.');
+  const home = homeOf(profile, profiles), file = path.join(home, 'settings.json');
+  let s = {};
+  try { s = JSON.parse(await fs.readFile(file, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') throw new Error('That profile\'s settings.json could not be read.'); }
+  if (model !== undefined) { if (model) s.model = model; else delete s.model; }
+  if (effort !== undefined) { if (effort) s.effortLevel = effort; else delete s.effortLevel; }
+  if (mode !== undefined) {
+    if (mode) s.permissions = { ...(s.permissions || {}), defaultMode: mode };
+    else if (s.permissions) { delete s.permissions.defaultMode; if (!Object.keys(s.permissions).length) delete s.permissions; }
+  }
+  await fs.mkdir(home, { recursive: true });
+  // a linked settings file is written where it really lives, with the permissions it had
+  let real = file, perm = 0o600;
+  try { real = await fs.realpath(file); perm = (await fs.stat(real)).mode & 0o777; } catch {}
+  const tmp = real + '.workwood-' + process.pid;
+  await fs.writeFile(tmp, JSON.stringify(s, null, 2) + '\n', { mode: perm });
+  await fs.rename(tmp, real);
+}
+export const setDefaultMode = (profile, profiles, mode) => setProfileDefaults(profile, profiles, { mode });
 
 // Attachments. A file that is already on disk is named by its own path, never copied; one that is not (a paste,
 // or a window that cannot tell where a file lives) is saved outside the project. Either way the message lists the

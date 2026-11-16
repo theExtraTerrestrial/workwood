@@ -1,7 +1,7 @@
 # Workwood
 
-A desktop app for running and overseeing several Claude Code sessions at once,
-grouped by Claudius profile.
+A desktop app for running and overseeing several Claude Code sessions at once:
+an inbox of the work that still needs something, across your Claude accounts.
 
 ## Run it
 
@@ -14,18 +14,18 @@ npm run edge      # alternative: the same app in a Microsoft Edge app window
 On Windows, run `npm run shortcut` once (inside WSL). It puts Workwood in the
 Start menu as a native Windows window, installed under `%LOCALAPPDATA%\Workwood`
 (Electron for Windows, downloaded once, and a Windows copy of the service).
-The window has a switch at the top of the sidebar for where sessions run:
+The small word after the "Sessions" title (for example "· WSL") says where sessions run; click it to change:
 
 - **Windows**: the service runs inside the window itself and uses the Windows
   Claude Code (`claude.exe`), your Windows folders and Claude Code's Windows
-  history. Nothing goes through WSL. There is no Claudius there, so there is
-  one account: the one Claude Code is signed in to.
+  history. Nothing goes through WSL. There is one account there: the one
+  Claude Code is signed in to.
 - **WSL**: the window starts the service in WSL and stops it again when the
-  window closes; this is the full set-up with Claudius profiles. Its output
+  window closes; this is the full set-up, with all your profiles. Its output
   goes to `~/.cache/workwood/workwood.log`.
 
-Agents on the side you are not looking at keep working. A dot on the other
-side's button shows when one is working (green) or waiting for you (amber).
+Agents on the side you are not looking at keep working. A dot next to that
+word shows when one there is working (green) or waiting for you (amber).
 
 Each side has its own settings. Under Settings, General, "Project folders"
 lists the folders that hold your projects (for example `F:\workspace` on
@@ -51,8 +51,48 @@ On a fresh WSL install the Electron window needs GTK once:
 
 ## What works in this first version
 
-- The sidebar lists every session in the shared Claude Code history, grouped by
-  the Claudius profile that last ran it, with each profile's 5-hour usage.
+- The sidebar is an inbox, grouped by project: sessions that are working, waiting
+  for you, finished but not yet looked at, or still open. A session leaves it
+  when you mark it done (the Done button, the tick on its row, or Ctrl+D), or by
+  itself after 7 days untouched (Settings, "Clear quiet sessions"). New work in a
+  done session brings it back. Sessions started in a terminal appear only while
+  they are running or waiting. Ctrl+K, or the Done row, finds any session by its
+  name or project.
+- A session in a git worktree is listed under the project the worktree was made
+  from. Under the title, always in the same place, the header names the worktree
+  (or the branch when there is none), then the project.
+- Under the message box: the profile the conversation runs on with its 5-hour and
+  7-day limits, then model and effort, and how full the context is. Pressing the
+  profile continues the conversation on another one from your next message.
+- Limits: the profile menu lists every profile with its 5-hour and 7-day limits
+  stacked, each bar marked with how far that window has run, and when it resets.
+  A dot on the profile's name says that one of them is close to (amber) or at
+  (red) a limit. Workwood reads the limits itself from Claude's usage endpoint,
+  the one behind `/usage`: nothing is sent to Claude and no usage is spent. It
+  reads every 5 minutes, after each turn for that turn's profile, and when you
+  press the refresh button in the menu. Profiles are read one at a time, never
+  side by side. A profile whose sign-in has lapsed is renewed first (see
+  Profiles below); if that cannot be done, it keeps its last reading and the
+  menu says why. Each reading is also written to the profile's `.usage` cache,
+  where `claudius list` reads it too. On the Windows side the one account gets
+  its limits the same way.
+- Profiles: Workwood keeps them itself, in `~/.claude-profiles/<name>`, the same
+  folders and files Claudius uses, so the two can be used side by side and see
+  the same profiles, usage and history. Claudius is not needed to run
+  Workwood; keep it for opening a profile in a terminal by hand. Workwood lists the
+  profiles, picks the one with the most room (by Claudius's own rules), reads
+  the session pool, and before a session runs on a profile wires it to the
+  shared history in `~/.claude` (sessions, plans, plugins, prompt history),
+  fills in the settings it lacks from the global ones, and copies over which
+  projects you trusted. What was already in the profile is merged into the pool
+  and kept as `<name>.pre-share.bak`, never deleted.
+- Renewing a sign-in: a refresh token works once, so only one program may
+  renew an account at a time. Workwood takes the two lock folders Claude Code
+  itself uses for this (`<profile>/.oauth_refresh.lock` and `<profile>.lock`),
+  and Claudius takes the same two, so Workwood, Claudius and Claude Code never
+  renew the same account at once. Whoever gets the lock second reads the
+  sign-in again and uses the renewed one instead of renewing it a second time.
+  An account signed in to `~/.claude` is only ever renewed there.
 - Live status: sessions working or waiting in this app, and sessions running in
   any terminal (these carry a terminal badge, and are locked while busy).
 - Open a session to read its conversation. Very long ones show the recent part.
@@ -63,8 +103,34 @@ On a fresh WSL install the Electron window needs GTK once:
   A leading `*` marks your default, taken from your Claude Code settings (the
   project's settings win over the profile's).
   The context meter uses that model's window size.
+- The permission mode (Ask, Accept edits, Plan, Auto) has its own picker next to
+  the model; Shift+Tab in the message box cycles through them, as in Claude Code.
+  A change applies at once, even mid-turn; a permission card already waiting stays
+  until you answer it. It shows the session's real mode (from its history, or the
+  profile's `permissions.defaultMode` for a new session), and "Make … the default"
+  writes that setting into the profile's own Claude Code settings. Bypass is listed
+  only once "Offer Bypass mode" is on in Settings → General.
 - Cards for questions, permissions and plans, and for a turn that stopped on a
   limit, a lost sign-in or an error (with "continue on another profile").
+- Compact sidebar: in a window narrower than about 1000 pixels, or when a side
+  panel would squeeze the conversation, the sidebar becomes a strip of project
+  tiles; hovering a tile shows the session's name. The button at the top of
+  the sidebar, or Ctrl+B, switches between the two at any width.
+- Writing while the agent works: a message sent mid-turn waits in a queue on
+  top of the message box until the agent finishes the step it is on. Then the
+  agent reads it before its next step, or runs it as the next turn. Until then,
+  ↑ in an empty box (or the pencil) takes it back to change it, and "Send now"
+  cuts the current step short and sends it at once. The send button stops the
+  turn only while the message box is empty.
+- Long conversations: marks along the right edge, one per turn, jump to that
+  turn; the list button in the header opens an outline of the turns that you
+  can search.
+- Context: the figure under the message box opens what fills the agent's
+  context, as Claude Code counts it, and "Compact the conversation now".
+- Files a shell command made (a screenshot, a page written by a script) get
+  preview cards too, when the command names them.
+- New session: the project menu also takes a typed folder or "Browse…".
+- "Open at login" (Windows window): in the gear menu and Settings.
 - Compare: when the agent asks a question about things it made in the same
   turn, they open next to the question. Each option is matched to the file its
   wording names (or to the text the agent attached to the option); picking an
@@ -72,16 +138,20 @@ On a fresh WSL install the Electron window needs GTK once:
   side" shows up to three at once. If nothing can be matched by name, the
   turn's files are offered under their own names.
 - Previews: pages, images, videos and PDFs the agent wrote appear as cards under
-  its reply. A card opens the file in a side panel, where you can step through
-  everything the session made, go full width, or open it in your browser.
+  its reply. A card opens the file at full width (beside the conversation while
+  a question waits there); the header button opens it as a side panel. Either
+  way you can step through everything the session made, switch between full
+  width and side panel, or open it in your browser.
+- The window opens where you left it, at the size you left it (and maximized,
+  if it was).
 - Session actions, from the "…" on a session or a right-click:
   - Rename: saved in the session's history the way Claude Code's `/rename` does,
     so the name also shows in `claude --resume`.
   - Open in VS Code, and Open in terminal (resumes the session under its own
     profile in a new Windows Terminal tab; set `WORKWOOD_TERMINAL` to a command
     of your own, which is called with the folder and then the command to run).
-  - Archive: hides the session in Workwood only (kept in
-    `~/.config/workwood/state.json`). Gear, "Archived sessions" shows them again.
+  - Mark done: takes the session out of the sidebar in Workwood only (kept in
+    `~/.config/workwood/state.json`). Nothing is deleted.
   - Delete: after a confirmation, removes the session's transcript and its
     subagents' transcripts from `~/.claude/projects`. This cannot be undone.
     A session that is working, or open in a terminal, cannot be deleted.
@@ -115,11 +185,22 @@ On a fresh WSL install the Electron window needs GTK once:
   first use into `~/.cache/workwood/models`); no audio leaves it. English by
   default: pick another language in Settings; `WORKWOOD_STT_MODEL` names another model.
 - Settings (gear, "All settings…"): theme, the profile new sessions start on,
-  archived sessions, the dictation language, your profiles with their usage,
+  when quiet sessions clear themselves, the dictation language, your profiles with their usage,
   the skills list, and versions.
-- Sign in again from the app: Settings, Profiles, "Sign in again" runs
-  `claudius relogin <profile>` in a terminal inside the dialog. A turn that
-  stopped because a sign-in lapsed has the same button on its card.
+- Managing profiles: Settings, Profiles.
+  - "Add a profile" takes a name and runs Claude Code's own sign-in
+    (`claude auth login`) for a new folder, in a terminal inside the dialog. The
+    profile is listed once the sign-in has landed; if it does not finish,
+    nothing is left behind.
+  - "Sign in again" does the same for an existing profile. The old sign-in is
+    set aside first and put back if the new one does not finish. For the
+    profile `~/.claude` is signed in to, the new sign-in goes there too. A turn
+    that stopped because a sign-in lapsed has the same button on its card.
+  - The pencil renames a profile in place (Enter saves, Escape cancels); the bin
+    removes one after asking. Removing deletes the profile's sign-in, settings
+    and usage history; sessions and the shared history stay. The profile
+    `~/.claude` is signed in to cannot be removed (switch with Claudius first),
+    and a profile cannot be renamed or removed while a session is using it.
 - Dark and light theme (gear, bottom left).
 
 Not built yet: the Mac build; an installer that runs on a Windows PC without WSL.
@@ -130,9 +211,11 @@ Not built yet: the Mac build; an installer that runs on a Windows PC without WSL
 npm test
 ```
 
-About 50 seconds, 64 tests. They run the real service and the real `claudius`
-inside a throwaway home folder (the same idea as Claudius's own tests), with a
-scripted stand-in for `claude` (`tests/fake-claude.mjs`). No real account is
+About 100 seconds, 108 tests. They run the real service inside a throwaway
+home folder (the same idea as Claudius's own tests), with a scripted stand-in
+for `claude` (`tests/fake-claude.mjs`) and local stand-ins for Claude's usage
+and sign-in servers. The real `claudius` is used where the two must agree: one
+test has both renew the same account at the same moment. No real account is
 used and nothing is sent to Anthropic. Half of the tests drive the window with
 real clicks in a headless Chromium; they are skipped with a note if none is
 found (`npx playwright install chromium-headless-shell`, or set `WORKWOOD_CHROME`).
@@ -140,8 +223,10 @@ The last test checks that nothing leaked out of the sandbox.
 
 ## How it is put together
 
-- `service/` is a small local web server (Node). It reads profiles and sessions
-  through `claudius` and `claude agents --json`, and runs turns with the Claude
+- `service/` is a small local web server (Node). It reads profiles
+  (`profiles.mjs`), limits (`usage.mjs`) and sessions itself, renews sign-ins
+  under the shared lock (`oauth.mjs`), asks `claude agents --json` what is
+  running, and runs turns with the Claude
   Agent SDK. It listens on this machine only, and every request needs the random
   token made at start-up.
 - Previews are served from a second local address with its own random key, so a

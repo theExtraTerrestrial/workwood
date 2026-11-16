@@ -5,54 +5,58 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Workwood</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..700&display=swap">
 <link rel="stylesheet" href="vendor/xterm.css">
 <link rel="stylesheet" href="app.css">
 </head>
 <body data-token="__TOKEN__">
 <div class="app">
   <aside class="side">
-    <div class="side-head"><span>Sessions</span><span class="gap"></span><div class="seg envs" id="envs" hidden></div></div>
+    <div class="side-head"><span class="st">Sessions</span><button class="envl" id="envl" hidden></button><span class="gap"></span><button class="ib" id="bFind" data-tip="Find a session, in the inbox or done (Ctrl+K)" data-i="search"></button><button class="ib" id="bSide" data-tip="Compact sidebar (Ctrl+B)" data-i="panel"></button></div>
+    <button class="newb" id="newBtn"><i data-i="plus"></i><span>New session</span></button>
     <div class="prog" id="prog"></div>
     <div class="list" id="list"></div>
-    <div class="side-foot"><button class="newb" id="newBtn"><i data-i="plus"></i>New session</button><button class="ib" id="bGear" title="Settings" data-i="cog"></button></div>
+    <div class="side-foot"><button class="hist" id="bHist"></button><button class="ib" id="bGear" title="Settings" data-i="cog"></button></div>
   </aside>
 
   <section class="main" id="main">
     <header class="head">
-      <h1 id="title"></h1><div class="where" id="where"></div>
+      <div class="hd"><h1 id="title"></h1><div class="where" id="where"></div></div>
       <div id="tools" style="display:flex;align-items:center;gap:4px">
         <div class="seg" id="seg">
           <button class="ib on" id="vChat" title="Chat" data-i="chat"></button>
           <button class="ib" id="vTerm" title="Terminal" data-i="term"></button>
         </div>
-        <button class="ib" id="bSkills" title="Skills in this session" data-i="zap"></button>
+        <button class="ib" id="bOutline" data-tip="Conversation outline" data-i="list"></button>
+        <button class="ib wide" id="bPreview" data-tip="Preview what the agent made" hidden><i data-i="monitor"></i><span id="pvN"></span></button>
+        <button class="ib wide" id="bTasks" data-tip="Running in the background" hidden><i data-i="pulse"></i><span id="tkN"></span></button>
         <button class="ib wide" id="bChanges" title="Changes" hidden><i data-i="diff"></i><span id="chN"></span></button>
         <button class="ib" id="bCode" title="Open in VS Code" data-i="code"></button>
+        <button class="doneb" id="bDone"></button>
       </div>
     </header>
 
     <div class="split" id="split">
       <section class="conv" id="conv">
+        <div class="rail" id="rail" hidden></div>
         <div class="scroll" id="scroll">
           <div class="col" id="thread"></div>
           <div class="hello" id="hello" hidden>What should the agent do?</div>
         </div>
         <div class="composer">
+          <button class="jump" id="jump" hidden></button>
           <div class="qcard" id="qcard" hidden></div>
+          <div class="tray" id="tray" hidden></div>
+          <div class="queue" id="queue" hidden></div>
           <div class="box" id="box">
             <div class="inl" id="slash" hidden></div>
             <div class="atts" id="atts" hidden></div>
             <textarea id="input" rows="1" placeholder="Message the agent…"></textarea>
             <div class="row">
-              <button class="ib" id="bAttach" title="Attach files" data-i="clip"></button><span id="fchips" style="display:contents"></span><input type="file" id="filePick" multiple hidden>
+              <button class="ib" id="bAttach" title="Attach files" data-i="clip"></button><button class="ib" id="bSkills" data-tip="Skills: what the agent can be asked to do here. Typing / opens the same list." data-i="slash"></button><input type="file" id="filePick" multiple hidden>
               <span class="slot" id="sProject" hidden>
                 <button class="pick" id="pProject" title="Project"></button>
                 <div class="pop" id="mProject" hidden></div>
-              </span>
-              <span class="slot" id="sProfile" hidden>
-                <button class="pick" id="pProfile" title="Profile"></button>
-                <div class="pop" id="mProfile" hidden></div>
               </span>
               <span class="gap"></span>
               <span class="voice" id="voice" hidden><button class="ib" id="vCancel" data-tip="Discard this dictation (Esc)" data-i="x"></button><span class="wave" id="wave"></span><span id="vtime">0:00</span></span>
@@ -60,7 +64,7 @@
               <button class="send" id="send" title="Send" data-i="up"></button>
             </div>
           </div>
-          <div class="support"><span class="slot"><button class="pick" id="pModel" title="Model"></button><div class="pop sm" id="mModel" hidden></div></span><span class="slot"><button class="pick" id="pEffort" title="Effort"></button><div class="pop sm" id="mEffort" hidden></div></span><span class="gap"></span><span class="ctx" id="pCtx" title="Context used"></span><div class="bar3" id="ctxBar"><i></i></div></div>
+          <div class="support"><span class="slot" id="sProfile"><button class="pick" id="pProfile"></button><div class="pop" id="mProfile" hidden></div></span><span class="lim" id="lim"></span><span class="gap"></span><span class="limnote" id="limNote"></span><span class="slot"><button class="pick mode" id="pMode"></button><div class="pop sm r" id="mMode" hidden></div></span><span class="slot"><button class="pick" id="pModel" data-tip="Model and effort for your next message"></button><div class="pop sm r" id="mModel" hidden></div></span><span class="slot" id="sCtx"><button class="ctx" id="pCtx"></button><div class="pop sm r" id="mCtx" hidden></div></span></div>
           <div class="oops" id="oops" hidden></div>
         </div>
       </section>
@@ -79,14 +83,20 @@
         </div>
         <div class="stage" id="stage"></div>
         </div>
+        <div class="pwrap" id="olw" hidden>
+          <div class="phead"><span class="ctitle" id="olT">Conversation</span><span class="gap"></span><button class="ib" id="olClose" data-tip="Close" data-i="x"></button></div>
+          <label class="find skf"><i data-i="search"></i><input id="olQ" placeholder="Find in this conversation" autocomplete="off" spellcheck="false"></label>
+          <div class="ol" id="oll"></div>
+        </div>
         <div class="pwrap" id="cmw" hidden>
           <div class="phead"><div class="cmpseg" id="cmSeg"></div><span class="gap"></span><button class="ib" id="cmFull" data-tip="Full width" data-i="max"></button><button class="ib" id="cmClose" data-tip="Close" data-i="x"></button></div>
           <div class="stage cms" id="cmStage"></div>
         </div>
-        <div class="pwrap" id="skw" hidden>
-          <div class="phead"><span class="ctitle" id="skT">Skills</span><span class="gap"></span><button class="ib" id="skClose" title="Close" data-i="x"></button></div>
-          <label class="find skf"><i data-i="search"></i><input id="skQ" placeholder="Search skills" autocomplete="off" spellcheck="false"></label>
-          <div class="ol" id="skl"></div>
+        <div class="pwrap" id="tkw" hidden>
+          <div class="phead"><span class="ctitle">Running in the background</span><span class="gap"></span><button class="ib" id="tkClose" data-tip="Close" data-i="x"></button></div>
+          <div class="tkl" id="tkList"></div>
+          <div class="tkinfo" id="tkInfo"></div>
+          <pre class="tkout mono" id="tkOut"></pre>
         </div>
         <div class="pwrap" id="chw" hidden>
           <div class="phead"><span class="ctitle" id="chT"></span><span class="cstat mono" id="chS"></span><span class="gap"></span><button class="ib" id="chRefresh" title="Refresh" data-i="refresh"></button><button class="ib" id="chClose" title="Close" data-i="x"></button></div>
@@ -97,9 +107,11 @@
     </div>
   </section>
 </div>
-<div class="fmenu" id="gmenu" hidden style="width:220px"><button id="gTheme">Theme<span id="gThemeV"></span></button><button id="gArch">Archived sessions<span id="gArchV"></span></button><hr><button id="gAll">All settings…</button></div>
+<div class="fmenu emenu" id="emenu" hidden></div>
+<div class="fmenu" id="gmenu" hidden style="width:220px"><button id="gTheme">Theme<span id="gThemeV"></span></button><button id="gProf">Default profile<span id="gProfV"></span></button><button id="gLogin" hidden>Open at login<span id="gLoginV"></span></button><hr><button id="gAll">All settings…</button></div>
 <div class="fmenu" id="smenu" hidden></div>
 <div class="dim" id="sdim" hidden><div class="dlg" id="dlg"><div class="dtabs"><h3>Settings</h3><div id="stabs"></div></div><div class="pg"><button class="ib cls" id="dClose" title="Close" data-i="x"></button><div id="spage"></div></div></div></div>
+<div class="dim" id="fdim" hidden><div class="finder"><label class="find"><i data-i="search"></i><input id="fQ" placeholder="Find a session" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></label><div class="flist" id="fList"></div></div></div>
 <div class="tip2" id="tip" hidden></div>
 <div class="dim" id="dim" hidden><div class="ask" id="ask"></div></div>
 <script src="vendor/xterm.js"></script>

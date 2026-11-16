@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 27: the account menu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+  :root{color-scheme:dark}[data-theme=light]{color-scheme:light}
+  :root{--page:#0e0f11;--win:#17181b;--box:#1d1f22;--pop:#1f2124;--surface:#26282c;--surface2:#33363b;--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.16);
+    --text:#e9eaec;--dim:#9a9ea6;--faint:#61656d;--note:#7fb4ff;--note-soft:rgba(127,180,255,.12);--go:#4cd3a2;--go-soft:rgba(76,211,162,.13);--warn:#e8b45a;--hot:#e2756f;--shadow:0 12px 40px rgba(0,0,0,.45)}
+  [data-theme=light]{--page:#e6e7ea;--win:#fbfbfc;--box:#fff;--pop:#fff;--surface:#eef0f3;--surface2:#dcdfe4;--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.16);
+    --text:#1a1c20;--dim:#5d616a;--faint:#9ea2aa;--note:#2f6fd6;--note-soft:rgba(47,111,214,.09);--go:#14a874;--go-soft:rgba(20,168,116,.11);--warn:#b07a12;--hot:#c4463f;--shadow:0 12px 40px rgba(0,0,0,.14)}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--text);font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:10px;padding:24px 0 4px;flex-wrap:wrap}
+  .top h1{font-size:17px;margin:0;flex:1}
+  .seg{display:flex;background:var(--surface);border-radius:8px;padding:2px;font-size:12px}
+  .seg button{padding:3px 10px;border-radius:6px;color:var(--dim)}.seg button.on{background:var(--win);color:var(--text);box-shadow:0 0 0 1px var(--line2)}
+  .lbl{font-size:12px;color:var(--faint)}
+  .intro{color:var(--dim);max-width:740px;margin:4px 0 0}.intro b{color:var(--text)}
+  h3{font-size:14px;margin:46px 0 2px;display:flex;align-items:baseline;gap:10px}
+  h3 i{font-style:normal;color:var(--note)}
+  h3 em{font-style:normal;font-size:11px;font-weight:600;color:var(--note);background:var(--note-soft);padding:1px 7px;border-radius:5px}
+  .why{color:var(--dim);margin:0 0 12px;max-width:740px}
+  .now{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px}
+  .now figure{margin:0}.now img{display:block;border-radius:8px;border:1px solid var(--line2);max-height:280px}
+  .now figcaption{font-size:11.5px;color:var(--faint);margin-top:4px}
+  ul.bad{color:var(--dim);margin:10px 0 0;padding-left:18px;max-width:740px}ul.bad li{margin:2px 0}
+
+  /* the frame: just the message box area, drag the right edge */
+  .win{container-type:inline-size;width:640px;min-width:300px;max-width:100%;height:520px;resize:horizontal;overflow:hidden;border:1px solid var(--line2);border-radius:10px;background:var(--win);position:relative;display:flex;flex-direction:column;justify-content:flex-end;padding:0 0 22px}
+  .win::after{content:attr(data-w);position:absolute;right:10px;top:8px;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .cmp{position:relative;width:100%;max-width:560px;margin:0 auto;padding:0 14px}
+  .box{height:62px;border-radius:14px;background:var(--box);border:1px solid var(--line2)}
+  .sup{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:12px;font-weight:500;color:var(--faint);white-space:nowrap;min-width:0}
+  .chip{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 6px;margin:0 -6px;border-radius:6px;color:var(--text);font-weight:600}
+  .chip.on{background:var(--surface)}
+  .chip svg{width:10px;height:10px;opacity:.6}
+  .m{display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
+  .m .bar{width:36px}
+  .sp{flex:1}
+  @container (max-width:430px){.sup .m.d7,.sup .mdl{display:none}}
+
+  .pop{position:absolute;left:14px;bottom:calc(100% - 20px);width:min(var(--pw,380px),calc(100cqw - 28px));background:var(--pop);border:1px solid var(--line2);border-radius:13px;box-shadow:var(--shadow);padding:6px;max-height:390px;overflow:auto;display:flex;flex-direction:column}
+  .ph{display:flex;align-items:center;gap:8px;padding:4px 6px 6px 10px;font-size:11.5px;color:var(--faint)}
+  .ph span:first-child{flex:1;font-weight:600;color:var(--dim)}
+  .rf{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--faint)}.rf:hover{background:var(--surface);color:var(--text)}
+  .rf svg{width:13px;height:13px}
+  .foot{font-size:11px;color:var(--faint);padding:6px 10px 2px;border-top:1px solid var(--line);margin-top:4px}
+
+  .bar{position:relative;height:4px;border-radius:2px;background:var(--surface2);flex:none}
+  .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--go)}
+  .bar b{position:absolute;top:-2px;bottom:-2px;width:1.5px;margin-left:-.75px;background:var(--text);opacity:.35}
+  .mid .bar i{background:var(--warn)}.hot .bar i{background:var(--hot)}
+  .v{font-variant-numeric:tabular-nums;color:var(--text)}.mid .v,.mid.v{color:var(--warn)}.hot .v,.hot.v{color:var(--hot)}
+  .ck{width:14px;height:14px;color:var(--note);flex:none}
+  .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .tag{font-size:10px;font-weight:600;color:var(--go);background:var(--go-soft);padding:0 6px;border-radius:5px;line-height:17px;white-space:nowrap;flex:none}
+  .row{border-radius:9px;width:100%}.row:hover{background:var(--surface)}.row.cur{background:var(--note-soft)}
+  .full .nm{color:var(--dim)}
+
+  /* A — one line per account */
+  .A .row{display:grid;grid-template-columns:16px minmax(0,1fr) auto 38px auto;align-items:center;gap:8px;height:34px;padding:0 10px 0 8px}
+  .A .n{display:flex;align-items:center;gap:6px;min-width:0}
+  .A .w{font-size:10.5px;color:var(--faint);width:16px;text-align:right}
+  .A .bar{width:70px}
+  .A .v{text-align:right;font-size:12px}
+  .A .rs{font-size:11.5px;color:var(--faint);text-align:right}
+  .A .rs{min-width:30px}
+  @container (max-width:400px){.A .bar,.A .tag{display:none}}
+  @container (max-width:320px){.A .rs{display:none}}
+
+  /* B — a table, 5h and 7d labelled once */
+  .B .hd,.B .row{display:grid;grid-template-columns:16px minmax(0,1fr) 92px 92px;align-items:center;gap:10px;padding:0 10px 0 8px}
+  .B .hd{font-size:10.5px;font-weight:600;color:var(--faint);height:24px}
+  .B .hd span:nth-child(n+3){text-align:left}
+  .B .row{height:38px}
+  .B .n{display:flex;align-items:center;gap:6px;min-width:0}
+  .B .c{display:flex;flex-direction:column;gap:3px}
+  .B .c .t{display:flex;justify-content:space-between;font-size:11.5px;line-height:1}
+  .B .c .t small{color:var(--faint);font-size:10.5px}
+  .B .c .bar{width:100%}
+  @container (max-width:420px){.B .hd,.B .row{grid-template-columns:16px minmax(0,1fr) 44px 44px}.B .c .bar,.B .c small{display:none}.B .c .t{justify-content:flex-end}.B .hd span:nth-child(n+3){text-align:right}}
+
+  /* C — cards: name above, both meters as one split bar */
+  .C .row{display:flex;flex-direction:column;gap:6px;padding:8px 10px}
+  .C .l1{display:flex;align-items:center;gap:7px;min-width:0}
+  .C .l1 .sp{flex:1}
+  .C .l1 .st{font-size:11.5px;color:var(--faint);white-space:nowrap}
+  .C .l2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .C .mm{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--faint);min-width:0}
+  .C .mm .bar{flex:1;min-width:20px}
+  .C .mm .v{font-size:11.5px;width:32px;text-align:right}
+  @container (max-width:360px){.C .l2{grid-template-columns:1fr;gap:4px}}
+
+  /* D — pick on the left, detail on the right */
+  .D .lst{display:flex;flex-direction:column}
+  .D .row{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px 0 8px}
+  .D .dot{width:7px;height:7px;border-radius:50%;background:var(--go);flex:none}
+  .D .dot.mid{background:var(--warn)}.D .dot.hot{background:var(--hot)}
+  .D .row .sp{flex:1}
+  .D .row .q{font-size:11.5px;font-variant-numeric:tabular-nums}
+  .D .det{margin:6px 4px 2px;padding:10px 10px 8px;border-radius:10px;background:var(--surface)}
+  .D .det .h{display:flex;align-items:baseline;gap:8px;font-weight:600;margin-bottom:8px}.D .det .h small{font-weight:500;color:var(--faint);font-size:11px}
+  .D .big{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .D .big div{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--faint)}
+  .D .big b{font-size:18px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.1}
+  .D .big .hot b{color:var(--hot)}.D .big .mid b{color:var(--warn)}
+  .D .big .bar{width:100%}
+  @container (max-width:360px){.D .big b{font-size:15px}}
+
+  .qs{max-width:740px;color:var(--dim)}.qs ol{padding-left:18px}.qs li{margin:6px 0}.qs b{color:var(--text)}
+</style></head>
+<body><div class="wrap">
+<div class="top"><h1>Round 27 · the account menu</h1>
+  <span class="lbl">Accounts</span><div class="seg" id="count"><button data-n="3" class="on">3</button><button data-n="6">6</button><button data-n="12">12</button></div>
+  <div class="seg" id="theme"><button data-t="dark" class="on">Dark</button><button data-t="light">Light</button></div></div>
+<p class="intro">The menu under the message box, four ways. <b>Drag each frame's right edge</b> to narrow it. The width shows in the corner.</p>
+
+<h3>What's wrong now</h3>
+<ul class="bad">
+  <li>It's a fixed 360px wide, so below about 450px it runs off the window.</li>
+  <li>Name and pills on the left, two meter rows on the right: the columns don't line up, and pills crowd the name.</li>
+  <li>"5h / 7d" and the reset times repeat on every row, so it reads as a wall of small text.</li>
+  <li>The line under the box doesn't wrap: at narrow widths the mode and model sit on top of the meters.</li>
+  <li>The red dot sits on <i>live</i> even when it's <i>full</i> that's out of room.</li>
+</ul>
+
+<h3><i>A</i>One line per account</h3>
+<p class="why">Shows only the limit closest to full (labelled 5h or 7d), with its bar, % and reset time. Narrower: the bar goes first, then the reset time.</p>
+<div class="win" data-v="A"></div>
+
+<h3><i>B</i>A small table <em>my pick</em></h3>
+<p class="why">5h and 7d are labelled once at the top. Each cell shows the %, its reset time and a bar. Narrower: just the two numbers.</p>
+<div class="win" data-v="B"></div>
+
+<h3><i>C</i>Two-line cards</h3>
+<p class="why">Name and status on top, then 5h and 7d side by side. Roomiest, but the tallest: 12 accounts means scrolling.</p>
+<div class="win" data-v="C"></div>
+
+<h3><i>D</i>A short list, and detail for the one you're on</h3>
+<p class="why">Each row is a dot and the worst %. The account this session runs on gets a card with two big numbers.</p>
+<div class="win" data-v="D"></div>
+
+<h3>Under the box, in every option</h3>
+<p class="why">The line wraps instead of overlapping. Below about 430px only the 5h meter stays. The dot on the account name means <i>this</i> account is near its limit. If another account is the one that's full, it shows only in the menu.</p>
+
+<div class="qs"><h3>Questions</h3><ol>
+  <li>Which one: <b>A, B, C or D</b>?</li>
+  <li>Should <b>"most room"</b> stay as a tag, or should accounts be sorted with the most room first?</li>
+  <li><b>"Updated 2m ago"</b> and refresh: keep them in the header, or move them to a footer?</li>
+</ol></div>
+</div>
+
+<script>
+const ALL=[
+  {n:'live',h5:34,d7:41,r5:'28m',r7:'5d',cur:1,g:1},
+  {n:'full',h5:100,d7:72,r5:'28m',r7:'5d'},
+  {n:'other',h5:12,d7:20,r5:'3h 10m',r7:'6d',most:1},
+  {n:'work-account-long-name',h5:61,d7:83,r5:'1h 4m',r7:'2d'},
+  {n:'ci',h5:5,d7:9,r5:'4h',r7:'6d'},
+  {n:'personal',h5:88,d7:47,r5:'52m',r7:'4d'},
+  {n:'review',h5:22,d7:31,r5:'2h',r7:'5d'},{n:'team-b',h5:45,d7:58,r5:'1h 30m',r7:'3d'},{n:'spare',h5:0,d7:3,r5:'',r7:'7d'},
+  {n:'night',h5:70,d7:66,r5:'40m',r7:'3d'},{n:'labs',h5:15,d7:92,r5:'4h 20m',r7:'1d'},{n:'demo',h5:9,d7:14,r5:'3h',r7:'6d'}];
+let N=3;
+const lv=v=>v>=100?'hot':v>=80?'mid':'';
+const run={h5:58,d7:30};
+const bar=(v,k,w)=>`<span class="bar" ${w?`style="width:${w}px"`:''}><i style="width:${Math.min(100,v)}%"></i>${v<100?`<b style="left:${run[k]}%"></b>`:''}</span>`;
+const CK='<svg class="ck" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3.5 8.5l3 3 6-7"/></svg>';
+const RF='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.6h-2.6"/></svg>';
+const CV='<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 3.5l3 3 3-3"/></svg>';
+const worst=p=>p.d7>p.h5?['7d',p.d7,p.r7,'d7']:['5h',p.h5,p.r5,'h5'];
+const tags=p=>p.most?'<span class="tag">most room</span>':'';
+const head=`<div class="ph"><span>Start this session on</span><span>Updated just now</span><button class="rf">${RF}</button></div>`;
+const rows={
+  A:ps=>head+ps.map(p=>{const[k,v,r,key]=worst(p);return `<button class="row ${p.cur?'cur':''} ${v>=100?'full':''}">${p.cur?CK:'<span></span>'}<span class="n"><span class="nm">${p.n}</span>${tags(p)}</span><span class="${lv(v)}" style="display:flex;align-items:center;gap:6px"><span class="w">${k}</span>${bar(v,key,48)}</span><span class="v ${lv(v)}">${v}%</span><span class="rs">${r}</span></button>`}).join(''),
+  B:ps=>head+`<div class="hd"><span></span><span>Account</span><span>5h</span><span>7d</span></div>`+ps.map(p=>{const c=(v,r,k)=>`<span class="c ${lv(v)}"><span class="t"><span class="v">${v}%</span><small>${r}</small></span>${bar(v,k)}</span>`;
+    return `<button class="row ${p.cur?'cur':''} ${Math.max(p.h5,p.d7)>=100?'full':''}">${p.cur?CK:'<span></span>'}<span class="n"><span class="nm">${p.n}</span>${tags(p)}</span>${c(p.h5,p.r5,'h5')}${c(p.d7,p.r7,'d7')}</button>`}).join(''),
+  C:ps=>head+ps.map(p=>{const[k,v,r]=worst(p),st=v>=100?`${k} full · clears in ${r}`:p.cur?'this session':'';
+    const mm=(lab,v,key)=>`<span class="mm ${lv(v)}">${lab}${bar(v,key)}<span class="v">${v}%</span></span>`;
+    return `<button class="row ${p.cur?'cur':''} ${v>=100?'full':''}"><span class="l1">${p.cur?CK:''}<span class="nm">${p.n}</span>${tags(p)}<span class="sp"></span><span class="st ${lv(v)}">${st}</span></span><span class="l2">${mm('5h',p.h5,'h5')}${mm('7d',p.d7,'d7')}</span></button>`}).join(''),
+  D:ps=>{const c=ps.find(p=>p.cur);const big=(lab,v,r,k)=>`<div class="${lv(v)}"><span>${lab}</span><b>${v}%</b>${bar(v,k)}<span>resets in ${r}</span></div>`;
+    return head+`<div class="lst">${ps.map(p=>{const[,v]=worst(p);return `<button class="row ${p.cur?'cur':''} ${v>=100?'full':''}"><i class="dot ${lv(v)}"></i><span class="nm">${p.n}</span>${tags(p)}<span class="sp"></span><span class="q v ${lv(v)}">${v}%</span>${p.cur?CK:'<span style="width:14px"></span>'}</button>`}).join('')}</div>`
+      +`<div class="det"><div class="h">${c.n}<small>this session</small></div><div class="big">${big('5 hours',c.h5,c.r5,'h5')}${big('7 days',c.d7,c.r7,'d7')}</div></div>`}
+};
+const W={A:380,B:400,C:380,D:320};
+function frame(v){const ps=ALL.slice(0,N),c=ps[0];
+  return `<div class="cmp"><div class="pop ${v}" style="--pw:${W[v]}px">${rows[v](ps)}</div><div class="box"></div>
+    <div class="sup"><span class="chip on">${c.n}${CV}</span><span class="m">5h ${bar(c.h5,'h5',36)} ${c.h5}%</span><span class="m d7">7d ${bar(c.d7,'d7',36)} ${c.d7}%</span><span class="sp"></span><span class="mdl">Ask</span><span class="mdl">Sonnet 5.5 · High</span></div></div>`}
+function renderAll(){document.querySelectorAll('.win').forEach(w=>{w.innerHTML=frame(w.dataset.v)})}
+const ro=new ResizeObserver(es=>es.forEach(e=>e.target.dataset.w=Math.round(e.contentRect.width)+'px'));
+document.querySelectorAll('.win').forEach(w=>ro.observe(w));
+document.getElementById('count').onclick=e=>{const b=e.target.closest('[data-n]');if(!b)return;N=+b.dataset.n;document.querySelectorAll('#count button').forEach(x=>x.classList.toggle('on',x===b));renderAll()};
+document.getElementById('theme').onclick=e=>{const b=e.target.closest('[data-t]');if(!b)return;document.documentElement.dataset.theme=b.dataset.t;document.querySelectorAll('#theme button').forEach(x=>x.classList.toggle('on',x===b))};
+renderAll();
+</script>
+</body></html>

@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 25: accounts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+  :root{color-scheme:dark}[data-theme=light]{color-scheme:light}
+  :root{--hue:168;
+    --bg:#18191c;--surface:#202226;--surface2:#2c2f34;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.14);
+    --text:#f0f1f3;--dim:#a6aab2;--faint:#6d717a;--pop:#1d1f23;--accent:hsl(var(--hue) 62% 62%);--accent-soft:hsl(var(--hue) 62% 60%/.14);
+    --go:#4fd6a4;--warn:#ffb955;--hot:#f0706a;--page:#0c0d0f;--side:#131416;--sel:rgba(255,255,255,.075);--shadow:0 18px 50px rgba(0,0,0,.55);--glow:.22}
+  [data-theme=light]{
+    --bg:#ffffff;--surface:#f6f7f9;--surface2:#e7e9ed;--line:rgba(0,0,0,.085);--line2:rgba(0,0,0,.16);
+    --text:#17191d;--dim:#5a5f69;--faint:#9a9fa9;--pop:#ffffff;--accent:hsl(var(--hue) 70% 34%);--accent-soft:hsl(var(--hue) 70% 40%/.10);
+    --go:#0f9d77;--warn:#c47f00;--hot:#d2463f;--page:#e4e6ea;--side:#f5f6f8;--sel:rgba(0,0,0,.065);--shadow:0 18px 50px rgba(20,25,40,.2);--glow:.14}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--text);font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+  svg{display:block;flex:none}
+  .num,code{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:12px;padding:26px 0 6px}
+  .top h1{font-size:17px;margin:0;flex:1}
+  .tbtn{padding:5px 11px;border-radius:8px;background:var(--surface);color:var(--dim);font-size:12px}
+  .tbtn:hover{color:var(--text)}
+  .intro{color:var(--dim);max-width:760px;margin:2px 0 0;font-size:13.5px}.intro b{color:var(--text);font-weight:600}
+  h3{font-size:14px;margin:52px 0 4px;display:flex;align-items:center;gap:10px}
+  h3 em{font-style:normal;font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:5px}
+  .why{color:var(--dim);margin:0 0 16px;max-width:760px}.why b{color:var(--text);font-weight:600}
+  .why code,ul.q code{font-size:11.5px;background:rgba(128,128,128,.16);padding:1px 5px;border-radius:5px;color:var(--text)}
+  ul.q{margin:6px 0 0;padding-left:18px;color:var(--dim);max-width:760px}ul.q li{margin:6px 0}ul.q b{color:var(--text);font-weight:600}
+
+  /* ───────── the account tile ───────── */
+  .tile{--h:220;position:relative;border-radius:16px;padding:15px 16px 13px;background:var(--surface);border:1px solid var(--line);overflow:hidden;isolation:isolate;transition:border-color .4s,box-shadow .4s}
+  .tile::before{content:"";position:absolute;inset:-60%;z-index:-1;pointer-events:none;
+    background:radial-gradient(30% 30% at 32% 30%,hsl(var(--h) 70% 60%/var(--glow)),transparent 70%);
+    animation:drift 16s ease-in-out infinite alternate;animation-play-state:paused}
+  .tile.live::before{animation-play-state:running}
+  @keyframes drift{to{transform:translate(18%,10%) scale(1.25)}}
+  .tile.flash{animation:flash 1.4s ease-out}
+  @keyframes flash{0%{box-shadow:inset 0 0 0 1px var(--go),0 0 0 4px color-mix(in srgb,var(--go) 25%,transparent)}100%{box-shadow:inset 0 0 0 1px transparent,0 0 0 4px transparent}}
+  .t1{display:flex;align-items:center;gap:8px;height:20px}
+  .t1 b{font-weight:700;font-size:13.5px;letter-spacing:-.01em}
+  .mark{width:18px;height:18px;border-radius:6px;display:grid;place-items:center;background:hsl(var(--h) 40% 50%/.18);color:hsl(var(--h) 70% 72%)}
+  [data-theme=light] .mark{color:hsl(var(--h) 55% 40%)}
+  .mark svg{width:11px;height:11px}
+  .plan{font-size:10.5px;color:var(--faint);font-weight:600;letter-spacing:.04em}
+  .live-dot{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);opacity:0;transition:opacity .3s}
+  .tile.live .live-dot{opacity:1}
+  .live-dot i{width:6px;height:6px;border-radius:50%;background:var(--go);box-shadow:0 0 0 0 var(--go);animation:ping 1.8s ease-out infinite}
+  @keyframes ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--go) 60%,transparent)}100%{box-shadow:0 0 0 7px transparent}}
+  .hero{display:flex;align-items:baseline;gap:7px;margin:12px 0 0;height:40px}
+  .hero .k{font-size:12px;color:var(--faint);font-weight:600;min-width:22px}
+  .hero .n{font-size:36px;font-weight:600;line-height:1;letter-spacing:-.04em;transition:color .4s}
+  .hero .n small{font-size:18px;color:var(--faint);margin-left:1px;letter-spacing:0}
+  .hero .r{margin-left:auto;font-size:11.5px;color:var(--faint);text-align:right;line-height:1.35}
+  .hero .r b{display:block;color:var(--dim);font-weight:600;font-size:12px}
+  .tile.warn .hero .n{color:var(--warn)}.tile.full .hero .n{color:var(--hot)}
+  .track{position:relative;height:6px;border-radius:3px;background:var(--surface2);margin:12px 0 0}
+  .fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--go);transition:width .9s cubic-bezier(.2,.8,.2,1),background-color .4s;overflow:hidden}
+  .tile.warn .fill{background:var(--warn)}.tile.full .fill{background:var(--hot)}
+  .tile.live:not(.full) .fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);background-size:40% 100%;background-repeat:no-repeat;animation:sweep 2.2s ease-in-out infinite}
+  @keyframes sweep{from{background-position:-60% 0}to{background-position:160% 0}}
+  .tick{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;border-radius:1px;background:var(--text);opacity:.45;transition:left .9s cubic-bezier(.2,.8,.2,1),opacity .3s}
+  .tile.ahead .tick{background:var(--warn);opacity:1;animation:tick 1.4s ease-in-out infinite}
+  @keyframes tick{50%{box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 30%,transparent)}}
+  .tile.full .tick{opacity:0}
+  .note{font-size:11.5px;color:var(--faint);margin-top:9px;height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .3s}
+  .tile.ahead .note,.tile.warn .note{color:var(--warn)}.tile.full .note{color:var(--dim)}
+  .subs{display:flex;gap:14px;margin-top:11px;padding-top:11px;border-top:1px solid var(--line);font-size:11.5px;color:var(--dim)}
+  .sub{display:flex;align-items:center;gap:6px}
+  .sub .mini{width:28px;height:3px;border-radius:2px;background:var(--surface2);overflow:hidden}
+  .sub .mini i{display:block;height:100%;background:var(--dim);border-radius:2px;transition:width .9s}
+  .sub.warn .mini i{background:var(--warn)}.sub.warn .num{color:var(--warn)}.sub.full .mini i{background:var(--hot)}
+  .sub .num{font-size:11px;color:var(--text)}
+  /* full: the countdown is the story */
+  .ring{display:none;width:34px;height:34px;margin-left:auto}
+  .tile.full .ring{display:block}.tile.full .hero .r{display:none}
+  .ring circle{fill:none;stroke-width:3}
+  .ring .rt{stroke:var(--surface2)}.ring .rv{stroke:var(--hot);stroke-linecap:round;transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset 1s linear}
+  /* signed out */
+  .tile.out .hero,.tile.out .track,.tile.out .subs{opacity:.25;filter:grayscale(1)}
+  .tile .signin{display:none;position:absolute;right:14px;bottom:13px;font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:8px;background:var(--text);color:var(--bg)}
+  .tile.out .signin{display:block}
+  .tile.best::after{content:"most room";position:absolute;top:15px;right:16px;font-size:10.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:1px 7px;border-radius:6px}
+  .tile.best.live::after{display:none}
+
+  /* ───────── the window ───────── */
+  .frame{height:600px;border-radius:14px;overflow:hidden;border:1px solid var(--line2);display:flex;background:var(--bg);position:relative}
+  .side{width:232px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;position:relative;z-index:2}
+  .sh{height:44px;display:flex;align-items:center;padding:0 16px;font-weight:700;font-size:13px}
+  .sl{flex:1;padding:2px 8px;overflow:hidden}
+  .sg{font-size:11px;color:var(--faint);padding:10px 8px 3px;font-weight:600}
+  .si{padding:6px 8px;border-radius:8px;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dim)}
+  .si.cur{background:var(--sel);color:var(--text)}
+  .si i{width:7px;height:7px;border-radius:50%;flex:none;background:var(--faint)}.si i.go{background:var(--go)}.si i.wait{background:var(--warn)}
+  /* the accounts strip at the foot of the sidebar */
+  .strip{margin:6px 8px 8px;padding:6px;border-radius:12px;display:flex;flex-direction:column;gap:1px;transition:background .2s}
+  .strip:hover,.strip.on{background:var(--sel)}
+  .srow{display:grid;grid-template-columns:16px 1fr 46px 36px;align-items:center;gap:8px;padding:4px 4px;font-size:12px;color:var(--dim)}
+  .srow .mark{width:16px;height:16px;border-radius:5px}.srow .mark svg{width:9px;height:9px}
+  .srow .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .srow.live .nm{color:var(--text)}
+  .srow .tr{position:relative;height:4px;border-radius:2px;background:var(--surface2)}
+  .srow .tr i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--go);transition:width .9s cubic-bezier(.2,.8,.2,1),background-color .4s}
+  .srow .tr b{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;background:var(--text);opacity:.35;border-radius:1px;transition:left .9s}
+  .srow.warn .tr i{background:var(--warn)}.srow.full .tr i{background:var(--hot)}.srow.ahead .tr b{background:var(--warn);opacity:1}.srow.full .tr b{opacity:0}
+  .srow .num{text-align:right;font-size:11px;color:var(--text)}
+  .srow.full .num{color:var(--hot)}.srow.warn .num{color:var(--warn)}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+  .mh{height:44px;flex:none;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid var(--line)}
+  .mh b{font-size:13.5px;font-weight:600}
+  .th{flex:1;padding:22px 28px;overflow:hidden}
+  .col{max-width:560px;margin:0 auto}
+  .me{margin:0 0 14px auto;width:fit-content;max-width:86%;background:var(--surface);border-radius:14px 14px 4px 14px;padding:8px 13px}
+  .ai{margin-bottom:12px;line-height:1.6}
+  .cmp{padding:6px 28px 14px}
+  .box{max-width:560px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:11px 14px;color:var(--faint)}
+  .support{max-width:560px;margin:8px auto 0;display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--dim)}
+  .chip{display:flex;align-items:center;gap:8px;padding:3px 9px 3px 4px;border-radius:9px;font-weight:600;color:var(--text)}
+  .chip:hover{background:var(--surface)}
+  .chip .tr{position:relative;width:44px;height:4px;border-radius:2px;background:var(--surface2)}
+  .chip .tr i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--go);transition:width .9s cubic-bezier(.2,.8,.2,1),background-color .4s}
+  .chip .tr b{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;background:var(--text);opacity:.35;border-radius:1px;transition:left .9s}
+  .chip.warn .tr i{background:var(--warn)}.chip.ahead .tr b{background:var(--warn);opacity:1}
+  .chip .num{font-weight:500;color:var(--dim);font-size:11px}
+  .gap{flex:1}
+  /* the accounts sheet */
+  .veil{position:absolute;inset:0;background:rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .25s;z-index:1}
+  [data-theme=light] .veil{background:rgba(20,25,40,.08)}
+  .sheet{position:absolute;left:244px;bottom:12px;width:600px;padding:14px;border-radius:20px;background:var(--pop);box-shadow:var(--shadow),0 0 0 1px var(--line2);z-index:3;
+    transform-origin:0 100%;transform:translateY(8px) scale(.97);opacity:0;pointer-events:none;transition:transform .28s cubic-bezier(.2,.9,.25,1.1),opacity .2s}
+  .frame.open .sheet{transform:none;opacity:1;pointer-events:auto}.frame.open .veil{opacity:1}
+  .frame.open .strip{background:var(--sel)}
+  .shh{display:flex;align-items:center;gap:10px;padding:2px 4px 12px}
+  .shh b{font-size:14px;font-weight:700;flex:1}
+  .shh .as{font-size:11px;color:var(--faint);display:flex;align-items:center;gap:6px}
+  .shh .as svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2}
+  .shh .as.spin svg{animation:spin .9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid .tile{animation:rise .45s cubic-bezier(.2,.9,.25,1) both}
+  .grid .tile:nth-child(2){animation-delay:.04s}.grid .tile:nth-child(3){animation-delay:.08s}.grid .tile:nth-child(4){animation-delay:.12s}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}}
+  .shf{display:flex;align-items:center;gap:10px;padding:12px 4px 0;font-size:11.5px;color:var(--faint)}
+  .shf button{color:var(--dim);font-weight:600}.shf button:hover{color:var(--text)}
+  .toast{position:absolute;right:16px;top:56px;width:290px;padding:12px 14px;border-radius:14px;background:var(--pop);box-shadow:var(--shadow),0 0 0 1px var(--line2);z-index:4;font-size:12px;
+    display:flex;gap:11px;transform:translateY(-8px);opacity:0;transition:transform .3s cubic-bezier(.2,.9,.25,1.1),opacity .2s;pointer-events:none}
+  .toast.show{transform:none;opacity:1;pointer-events:auto}
+  .toast .ic{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:none}
+  .toast b{display:block;font-weight:700;margin-bottom:1px}.toast span{color:var(--dim)}
+  .toast .go{display:inline-block;margin-top:8px;font-weight:600;padding:4px 10px;border-radius:8px;background:var(--text);color:var(--bg);font-size:11.5px}
+
+  .ctl{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--faint);flex-wrap:wrap}
+  .ctl button{padding:5px 11px;border-radius:8px;background:var(--surface);color:var(--dim)}
+  .ctl button:hover{color:var(--text)}.ctl .clock{margin-left:auto;font-size:11.5px}
+
+  /* variants */
+  .pair{display:grid;grid-template-columns:repeat(2,minmax(0,300px));gap:28px}
+  .pair .cap{font-size:12px;color:var(--dim);margin-top:10px}.pair .cap b{color:var(--text)}
+  .rtile .hero{display:none}.rtile .track{display:none}
+  .rbig{display:flex;align-items:center;gap:16px;margin:12px 0 0}
+  .rbig svg{width:76px;height:76px}
+  .rbig circle{fill:none}
+  .rbig .a{stroke:var(--surface2);stroke-width:7}.rbig .b{stroke:var(--go);stroke-width:7;stroke-linecap:round;transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset .9s cubic-bezier(.2,.8,.2,1),stroke .4s}
+  .rbig .c{stroke:var(--line2);stroke-width:2}.rbig .d{stroke:var(--dim);stroke-width:2;stroke-linecap:round;transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset .9s}
+  .rtile.warn .rbig .b{stroke:var(--warn)}.rtile.ahead .rbig .d{stroke:var(--warn)}
+  .rbig .n{font-size:30px;font-weight:600;letter-spacing:-.04em;line-height:1}
+  .rtile.warn .rbig .n{color:var(--warn)}
+  .rbig .r{font-size:11.5px;color:var(--faint);margin-top:4px}
+
+  /* states */
+  .states{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .states .lab{font-size:11.5px;color:var(--faint);margin:8px 2px 0}.states .lab b{color:var(--text);font-weight:600}
+
+  /* settings */
+  .dlg{border-radius:16px;overflow:hidden;border:1px solid var(--line2);display:flex;background:var(--bg);height:470px}
+  .stabs{width:170px;flex:none;background:var(--side);border-right:1px solid var(--line);padding:14px 8px}
+  .stabs div{padding:6px 10px;border-radius:8px;color:var(--dim);font-size:12.5px}.stabs div.on{background:var(--sel);color:var(--text)}
+  .spage{flex:1;padding:18px 20px;overflow:auto}
+  .sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+  .more{margin-left:auto;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;color:var(--faint)}
+  .more:hover{background:var(--sel);color:var(--text)}
+  .add{border:1px dashed var(--line2);border-radius:16px;min-height:150px;display:grid;place-items:center;color:var(--faint);font-weight:600;transition:border-color .2s,color .2s;perspective:800px}
+  .add:hover{border-color:var(--dim);color:var(--text)}
+  .add .in{display:flex;flex-direction:column;gap:8px;width:100%;padding:14px;animation:rise .35s cubic-bezier(.2,.9,.25,1)}
+  .prov{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;background:var(--surface);color:var(--text);font-weight:600;width:100%}
+  .prov:hover{background:var(--surface2)}
+  .prov small{display:block;font-weight:500;color:var(--faint);font-size:11px}
+  .kmenu{position:absolute;right:12px;top:40px;background:var(--pop);border-radius:11px;box-shadow:var(--shadow),0 0 0 1px var(--line2);padding:5px;z-index:5;width:150px;animation:rise .2s}
+  .kmenu button{display:block;width:100%;padding:6px 10px;border-radius:7px;font-size:12px;color:var(--dim)}.kmenu button:hover{background:var(--sel);color:var(--text)}
+  .kmenu button.d{color:var(--hot)}
+  details{margin-top:52px;max-width:760px;color:var(--dim)}
+  summary{cursor:pointer;font-weight:700;color:var(--text);font-size:14px}
+</style></head><body><div class="wrap">
+<div class="top"><h1>Round 25: accounts</h1><button class="tbtn" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Dark / light</button></div>
+<p class="intro">Workwood looks after its own accounts now: Claude today, Codex next. Each one is a <b>tile</b> that shows the limit closest to running out. A bar shows how much is used, and a thin mark shows <b>how far the window has run</b>. If the bar passes the mark, you're using it faster than the clock allows.</p>
+
+<!-- ============ live ============ -->
+<h3>In the window</h3>
+<p class="why">The foot of the sidebar always shows every account in one line each. Click it to open the tiles. Time is <b>sped up</b> here: <b>axius</b> has a session working, so watch it climb, overtake its mark, fill up and count down to the reset. Each time a limit fills or clears, a small alert appears.</p>
+<div class="frame open" id="app">
+  <div class="side"><div class="sh">Sessions</div>
+    <div class="sl"><div class="sg">workwood</div><div class="si cur"><i class="go"></i>Native accounts</div><div class="si"><i></i>Compare panel tidy-up</div><div class="sg">claudius</div><div class="si"><i class="wait"></i>Dashboard export</div><div class="si"><i></i>Statusline cache</div></div>
+    <button class="strip" id="strip"></button></div>
+  <div class="main"><div class="mh"><b>Native accounts</b></div>
+    <div class="th"><div class="col"><div class="me">Read how Claudius renews a token</div><div class="ai">It sends the refresh token to the sign-in server and writes the new token back into the profile's own <code>.credentials.json</code>, under a lock so two programs never renew it at once.</div><div class="ai">Next I'll look at the usage endpoint.</div></div></div>
+    <div class="cmp"><div class="box">Message the agent</div><div class="support"><button class="chip" id="chip"></button><span class="gap"></span><span>Opus 5.5 · High</span></div></div>
+    <div class="veil" id="veil"></div>
+    <div class="toast" id="toast"><i class="ic"></i><div><b></b><span></span><br><button class="go"></button></div></div>
+  </div>
+  <div class="sheet" id="sheet">
+    <div class="shh"><b>Accounts</b><span class="as" id="asof"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg><span>just now</span></span></div>
+    <div class="grid" id="grid"></div>
+    <div class="shf"><span>Read every 5 minutes, every minute while a session works. No tokens spent.</span><span class="gap"></span><button>Manage accounts</button></div>
+  </div>
+</div>
+<div class="ctl"><button id="play">Pause</button><button id="fast">Skip 30 min</button><button id="restart">Start again</button><span class="clock num" id="clock"></span></div>
+
+<!-- ============ variants ============ -->
+<h3>The meter: two shapes <em>A recommended</em></h3>
+<p class="why">Both show the same two things: how much is used, and how far the window has run.</p>
+<div class="pair">
+  <div><div id="vA"></div><div class="cap"><b>A · Bar and mark.</b> Fits on one line, so the same meter works in the sidebar and under the message box.</div></div>
+  <div><div id="vB"></div><div class="cap"><b>B · Two rings.</b> The thick ring is usage, the thin one is the clock. Looks good on a tile, but it needs room, so the sidebar would show something else.</div></div>
+</div>
+
+<!-- ============ states ============ -->
+<h3>How a tile changes</h3>
+<p class="why">Colour comes only from the limit. Motion only means something is happening: a light that runs along the bar while a session works, a pulsing mark when you're ahead of the clock. A full account stops moving and counts down.</p>
+<div class="states" id="states"></div>
+
+<!-- ============ settings ============ -->
+<h3>Settings → Accounts</h3>
+<p class="why">The same tiles, and one more for adding an account. Click it, pick a provider, and that provider's own sign-in opens in the terminal pane the dialog already has. Rename, make default, sign in again and remove sit behind <b>⋯</b>.</p>
+<div class="dlg"><div class="stabs"><div>General</div><div class="on">Accounts</div><div>Skills</div><div>About</div></div>
+  <div class="spage"><b style="font-size:13.5px">Accounts</b><div class="sgrid" id="sgrid"></div></div></div>
+
+<details><summary>Under the hood</summary>
+<ul class="q">
+  <li>Accounts stay in <code>~/.claude-profiles</code>, as with Claudius, so both tools see the same ones. Workwood renews tokens itself, using the lock Claudius uses.</li>
+  <li>Usage comes from Claude's own usage endpoint, the one behind <code>/usage</code>. Asking costs nothing (I checked it on axius). Besides the 5-hour and weekly limits, it reports a weekly <b>Fable-only</b> limit and extra-usage credits. The tile shows whichever of these is closest to full.</li>
+  <li>The mark is simple arithmetic: time since the window started, divided by the window's length. The reset time comes with every reading.</li>
+  <li>Codex: each account is a <code>CODEX_HOME</code> folder. Its limits come with each Codex turn, so the tile says “as of your last turn”. Plans billed per use show credits instead of a bar.</li>
+</ul></details>
+
+<h3>Open questions</h3>
+<ul class="q">
+  <li>Meter <b>A or B</b>?</li>
+  <li>Should the sidebar strip always be there, or only show when an account is <b>near</b> a limit?</li>
+  <li>When an account fills mid-turn: keep asking (today's card), or <b>move to the one with most room</b> by itself?</li>
+  <li>Codex: just accounts and limits for now, or Codex sessions too? Is your Codex on Windows, in WSL or both?</li>
+  <li>Should accounts work on the <b>Windows side</b> too, so a PC without WSL can have several?</li>
+</ul>
+</div>
+
+<script>
+const CL='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l1.6 6.2 6.2-2.3-4.3 5 4.3 5-6.2-2.3L12 20.5l-1.6-6.4-6.2 2.3 4.3-5-4.3-5 6.2 2.3z"/></svg>';
+const CX='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z"/></svg>';
+const H=300, W=7*1440;   // window lengths in minutes
+// a limit: used %, minutes into its window, window length; rate = % per minute while a session works there
+const seed=()=>[
+  {name:'axius',prov:'claude',plan:'PRO',h:215,live:true,rate:.16,L:[{k:'5h',u:58,at:150,len:H},{k:'7d',u:7,at:2100,len:W},{k:'Fable',u:0,at:2100,len:W}]},
+  {name:'erhards',prov:'claude',plan:'MAX',h:265,L:[{k:'5h',u:34,at:110,len:H},{k:'7d',u:61,at:6200,len:W},{k:'Fable',u:88,at:6200,len:W}]},
+  {name:'erhards2',prov:'claude',plan:'PRO',h:300,L:[{k:'5h',u:100,at:255,len:H},{k:'7d',u:40,at:3000,len:W},{k:'Fable',u:12,at:3000,len:W}]},
+  {name:'codex-work',prov:'codex',plan:'PLUS',h:190,stale:'as of your last turn, 3h ago',L:[{k:'5h',u:22,at:190,len:H},{k:'7d',u:45,at:5000,len:W}]},
+];
+let P=seed(),clock=11*60+22,playing=true;
+const hhmm=m=>{m=((Math.round(m)%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')};
+const dur=m=>{m=Math.max(0,Math.round(m));if(m>=1440)return `${Math.floor(m/1440)}d ${Math.floor(m%1440/60)}h`;const h=Math.floor(m/60);return h?`${h}h ${String(m%60).padStart(2,'0')}m`:`${m}m`};
+const day=m=>m>=1440?['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][(Math.floor((clock+m)/1440)+0)%7]+' '+hhmm(clock+m):hhmm(clock+m);
+// the limit that matters: a full one, else the highest
+const main=p=>p.L.reduce((a,b)=>b.u>a.u?b:a);
+const lv=u=>u>=100?'full':u>=80?'warn':'';
+const ahead=(l,p)=>!!p?.live&&l.u<100&&l.u>=40&&l.u>l.at/l.len*100+8;
+const most=()=>P.filter(p=>p.prov==='claude'&&main(p).u<100).sort((a,b)=>main(a).u-main(b).u)[0]?.name;
+function noteOf(p,l){
+  if(p.out)return 'Signed out. Its sign-in could not be renewed.';
+  if(l.u>=100)return `${l.k==='Fable'?'Fable is':'All models are'} paused here until ${day(l.len-l.at)}.`;
+  if(ahead(l,p)){const left=(100-l.u)/p.rate,fill=clock+left;return left<l.len-l.at?`At this pace it fills at ${hhmm(fill)}, ${dur(l.len-l.at-left)} before the reset.`:'Ahead of the clock, but it should last.'}
+  if(l.k==='Fable'&&l.u>=80)return 'Only Fable is close. Other models are fine.';
+  if(l.u>=80)return `Getting close. It resets in ${dur(l.len-l.at)}.`;
+  return p.stale||'On pace. Plenty left.';
+}
+
+/* one tile: built once, then updated so the transitions run */
+function tile(p,variant){
+  const t=document.createElement('div');t.className='tile'+(variant==='B'?' rtile':'');t.style.setProperty('--h',p.h);
+  t.innerHTML=`<div class="t1"><span class="mark">${p.prov==='codex'?CX:CL}</span><b>${p.name}</b><span class="plan">${p.plan}</span><span class="live-dot"><i></i>working</span></div>
+    <div class="hero"><span class="k"></span><span class="n num"></span><span class="r"><span></span><b></b></span><svg class="ring" viewBox="0 0 36 36"><circle class="rt" cx="18" cy="18" r="15"/><circle class="rv" cx="18" cy="18" r="15" stroke-dasharray="94.25"/></svg></div>
+    <div class="track"><div class="fill"></div><div class="tick"></div></div>
+    ${variant==='B'?`<div class="rbig"><svg viewBox="0 0 80 80"><circle class="a" cx="40" cy="40" r="30"/><circle class="b" cx="40" cy="40" r="30" stroke-dasharray="188.5"/><circle class="c" cx="40" cy="40" r="38"/><circle class="d" cx="40" cy="40" r="38" stroke-dasharray="238.8"/></svg><div><div class="n num"></div><div class="r"></div></div></div>`:''}
+    <div class="note"></div><div class="subs"></div><button class="signin">Sign in again</button>`;
+  t.update=()=>paint(t,p,variant);t.update();return t;
+}
+function paint(t,p,variant){
+  const l=main(p),u=Math.min(100,l.u),tm=l.at/l.len*100,full=u>=100,st=lv(u);
+  t.className=`tile${variant==='B'?' rtile':''}${p.live&&!full?' live':''}${st?' '+st:''}${ahead(l,p)?' ahead':''}${p.out?' out':''}${variant!=='B'&&most()===p.name&&!p.live&&!p.out&&variant!=='still'?' best':''}`;
+  t.querySelector('.hero .k').textContent=l.k;
+  const n=t.querySelector('.hero .n');
+  n.innerHTML=full?`<span>${dur(l.len-l.at)}</span>`:`${Math.floor(u)}<small>%</small>`;
+  t.querySelector('.hero .r b').textContent=l.len-l.at>=1440?day(l.len-l.at):'in '+dur(l.len-l.at);
+  t.querySelector('.hero .r span').textContent='resets';
+  t.querySelector('.rv').style.strokeDashoffset=94.25*(1-(l.len-l.at)/Math.max(1,l.len*(1-0)))*1;
+  t.querySelector('.fill').style.width=u+'%';t.querySelector('.tick').style.left=tm+'%';
+  t.querySelector('.note').textContent=noteOf(p,l);
+  t.querySelector('.subs').innerHTML=p.L.filter(x=>x!==l).map(x=>`<span class="sub ${lv(x.u)}">${x.k}<span class="mini"><i style="width:${Math.min(100,x.u)}%"></i></span><span class="num">${Math.floor(Math.min(100,x.u))}%</span></span>`).join('');
+  if(variant==='B'){t.querySelector('.rbig .b').style.strokeDashoffset=188.5*(1-u/100);t.querySelector('.rbig .d').style.strokeDashoffset=238.8*(1-tm/100);
+    t.querySelector('.rbig .n').textContent=Math.floor(u)+'%';t.querySelector('.rbig .r').textContent=`${l.k} · resets in ${dur(l.len-l.at)}`}
+}
+
+/* the window */
+const app=document.getElementById('app'),grid=document.getElementById('grid'),strip=document.getElementById('strip'),chip=document.getElementById('chip');
+let tiles=[];
+function buildGrid(){grid.innerHTML='';tiles=P.map(p=>{const t=tile(p);grid.append(t);return t})}
+function paintStrip(){strip.innerHTML=P.map(p=>{const l=main(p),u=Math.min(100,l.u);return`<div class="srow ${lv(u)} ${ahead(l,p)?'ahead':''} ${p.live&&u<100?'live':''}" style="--h:${p.h}"><span class="mark">${p.prov==='codex'?CX:CL}</span><span class="nm">${p.name}</span><span class="tr"><i style="width:${u}%"></i><b style="left:${l.at/l.len*100}%"></b></span><span class="num">${u>=100?dur(l.len-l.at).replace(/ \d+m$/,m=>m):Math.floor(u)+'%'}</span></div>`}).join('');
+  const a=P[0],l=main(a),u=Math.min(100,l.u);chip.className=`chip ${lv(u)} ${ahead(l,a)?'ahead':''}`;
+  chip.innerHTML=`<span class="mark" style="--h:${a.h};width:18px;height:18px">${CL}</span>${a.name}<span class="tr"><i style="width:${u}%"></i><b style="left:${l.at/l.len*100}%"></b></span><span class="num">${u>=100?'full':Math.floor(u)+'%'}</span>`}
+strip.onclick=()=>app.classList.toggle('open');document.getElementById('veil').onclick=()=>app.classList.remove('open');
+chip.onclick=()=>app.classList.add('open');
+
+let tT;
+function toast(color,title,text,act){const t=document.getElementById('toast');t.querySelector('.ic').style.background=color;t.querySelector('b').textContent=title;t.querySelector('span').textContent=text;t.querySelector('.go').textContent=act;
+  t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),4200)}
+document.getElementById('toast').onclick=()=>document.getElementById('toast').classList.remove('show');
+
+function step(min){
+  clock+=min;
+  for(const p of P){for(const l of p.L){
+    const was=l.u;l.at+=min;
+    if(p.live&&l.u<100)l.u=Math.min(100,l.u+(l.k==='5h'?p.rate:l.k==='7d'?p.rate*.08:p.rate*.02)*min);
+    if(l.at>=l.len){l.at-=l.len;l.u=p.live?Math.min(l.u,0):0;const ti=tiles[P.indexOf(p)];if(was>=100){ti.classList.remove('flash');void ti.offsetWidth;ti.classList.add('flash');toast('var(--go)',`${p.name} has room again`,`Its ${l.k} limit reset.`,'Use it')}}
+    if(was<80&&l.u>=80)toast('var(--warn)',`${p.name} is at 80% of its ${l.k} limit`,`It resets in ${dur(l.len-l.at)}.`,`Use ${most()} next`);
+    if(was<100&&l.u>=100){toast('var(--hot)',`${p.name} reached its ${l.k} limit`,`The session there waits ${dur(l.len-l.at)}.`,`Continue on ${most()}`)}
+  }}
+  if(P[0].L[0].u>=100&&P[0].live){P[0].live=false}
+  tiles.forEach(t=>t.update());paintStrip();
+  document.getElementById('clock').textContent='sped up · '+hhmm(clock);
+  const as=document.getElementById('asof');as.classList.add('spin');setTimeout(()=>as.classList.remove('spin'),600);
+}
+let iv;const run=()=>{clearInterval(iv);iv=setInterval(()=>{if(playing)step(2)},700)};
+document.getElementById('play').onclick=e=>{playing=!playing;e.target.textContent=playing?'Pause':'Play'};
+document.getElementById('fast').onclick=()=>step(30);
+document.getElementById('restart').onclick=()=>{P=seed();clock=11*60+22;buildGrid();paintStrip();step(0)};
+buildGrid();paintStrip();step(0);run();
+
+/* variants: one account, breathing between two readings */
+const demo={name:'axius',prov:'claude',plan:'PRO',h:215,live:true,L:[{k:'5h',u:58,at:150,len:H},{k:'7d',u:7,at:2100,len:W}]};
+const va=tile(demo,'A'),vb=tile(demo,'B');document.getElementById('vA').append(va);document.getElementById('vB').append(vb);
+let ph=0;setInterval(()=>{ph=1-ph;demo.L[0].u=ph?84:58;demo.L[0].at=ph?190:150;va.update();vb.update()},2600);
+
+/* states */
+const S=[
+  ['Plenty of room','Green, the mark well ahead of the bar.',{name:'erhards',plan:'MAX',h:265,L:[{k:'5h',u:22,at:150,len:H},{k:'7d',u:30,at:3000,len:W}]}],
+  ['Working','A light runs along the bar. The tile\'s glow drifts slowly.',{name:'axius',plan:'PRO',h:215,live:true,rate:.15,L:[{k:'5h',u:46,at:160,len:H},{k:'7d',u:7,at:2100,len:W}]}],
+  ['Ahead of the clock','The bar has passed the mark. The mark pulses and says when it fills.',{name:'axius',plan:'PRO',h:215,live:true,rate:.3,L:[{k:'5h',u:72,at:120,len:H},{k:'7d',u:9,at:2100,len:W}]}],
+  ['Full','Red and still. The number becomes the time until it clears, with a ring running down.',{name:'erhards2',plan:'PRO',h:300,L:[{k:'5h',u:100,at:228,len:H},{k:'7d',u:40,at:3000,len:W}]}],
+  ['One model near','Only Fable is close. The tile says other models are fine.',{name:'erhards',plan:'MAX',h:265,L:[{k:'5h',u:34,at:110,len:H},{k:'7d',u:61,at:6200,len:W},{k:'Fable',u:88,at:6200,len:W}]}],
+  ['Signed out','Faded, with one button.',{name:'old-team',plan:'TEAM',h:190,out:true,L:[{k:'5h',u:0,at:10,len:H},{k:'7d',u:12,at:900,len:W}]}],
+];
+const sw=document.getElementById('states');
+S.forEach(([a,b,p])=>{p.prov='claude';const d=document.createElement('div');d.append(tile(p,'still'));d.insertAdjacentHTML('beforeend',`<div class="lab"><b>${a}.</b> ${b}</div>`);sw.append(d)});
+
+/* settings */
+const sg=document.getElementById('sgrid');
+function settings(){sg.innerHTML='';seed().forEach(p=>{p.live=false;const t=tile(p,'still');t.querySelector('.t1').insertAdjacentHTML('beforeend','<button class="more" title="More">⋯</button>');sg.append(t)});
+  const add=document.createElement('button');add.className='add';add.innerHTML='+ Add an account';sg.append(add);
+  add.onclick=()=>{if(add.dataset.open)return;add.dataset.open=1;add.innerHTML=`<div class="in"><button class="prov"><span class="mark" style="--h:215">${CL}</span><span>Claude<small>Pro, Max, Team</small></span></button><button class="prov"><span class="mark" style="--h:190">${CX}</span><span>OpenAI Codex<small>ChatGPT sign-in</small></span></button></div>`}}
+sg.onclick=e=>{const m=e.target.closest('.more');document.querySelectorAll('.kmenu').forEach(k=>k.remove());if(m){m.closest('.tile').insertAdjacentHTML('beforeend','<div class="kmenu"><button>Rename</button><button>Make default</button><button>Sign in again</button><button class="d">Remove</button></div>')}};
+settings();
+</script>
+</body></html>

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 28: profile settings (wireframes)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+  :root{color-scheme:dark}[data-theme=light]{color-scheme:light}
+  :root{--page:#0e0f11;--win:#17181b;--side:#121315;--blk:#26282c;--blk2:#33363b;--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.18);
+    --text:#e9eaec;--dim:#9a9ea6;--faint:#61656d;--note:#7fb4ff;--note-soft:rgba(127,180,255,.12);--warn:#e8b45a;--hot:#e2756f;--go:#4cd3a2;--pop:#1f2124}
+  [data-theme=light]{--page:#e6e7ea;--win:#fbfbfc;--side:#f1f2f4;--blk:#e2e4e8;--blk2:#cfd2d8;--line:rgba(0,0,0,.09);--line2:rgba(0,0,0,.2);
+    --text:#1a1c20;--dim:#5d616a;--faint:#9ea2aa;--note:#2f6fd6;--note-soft:rgba(47,111,214,.09);--warn:#b07a12;--hot:#c4463f;--go:#14a874;--pop:#fff}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--text);font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:10px;padding:24px 0 4px;flex-wrap:wrap}
+  .top h1{font-size:17px;margin:0;flex:1}
+  .seg{display:flex;background:var(--blk);border-radius:8px;padding:2px;font-size:12px}
+  .seg button{padding:3px 10px;border-radius:6px;color:var(--dim)}.seg button.on{background:var(--win);color:var(--text);box-shadow:0 0 0 1px var(--line2)}
+  .lbl{font-size:12px;color:var(--faint)}
+  .tbtn{padding:4px 10px;border-radius:8px;background:var(--blk);color:var(--dim);font-size:12px}
+  .intro{color:var(--dim);max-width:740px;margin:4px 0 0}.intro b{color:var(--text)}
+  h3{font-size:14px;margin:46px 0 2px;display:flex;align-items:baseline;gap:10px}
+  h3 i{font-style:normal;color:var(--note)}
+  h3 em{font-style:normal;font-size:11px;font-weight:600;color:var(--note);background:var(--note-soft);padding:1px 7px;border-radius:5px}
+  .why{color:var(--dim);margin:0 0 6px;max-width:740px}
+  .pc{display:flex;gap:18px;font-size:12px;color:var(--dim);margin:0 0 12px;max-width:740px;flex-wrap:wrap}
+  .pc span:first-child::before{content:"+ ";color:var(--note)}.pc span:last-child::before{content:"− ";color:var(--hot)}
+
+  /* the settings dialog, as it is today: 680 × 460, tabs on the left. Drag the right edge. */
+  .dlg{container-type:inline-size;width:680px;min-width:380px;max-width:100%;height:460px;resize:horizontal;overflow:hidden;border:1px solid var(--line2);border-radius:14px;background:var(--win);display:flex}
+  .tabs{width:150px;flex:none;background:var(--side);border-right:1px solid var(--line);padding:14px 8px;display:flex;flex-direction:column;gap:2px}
+  .tabs h4{margin:0 8px 10px;font-size:13px}
+  .tabs .t{padding:5px 8px;border-radius:7px;color:var(--dim);font-size:12.5px;display:flex;align-items:center;gap:7px}
+  .tabs .t.on{background:var(--blk);color:var(--text);font-weight:600}
+  .tabs .sub{padding-left:22px;font-size:12px}
+  .tabs .grp{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin:10px 8px 2px}
+  @container (max-width:520px){.tabs{width:52px}.tabs h4,.tabs .t span,.tabs .grp{display:none}.tabs .sub{padding-left:8px}}
+  .pg{flex:1;min-width:0;padding:16px 18px;display:flex;flex-direction:column;overflow:hidden}
+  .pgh{font-weight:700;font-size:14px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .pgh .add{margin-left:auto}
+
+  /* shared bits */
+  .ph{height:7px;border-radius:4px;background:var(--blk);display:inline-block;width:90px}
+  .btn{font-size:11.5px;padding:3px 9px;border-radius:7px;background:var(--blk);color:var(--text);white-space:nowrap}
+  .btn.q{background:none;color:var(--dim)}.btn.q:hover{background:var(--blk)}
+  .btn.red{color:var(--hot)}
+  .add{font-size:11.5px;padding:3px 9px;border-radius:7px;border:1px dashed var(--line2);color:var(--dim)}
+  .av{width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:10.5px;font-weight:700;color:#fff}
+  .av.big{width:38px;height:38px;font-size:15px}
+  .star{color:var(--warn);font-size:11px}
+  .pill{font-size:10px;font-weight:600;padding:0 6px;border-radius:5px;background:var(--blk);color:var(--dim)}
+  .pill.bad{background:color-mix(in srgb,var(--hot) 16%,transparent);color:var(--hot)}
+  .pill.def{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
+  .em{font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tr{position:relative;width:40px;height:4px;border-radius:2px;background:var(--blk2);flex:none}
+  .tr i{position:absolute;inset:0 auto 0 0;border-radius:2px;background:var(--dim)}
+  .w .tr i{background:var(--warn)}.f .tr i{background:var(--hot)}
+  .mtr{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .w.mtr{color:var(--warn)}.f.mtr{color:var(--hot)}
+  .kv{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px 12px;font-size:12px;align-items:center}
+  .kv>span:nth-child(odd){color:var(--faint)}
+  .sel{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:7px;background:var(--blk);font-size:12px;justify-self:start}
+  .sel::after{content:"▾";font-size:9px;color:var(--faint)}
+  .tog{width:28px;height:16px;border-radius:9px;background:var(--blk2);position:relative;justify-self:start}.tog::after{content:"";position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;background:#fff}
+  .tog.on{background:var(--go)}.tog.on::after{left:14px}
+  .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:12px;border-top:1px solid var(--line)}
+  .acts .btn.red{margin-left:auto}
+  .scroll{overflow:auto;min-height:0;scrollbar-width:thin}
+
+  /* A: list + detail */
+  .ad{display:flex;gap:14px;flex:1;min-height:0}
+  .al{width:170px;flex:none;display:flex;flex-direction:column;gap:2px}
+  .al .r{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:8px;font-size:12px;min-width:0}
+  .al .r.on{background:var(--blk)}
+  .al .r>div{min-width:0;flex:1}.al .r b{font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .al .add{margin-top:6px;text-align:center}
+  .adt{flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;border-left:1px solid var(--line);padding-left:14px}
+  .who{display:flex;align-items:center;gap:10px}.who b{font-size:14px}
+  @container (max-width:560px){.al{width:44px}.al .r>div,.al .r .star{display:none}.al .add{font-size:0;padding:3px}.al .add::before{content:"+";font-size:13px}}
+
+  /* B: cards */
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;align-content:start}
+  .card{border:1px solid var(--line2);border-radius:11px;padding:10px;display:flex;flex-direction:column;gap:7px;position:relative;min-width:0}
+  .card.cur{box-shadow:0 0 0 1.5px var(--note)}
+  .card .hd{display:flex;align-items:center;gap:7px;min-width:0}.card .hd b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
+  .card .mm{display:flex;flex-direction:column;gap:4px}
+  .card .mm .tr{width:auto;flex:1}
+  .card .mm .mtr{display:flex}
+  .card .more{position:absolute;right:8px;top:8px;color:var(--faint);letter-spacing:1px}
+  .card.addc{border-style:dashed;align-items:center;justify-content:center;color:var(--dim);min-height:118px}
+  .flyout{position:absolute;z-index:3;right:8px;top:28px;background:var(--pop);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.35),0 0 0 1px var(--line2);padding:5px;width:160px;font-size:12px}
+  .flyout div{padding:4px 8px;border-radius:6px}.flyout div:hover{background:var(--blk)}.flyout hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+
+  /* C: rows that open in place */
+  .rows{display:flex;flex-direction:column}
+  .rw{border-bottom:1px solid var(--line)}
+  .rh{display:grid;grid-template-columns:22px minmax(0,1fr) auto auto 14px;align-items:center;gap:10px;padding:7px 4px;cursor:pointer}
+  .rh .nm{min-width:0}.rh .nm b{font-weight:600;font-size:12.5px;margin-right:6px}
+  .rh .nm .em{display:block}
+  .rh .chev{color:var(--faint);font-size:10px;transition:transform .15s}
+  .rw.open .chev{transform:rotate(90deg)}
+  .rb{display:none;padding:4px 4px 12px 36px}
+  .rw.open .rb{display:block}
+  .rb .acts{border:0;padding-top:10px}
+  @container (max-width:520px){.rh{grid-template-columns:22px minmax(0,1fr) auto 14px}.rh .m7{display:none}}
+
+  /* D: each profile its own tab */
+  .dsum{display:flex;gap:18px;padding:10px 12px;border-radius:10px;background:var(--blk);font-size:12px;margin-bottom:14px;flex-wrap:wrap}
+  .dsum .mtr .tr{width:70px}
+
+  ul.q{margin:6px 0 0;padding-left:18px;color:var(--dim);max-width:740px}ul.q li{margin:6px 0}ul.q b{color:var(--text)}
+</style></head><body><div class="wrap">
+<div class="top"><h1>Round 28: profile settings · wireframes</h1>
+  <span class="lbl">Profiles</span><div class="seg" id="count"><button data-n="2">2</button><button data-n="4" class="on">4</button><button data-n="10">10</button></div>
+  <button class="tbtn" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Dark / light</button></div>
+<p class="intro">Four layouts for the <b>Profiles</b> page in Settings. Same facts in each: name, email, plan, 5h / 7d, signed in or not, which one is the <b>default</b> (moves here from General), and per-profile defaults for model and permission mode. Drag a dialog's right edge to see it narrow.</p>
+
+<h3><i>A</i>List and detail <em>Recommended</em></h3>
+<p class="why">Profiles on the left, the picked one on the right. Room for per-profile settings without crowding the list.</p>
+<div class="pc"><span>Scales to many profiles; room to grow</span><span>Two clicks to compare limits</span></div>
+<div class="dlg" id="A"></div>
+
+<h3><i>B</i>Cards</h3>
+<p class="why">One card per profile with its two meters. Actions in a ⋯ menu.</p>
+<div class="pc"><span>Limits at a glance, side by side</span><span>No home for per-profile settings; long lists get tall</span></div>
+<div class="dlg" id="B"></div>
+
+<h3><i>C</i>Rows that open</h3>
+<p class="why">Today's list, tidied. Click a row to open its settings underneath; one open at a time.</p>
+<div class="pc"><span>Closest to today; compact</span><span>Opened row pushes the rest down</span></div>
+<div class="dlg" id="C"></div>
+
+<h3><i>D</i>A tab per profile</h3>
+<p class="why">Profiles join the settings sidebar, each with its own page.</p>
+<div class="pc"><span>Simple full pages</span><span>The sidebar grows with every profile</span></div>
+<div class="dlg" id="D"></div>
+
+<h3>Open questions</h3>
+<ul class="q">
+  <li>Per-profile <b>default model and effort</b>, or just permission mode as today?</li>
+  <li>Show <b>email and organisation</b>, or the name only?</li>
+  <li>Should <b>Default profile</b> leave General and become a ★ here?</li>
+</ul>
+</div>
+<script>
+const ALL=[
+  {n:'erhards2',e:'erhards2@…',o:'Personal',p:'Max',h:34,d:61,c:'#5b8def',def:1,cur:1},
+  {n:'erhards',e:'erhards@…',o:'Personal',p:'Max',h:88,d:72,c:'#c46fd6'},
+  {n:'axius',e:'dev@axius…',o:'Axius',p:'Team',h:100,d:40,c:'#3fb98a'},
+  {n:'work',e:'me@work…',o:'Work Ltd',p:'Pro',h:null,d:null,c:'#d58a3c',out:1},
+  {n:'lab',e:'lab@…',o:'Lab',p:'Pro',h:12,d:20,c:'#5bb7c9'},{n:'client-a',e:'a@client…',o:'Client A',p:'Team',h:5,d:44,c:'#9a7be0'},
+  {n:'client-b',e:'b@client…',o:'Client B',p:'Team',h:0,d:3,c:'#d26b8a'},{n:'spare',e:'spare@…',o:'Personal',p:'Pro',h:55,d:81,c:'#7ea24a'},
+  {n:'night',e:'night@…',o:'Personal',p:'Max',h:20,d:30,c:'#4f86b8'},{n:'test',e:'test@…',o:'QA',p:'Pro',h:0,d:0,c:'#a08b5a'}];
+let N=4,openC=1,pickA=0,pickD=0,flyB=-1;
+const lv=v=>v==null?'':v>=100?'f':v>=80?'w':'';
+const m=(k,v,w)=>v==null?`<span class="mtr">${k} —</span>`:`<span class="mtr ${lv(v)}">${k}<span class="tr" ${w?`style="width:${w}px"`:''}><i style="width:${Math.min(v,100)}%"></i></span>${v}%</span>`;
+const av=(p,big)=>`<span class="av ${big?'big':''}" style="background:${p.c}">${p.n[0].toUpperCase()}</span>`;
+const tags=p=>(p.def?'<span class="pill def">default</span> ':'')+(p.out?'<span class="pill bad">signed out</span>':'');
+const tabs=(extra='')=>`<div class="tabs"><h4>Settings</h4><div class="t">⚙<span>General</span></div><div class="t ${extra?'':'on'}">◎<span>Profiles</span></div>${extra}<div class="t">/<span>Skills</span></div><div class="t">i<span>About</span></div></div>`;
+const settings=(p,full=1)=>`<div class="kv">${full?`
+  <span>Plan</span><span>${p.p} · ${p.o}</span>
+  <span>Limits</span><span style="display:flex;gap:14px;flex-wrap:wrap">${m('5h',p.h,60)}${m('7d',p.d,60)}</span>`:''}
+  <span>Default</span><span class="tog ${p.def?'on':''}"></span>
+  <span>Model</span><span class="sel">Opus · high</span>
+  <span>Permissions</span><span class="sel">Ask before edits</span></div>`;
+const actions=p=>`<div class="acts">${p.out?'<button class="btn" style="background:var(--note);color:#fff">Sign in</button>':'<button class="btn">Sign in again</button>'}<button class="btn q">Rename</button><button class="btn q red">Remove</button></div>`;
+
+function draw(){
+  const L=ALL.slice(0,N);
+  // A
+  const a=L[Math.min(pickA,N-1)];
+  document.getElementById('A').innerHTML=tabs()+`<div class="pg"><div class="pgh">Profiles</div><div class="ad">
+    <div class="al scroll">${L.map((p,i)=>`<button class="r ${p===a?'on':''}" data-a="${i}">${av(p)}<div><b>${p.n}</b><span class="em">${p.out?'<span style="color:var(--hot)">signed out</span>':p.e}</span></div>${p.def?'<span class="star">★</span>':''}</button>`).join('')}<button class="add">+ Add profile</button></div>
+    <div class="adt"><div class="who">${av(a,1)}<div><b>${a.n}</b> ${tags(a)}<div class="em">${a.e}</div></div></div>${settings(a)}${actions(a)}</div></div></div>`;
+  // B
+  document.getElementById('B').innerHTML=tabs()+`<div class="pg"><div class="pgh">Profiles</div><div class="cards scroll">${L.map((p,i)=>`<div class="card ${p.cur?'cur':''}"><button class="more" data-b="${i}">⋯</button>
+    <div class="hd">${av(p)}<b>${p.n}</b>${p.def?'<span class="star">★</span>':''}</div><span class="em">${p.p} · ${p.e}</span>
+    ${p.out?'<span style="margin-top:6px"><button class="btn" style="background:var(--note);color:#fff">Sign in</button></span>':`<div class="mm">${m('5h',p.h)}${m('7d',p.d)}</div>`}
+    ${flyB===i?`<div class="flyout"><div>Make default</div><div>Sign in again</div><div>Rename</div><hr><div style="color:var(--hot)">Remove</div></div>`:''}</div>`).join('')}<div class="card addc">+ Add profile</div></div></div>`;
+  document.querySelectorAll('#B .card .mm .tr').forEach(t=>t.style.flex='1');
+  // C
+  document.getElementById('C').innerHTML=tabs()+`<div class="pg"><div class="pgh">Profiles<button class="add">+ Add</button></div><div class="rows scroll">${L.map((p,i)=>`<div class="rw ${openC===i?'open':''}">
+    <div class="rh" data-c="${i}">${av(p)}<span class="nm"><b>${p.n}</b>${tags(p)}<span class="em">${p.p} · ${p.e}</span></span><span>${m('5h',p.h)}</span><span class="m7">${m('7d',p.d)}</span><span class="chev">▶</span></div>
+    <div class="rb">${settings(p,0)}${actions(p)}</div></div>`).join('')}</div></div>`;
+  // D
+  const d=L[Math.min(pickD,N-1)];
+  const sub=`<div class="grp">Profiles</div>${L.map((p,i)=>`<div class="t sub ${p===d?'on':''}" data-d="${i}" style="cursor:pointer">${av(p).replace('class="av','style="width:14px;height:14px;font-size:8px" class="av')}<span>${p.n}</span></div>`).join('')}<div class="t sub" style="color:var(--faint)">+<span>Add</span></div><div class="grp"></div>`;
+  document.getElementById('D').innerHTML=tabs(sub).replace('<div class="t "','<div class="t" style="display:none"')+`<div class="pg"><div class="pgh">${av(d)}${d.n} ${tags(d)}</div>
+    <div class="dsum">${d.out?'<span style="color:var(--hot)">Signed out</span>':m('5h',d.h,70)+m('7d',d.d,70)}<span class="em" style="margin-left:auto">${d.p} · ${d.e}</span></div>
+    ${settings(d,0)}${actions(d)}</div>`;
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-n],[data-a],[data-b],[data-c],[data-d]');
+  if(!t){if(flyB>=0){flyB=-1;draw()}return}
+  if(t.dataset.n){N=+t.dataset.n;document.querySelectorAll('#count button').forEach(b=>b.classList.toggle('on',b===t))}
+  if(t.dataset.a)pickA=+t.dataset.a;
+  if(t.dataset.b){flyB=flyB===+t.dataset.b?-1:+t.dataset.b}
+  if(t.dataset.c){openC=openC===+t.dataset.c?-1:+t.dataset.c}
+  if(t.dataset.d)pickD=+t.dataset.d;
+  draw()});
+draw();
+</script>
+</body></html>

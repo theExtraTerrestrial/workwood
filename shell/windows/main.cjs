@@ -13,9 +13,20 @@ if (!app.requestSingleInstanceLock()) app.quit();
 app.setAppUserModelId('Workwood');
 let win = null, wsl = null, quitting = false, current = null;
 const native = path.join(__dirname, '..', 'native', 'service', 'server.mjs');
-const envs = [...(fs.existsSync(native) ? [{ id: 'windows', label: 'Windows' }] : []), ...(cfg.distro ? [{ id: 'wsl', label: 'WSL' }] : [])];
+const envs = [...(fs.existsSync(native) ? [{ id: 'windows', label: 'Windows', detail: 'This PC' }] : []), ...(cfg.distro ? [{ id: 'wsl', label: 'WSL', detail: cfg.distro }] : [])];
 const remembered = path.join(app.getPath('userData'), 'workwood-env.json');
 const started = {};   // id -> promise of the service's address
+// Quitting ends the background work sessions left running (a dev server, a monitor, an agent): ask first.
+async function sureToQuit(win, more = 0) {
+  let list = [];
+  try { list = (await win.webContents.executeJavaScript('window.wwBackground ? window.wwBackground() : []')) || []; } catch {}
+  const n = list.reduce((a, s) => a + s.n, 0) + more;
+  if (!n) return true;
+  const r = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Quit and stop them', 'Cancel'], defaultId: 1, cancelId: 1, noLink: true,
+    title: 'Workwood', message: `${n} task${n > 1 ? 's are' : ' is'} still running in the background`,
+    detail: [...list.map(s => `${s.title}: ${s.n} running`), more ? `${more} more in the other place` : ''].filter(Boolean).join('\n') + '\n\nQuitting stops them.' });
+  return r.response === 0;
+}
 
 function startWsl() {
   return new Promise((resolve, reject) => {
@@ -54,13 +65,20 @@ async function show(id) {
 
 async function open() {
   Menu.setApplicationMenu(null);
+  const size = { width: 1400, height: 900, minWidth: 900, minHeight: 600 }, place = require('./window-state.cjs')(size);
   win = new BrowserWindow({
-    width: 1400, height: 900, minWidth: 900, minHeight: 600, show: false,
+    ...size, ...place.options, show: false,
     title: 'Workwood', backgroundColor: '#18191c', autoHideMenuBar: true, icon: path.join(__dirname, 'workwood.ico'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, spellcheck: true },
   });
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => { if (place.maximized) win.maximize(); win.show(); });
+  place.track(win);
   win.on('closed', () => { win = null; });
+  // the other place, when it was started, may have background work of its own
+  const elsewhere = async () => { let n = 0; for (const id of Object.keys(started)) { if (id === current) continue;
+    try { const u = new URL(await started[id]); const r = await fetch(`${u.origin}/api/status`, { headers: { 'x-workwood-token': u.searchParams.get('token') }, signal: AbortSignal.timeout(3000) }); if (r.ok) n += (await r.json()).bg || 0; } catch {} } return n; };
+  let sure = false;
+  win.on('close', e => { if (sure) return; e.preventDefault(); elsewhere().then(more => sureToQuit(win, more)).then(ok => { if (ok && win) { sure = true; win.close(); } }); });
   // The microphone, for dictation, and nothing else.
   win.webContents.session.setPermissionRequestHandler((wc, what, done, d) => done(what === 'media' && !(d.mediaTypes || []).includes('video')));
   // Links in a conversation open in your browser, never inside the app window.
@@ -68,6 +86,10 @@ async function open() {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!/^http:\/\/127\.0\.0\.1:\d+\//.test(url)) { e.preventDefault(); shell.openExternal(url); } else ours(url).then(ok => { if (!ok) win?.webContents.stop(); }); });
   ipcMain.on('env:get', e => { e.returnValue = { current, list: envs }; });
+  // Open at login: Windows starts this same program with the app folder, as the Start-menu shortcut does.
+  const atLogin = { path: process.execPath, args: [`"${__dirname}"`] };
+  ipcMain.on('login:get', e => { try { e.returnValue = !!app.getLoginItemSettings(atLogin).openAtLogin; } catch { e.returnValue = null; } });
+  ipcMain.handle('login:set', (e, on) => { app.setLoginItemSettings({ ...atLogin, openAtLogin: !!on }); return !!app.getLoginItemSettings(atLogin).openAtLogin; });
   ipcMain.handle('folder:pick', async () => { const r = await dialog.showOpenDialog(win, { title: 'Choose a project folder', properties: ['openDirectory'] }); return r.canceled ? null : r.filePaths[0] || null; });
   ipcMain.handle('env:set', (e, id) => { if (envs.some(x => x.id === id) && id !== current) show(id); });
   // While you look at one side, ask the other (if it was started) whether an agent there is working or waiting for you.

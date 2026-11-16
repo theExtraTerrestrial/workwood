@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 29: the website (wireframes)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+  :root{color-scheme:dark}[data-theme=light]{color-scheme:light}
+  :root{--page:#0e0f11;--win:#17181b;--blk:#26282c;--blk2:#33363b;--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.18);
+    --text:#e9eaec;--dim:#9a9ea6;--faint:#61656d;--note:hsl(168 62% 62%);--note-soft:hsl(168 62% 60%/.13);--warn:#e8b45a;--go:#4cd3a2}
+  [data-theme=light]{--page:#e6e7ea;--win:#fbfbfc;--blk:#e2e4e8;--blk2:#cfd2d8;--line:rgba(0,0,0,.09);--line2:rgba(0,0,0,.2);
+    --text:#1a1c20;--dim:#5d616a;--faint:#9ea2aa;--note:hsl(168 70% 30%);--note-soft:hsl(168 70% 40%/.10);--warn:#b07a12;--go:#14a874}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--text);font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:10px;padding:24px 0 4px}
+  .top h1{font-size:17px;margin:0;flex:1}
+  .tbtn{padding:4px 10px;border-radius:8px;background:var(--blk);color:var(--dim);font-size:12px}
+  .intro{color:var(--dim);max-width:640px;margin:4px 0 0}
+  h3{font-size:14px;margin:46px 0 12px}
+
+  /* three page wireframes side by side */
+  .pages{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:26px;align-items:start}
+  @media(max-width:860px){.pages{grid-template-columns:1fr;max-width:380px}}
+  .opt h2{font-size:14px;margin:0 0 2px;display:flex;align-items:center;gap:8px}
+  .opt h2 i{font-style:normal;color:var(--note)}
+  .opt h2 em{font-style:normal;font-size:11px;font-weight:600;color:var(--note);background:var(--note-soft);padding:1px 7px;border-radius:5px}
+  .opt p{color:var(--dim);margin:0 0 12px;min-height:58px}
+  .pg{background:var(--win);border-radius:12px;box-shadow:0 0 0 1px var(--line);padding:12px;display:flex;flex-direction:column;gap:10px}
+  .opt.rec .pg{box-shadow:0 0 0 1.5px var(--note)}
+  .nav{display:flex;align-items:center;gap:6px}
+  .nav b{width:34px;height:7px;border-radius:4px;background:var(--text)}
+  .nav s{flex:1}
+  .nav u{width:20px;height:5px;border-radius:3px;background:var(--blk2)}
+  .nav u.c{width:30px;height:11px;border-radius:6px;background:var(--note)}
+  .sec{border-radius:8px;background:var(--blk);padding:10px;display:flex;flex-direction:column;gap:6px;position:relative}
+  .sec.bare{background:none;padding:6px 0}
+  .tag{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .hl{height:9px;border-radius:5px;background:var(--text);width:78%}
+  .hl.s{width:52%}.hl.c{margin-inline:auto}
+  .tx{height:5px;border-radius:3px;background:var(--blk2);width:88%}
+  .tx.s{width:60%}.tx.c{margin-inline:auto}
+  .cta{width:54px;height:13px;border-radius:7px;background:var(--note);margin-top:2px}
+  .cta.c{margin-inline:auto}
+  /* a tiny app window */
+  .app{border-radius:6px;background:var(--page);box-shadow:0 0 0 1px var(--line2);display:flex;overflow:hidden;height:var(--h,96px)}
+  .app .sb{width:30%;padding:6px 5px;display:flex;flex-direction:column;gap:4px;border-right:1px solid var(--line)}
+  .app .sb i{height:7px;border-radius:3px;background:var(--blk2);position:relative}
+  .app .sb i.w::after,.app .sb i.g::after{content:"";position:absolute;right:3px;top:2px;width:3px;height:3px;border-radius:50%;background:var(--warn)}
+  .app .sb i.g::after{background:var(--go)}
+  .app .sb i.on{background:var(--note-soft);box-shadow:0 0 0 1px var(--note)}
+  .app .cv{flex:1;padding:7px;display:flex;flex-direction:column;gap:4px;justify-content:flex-end}
+  .app .cv i{height:5px;border-radius:3px;background:var(--blk)}
+  .app .cv i.q{height:16px;background:var(--note-soft);box-shadow:0 0 0 1px var(--note)}
+  .app .cv i.in{height:11px;border-radius:5px;box-shadow:0 0 0 1px var(--line2);background:none}
+  .glow{position:absolute;inset:0;border-radius:8px;background:radial-gradient(80% 70% at 20% 0,hsl(168 62% 40%/.28),transparent 70%);pointer-events:none}
+  .two{display:flex;gap:8px;align-items:center}.two>*{flex:1;min-width:0}.two.r{flex-direction:row-reverse}
+  .col{display:flex;flex-direction:column;gap:5px}
+  .shot{border-radius:5px;height:50px;background:var(--page);box-shadow:0 0 0 1px var(--line2)}
+  .bento{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+  .bento div{border-radius:6px;background:var(--blk);height:54px;padding:7px;display:flex;flex-direction:column;gap:4px;justify-content:flex-end}
+  .bento .w2{grid-column:span 2}.bento .t2{grid-row:span 2;height:auto}
+  .steps{display:flex;flex-direction:column;gap:9px}
+  .steps div{display:flex;flex-direction:column;gap:4px;padding-left:8px;border-left:2px solid var(--blk2)}
+  .steps div.on{border-color:var(--note)}
+  .stick{font-size:10px;color:var(--note);text-align:center}
+  .foot{display:flex;gap:6px;justify-content:center;padding:2px 0}.foot u{width:26px;height:4px;border-radius:2px;background:var(--blk2)}
+
+  /* what the page says */
+  .say{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:860px){.say{grid-template-columns:1fr 1fr}}
+  .say div{background:var(--win);border-radius:10px;box-shadow:0 0 0 1px var(--line);padding:14px}
+  .say b{display:block;margin-bottom:3px}.say span{color:var(--dim)}
+  .head{font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.15;margin:0 0 6px}
+  .sub{color:var(--dim);max-width:520px;margin:0 0 18px;font-size:14px}
+  ol{margin:0;padding-left:18px;color:var(--dim);max-width:640px}ol li{margin:6px 0}ol b{color:var(--text)}
+</style></head><body><div class="wrap">
+
+<div class="top"><h1>Round 29 · The website</h1><button class="tbtn" onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme=='dark'?'light':'dark'">Light / dark</button></div>
+<p class="intro">Three ways to lay the page out, as wireframes. Pick one and I draw it for real.</p>
+
+<div class="pages">
+
+  <div class="opt rec"><h2><i>A</i>The window is the hero<em>Recommended</em></h2>
+  <p>One line, one button, and the app itself, alive: sessions start working, one turns amber, you answer it. Four strengths follow, each with a close-up.</p>
+  <div class="pg">
+    <div class="nav"><b></b><s></s><u></u><u></u><u class="c"></u></div>
+    <div class="sec"><div class="glow"></div><span class="tag">Hero</span><div class="hl c"></div><div class="tx s c"></div><div class="cta c"></div>
+      <div class="app" style="--h:120px"><div class="sb"><i class="g"></i><i class="w on"></i><i></i><i class="g"></i><i></i></div><div class="cv"><i></i><i style="width:70%"></i><i class="q"></i><i class="in"></i></div></div></div>
+    <div class="sec bare"><span class="tag">Strength × 4, alternating</span>
+      <div class="two"><div class="col"><div class="hl s"></div><div class="tx"></div><div class="tx s"></div></div><div class="shot"></div></div>
+      <div class="two r"><div class="col"><div class="hl s"></div><div class="tx"></div><div class="tx s"></div></div><div class="shot"></div></div></div>
+    <div class="sec"><span class="tag">Get it</span><div class="hl s c"></div><div class="cta c"></div></div>
+    <div class="foot"><u></u><u></u><u></u></div>
+  </div></div>
+
+  <div class="opt"><h2><i>B</i>Scroll story</h2>
+  <p>The window stays pinned while you scroll through a morning with it: start three sessions, see who needs you, answer, hit a limit, carry on.</p>
+  <div class="pg">
+    <div class="nav"><b></b><s></s><u></u><u></u><u class="c"></u></div>
+    <div class="sec"><div class="glow"></div><span class="tag">Hero</span><div class="hl"></div><div class="tx s"></div><div class="cta"></div></div>
+    <div class="sec bare"><span class="tag">Story, 5 steps</span>
+      <div class="two" style="align-items:flex-start"><div class="steps"><div><div class="hl s"></div><div class="tx"></div></div><div class="on"><div class="hl s"></div><div class="tx"></div></div><div><div class="hl s"></div><div class="tx"></div></div><div><div class="hl s"></div><div class="tx"></div></div></div>
+      <div class="col"><div class="app" style="--h:104px"><div class="sb"><i class="g"></i><i class="w on"></i><i></i></div><div class="cv"><i></i><i class="q"></i><i class="in"></i></div></div><div class="stick">pinned · changes per step</div></div></div></div>
+    <div class="sec"><span class="tag">Get it</span><div class="hl s c"></div><div class="cta c"></div></div>
+    <div class="foot"><u></u><u></u><u></u></div>
+  </div></div>
+
+  <div class="opt"><h2><i>C</i>Bento</h2>
+  <p>A short hero, then a grid of tiles. Each tile is one strength with a small live visual. Quick to scan, less of a story.</p>
+  <div class="pg">
+    <div class="nav"><b></b><s></s><u></u><u></u><u class="c"></u></div>
+    <div class="sec"><div class="glow"></div><span class="tag">Hero</span><div class="hl c"></div><div class="tx s c"></div><div class="cta c"></div></div>
+    <div class="sec bare"><span class="tag">Tiles</span>
+      <div class="bento"><div class="w2"><div class="hl s"></div><div class="tx"></div></div><div class="t2"><div class="hl"></div><div class="tx"></div></div><div><div class="hl"></div></div><div><div class="hl"></div></div><div><div class="hl"></div></div><div class="w2"><div class="hl s"></div><div class="tx"></div></div></div></div>
+    <div class="sec"><span class="tag">Get it</span><div class="hl s c"></div><div class="cta c"></div></div>
+    <div class="foot"><u></u><u></u><u></u></div>
+  </div></div>
+
+</div>
+
+<h3>What the page says</h3>
+<div class="head">Every Claude Code session.<br>One window.</div>
+<p class="sub">Workwood is an inbox for your agents. It shows which ones are working and which ones are waiting for you.</p>
+<div class="say">
+  <div><b>See who needs you</b><span>Working, waiting, finished. Every session in one list, also the ones in a terminal.</span></div>
+  <div><b>Answer in a click</b><span>Questions, permissions and plans arrive as cards, with what the agent made right next to them.</span></div>
+  <div><b>Never stuck on a limit</b><span>All your accounts and their limits in view. Hit one, continue on another.</span></div>
+  <div><b>Still Claude Code</b><span>Same sessions, same history, the real terminal one switch away. All on your machine.</span></div>
+</div>
+
+<h3>Open questions</h3>
+<ol>
+  <li><b>Layout:</b> A, B or C?</li>
+  <li><b>Headline:</b> does "Every Claude Code session. One window." fit, or do you want another angle?</li>
+  <li><b>The button:</b> "Download for Windows" (I add the zip as a GitHub release) or "View on GitHub" with the install steps?</li>
+  <li><b>Pictures:</b> drawn and animated in the page (always sharp, follows the theme), or real screenshots?</li>
+</ol>
+
+</div></body></html>

@@ -3,11 +3,36 @@
 A desktop app for running and overseeing several Claude Code sessions at once:
 an inbox of the work that still needs something, across your Claude accounts.
 
+## Install it
+
+You need Node 22 or newer, git and Claude Code. Workwood is built on your own
+machine, so there is no installer to download:
+
+```bash
+git clone https://github.com/theExtraTerrestrial/workwood
+cd workwood
+npm install
+npm run install-app
+```
+
+- **macOS**: makes `~/Applications/Workwood.app`. Not yet tried on a Mac.
+- **Linux**: adds Workwood to the app launcher. `npm install` builds one part
+  here, so it also needs `build-essential` and `python3`.
+- **Windows**: run it in PowerShell. Workwood goes into the Start menu; sessions
+  run on Windows itself. Not yet tried on Windows without WSL.
+- **Windows with WSL**: run it inside WSL. Workwood goes into the Start menu and
+  sessions run in WSL (the same as `npm run shortcut`, described below).
+
+On macOS and Linux the app runs straight from this folder: keep the folder where
+it is, and `git pull` is all an update needs. On Windows, run
+`npm run install-app` again after pulling. `npm run install-app -- --remove`
+takes the app away again; your sessions and settings stay.
+
 ## Run it
 
 ```bash
 cd ~/workspace/workwood
-npm start         # the Workwood window (Electron, shown on Windows through WSL)
+npm start         # the Workwood window, without installing anything
 npm run edge      # alternative: the same app in a Microsoft Edge app window
 ```
 
@@ -203,7 +228,7 @@ On a fresh WSL install the Electron window needs GTK once:
     and a profile cannot be renamed or removed while a session is using it.
 - Dark and light theme (gear, bottom left).
 
-Not built yet: the Mac build; an installer that runs on a Windows PC without WSL.
+Not yet tried on a real machine: the macOS app, and installing on a Windows PC without WSL from this folder.
 
 ## Tests
 

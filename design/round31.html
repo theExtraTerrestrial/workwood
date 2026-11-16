@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 31: page vs app</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+  :root{color-scheme:dark;--page:#0e0f11;--win:#17181b;--blk:#26282c;--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.18);
+    --text:#e9eaec;--dim:#9a9ea6;--faint:#61656d;--note:hsl(168 62% 62%);--note-soft:hsl(168 62% 60%/.13);--warn:#e8b45a;--warn-soft:rgba(232,180,90,.12);--hot:#e2756f;--hot-soft:rgba(226,117,111,.12)}
+  [data-theme=light]{color-scheme:light;--page:#e6e7ea;--win:#fbfbfc;--blk:#e2e4e8;--line:rgba(0,0,0,.09);--line2:rgba(0,0,0,.2);
+    --text:#1a1c20;--dim:#5d616a;--faint:#9ea2aa;--note:hsl(168 70% 30%);--note-soft:hsl(168 70% 40%/.10);--warn:#b07a12;--warn-soft:rgba(176,122,18,.1);--hot:#c4463f;--hot-soft:rgba(196,70,63,.09)}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--text);font:14px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:90px}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:10px;padding:24px 0 4px}.top h1{font-size:17px;margin:0;flex:1}
+  .tbtn{padding:4px 10px;border-radius:8px;background:var(--blk);color:var(--dim);font-size:12px}
+  .rule{font-size:clamp(24px,3.2vw,36px);font-weight:800;letter-spacing:-.03em;line-height:1.12;margin:26px 0 8px;max-width:760px}
+  .rule em{font-style:normal;color:var(--note)}
+  .intro{color:var(--dim);max-width:640px;margin:0}
+  h3{font-size:15px;margin:54px 0 4px}h3+p{color:var(--dim);margin:0 0 18px;max-width:640px}
+  .it{background:var(--win);border-radius:16px;box-shadow:0 0 0 1px var(--line);padding:18px;margin-bottom:14px}
+  .hd{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .hd b{font-size:16px}.hd span{color:var(--dim);flex:1;min-width:240px}
+  .hd .v,.v{font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;white-space:nowrap;flex:none;min-width:0}
+  .v.b{color:var(--note);background:var(--note-soft)}.v.d{color:var(--hot);background:var(--hot-soft)}.v.m{color:var(--warn);background:var(--warn-soft)}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.pair{grid-template-columns:1fr}}
+  figure{margin:0;border-radius:12px;background:#0c0d0f;box-shadow:inset 0 0 0 1px var(--line);padding:30px 14px 14px;position:relative;display:grid;place-items:center;min-height:120px}
+  figure::before{content:attr(data-l);position:absolute;left:12px;top:8px;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  figure.app::before{color:var(--note)}
+  figure img{max-width:100%;max-height:300px;border-radius:8px;display:block}
+  .grid{display:grid;grid-template-columns:1fr;gap:14px}
+  .grid .it{margin:0}.grid figure img{max-height:210px}.grid .hd{margin-bottom:10px}.grid .hd b{font-size:14px}
+  .ways{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:760px){.ways{grid-template-columns:1fr}}
+  .way{background:var(--win);border-radius:16px;box-shadow:0 0 0 1px var(--line);padding:20px}.way.rec{box-shadow:0 0 0 1.5px var(--note)}
+  .way h4{margin:0 0 6px;font-size:16px;display:flex;gap:10px;align-items:center}.way h4 i{font-style:normal;color:var(--note)}
+  .way p{margin:0 0 10px;color:var(--dim)}.way ul{margin:0;padding:0;list-style:none;color:var(--dim)}.way li{padding-left:18px;position:relative;margin:4px 0}
+  .way li::before{content:"+";position:absolute;left:0;color:var(--note);font-weight:700}.way li.n::before{content:"−";color:var(--hot)}
+  ol{margin:0;padding-left:18px;color:var(--dim);max-width:680px}ol li{margin:7px 0}ol b{color:var(--text)}
+</style></head><body><div class="wrap">
+
+<div class="top"><h1>Round 31 · Page vs app</h1><button class="tbtn" onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme=='dark'?'light':'dark'">Light / dark</button></div>
+<div class="rule">The page shows <em>only what the app does.</em></div>
+<p class="intro">Round 30 broke that rule in both directions. Left is what the page drew, right is the app today, taken from a real run.</p>
+
+<h3>Your call · the page invented these</h3>
+<p>Each one either goes into the app first, with its own design round, or leaves the page.</p>
+
+<div class="it"><div class="hd"><b>1 · Variants above the question</b><span>The page shows the choices as small pictures and lights up the one you pick. The app opens them in a side panel with tabs.</span><span class="v b">I'd bring it to the app</span></div>
+  <div class="pair"><figure data-l="Page drew"><img src="round31/page-compare.png"></figure><figure class="app" data-l="App today"><img src="round31/app-compare.png"></figure></div></div>
+
+<div class="it"><div class="hd"><b>2 · What each session is doing</b><span>The page gives every session a second line ("Editing checkout.css") and its own coloured tile. The app has one line per session and a label only when it needs you.</span><span class="v m">Second line: maybe · tile: drop</span></div>
+  <div class="pair"><figure data-l="Page drew"><img src="round31/page-rows.png"></figure><figure class="app" data-l="App today"><img src="round31/app-rows.png"></figure></div></div>
+
+<div class="it"><div class="hd"><b>3 · Waiting sessions rise to the top</b><span>The page reorders the inbox when a session starts waiting, and counts them next to "Sessions". The app keeps sessions under their project, newest first.</span><span class="v d">I'd drop both</span></div>
+  <div class="pair"><figure data-l="Page drew"><img src="round31/page-inbox.png"></figure><figure class="app" data-l="App today"><img src="round31/app-rows.png"></figure></div></div>
+
+<h3>No call needed · the app is better, the page copies it</h3>
+<p>Here the page was a poorer drawing of something the app already does well.</p>
+
+<div class="grid">
+  <div class="it"><div class="hd"><b>Question card</b><span>Radio rows, your own answer, Stop and Send.</span></div><div class="pair"><figure data-l="Page drew"><img src="round31/page-question.png"></figure><figure class="app" data-l="App today"><img src="round31/app-question.png"></figure></div></div>
+  <div class="it"><div class="hd"><b>Limit reached</b><span>A card with every account you can continue on.</span></div><div class="pair"><figure data-l="Page drew"><img src="round31/page-limit.png"></figure><figure class="app" data-l="App today"><img src="round31/app-limit.png"></figure></div></div>
+  <div class="it"><div class="hd"><b>Limits per account</b><span>A table, with how far each window has run and when it resets.</span></div><div class="pair"><figure data-l="Page drew"><img src="round31/page-limit.png"></figure><figure class="app" data-l="App today"><img src="round31/app-limits.png"></figure></div></div>
+  <div class="it"><div class="hd"><b>Steps</b><span>A timeline with times, folded into one line when done.</span></div><div class="pair"><figure data-l="Page drew"><img src="round31/page-steps.png"></figure><figure class="app" data-l="App today"><img src="round31/app-steps.png"></figure></div></div>
+  <div class="it"><div class="hd"><b>Under the message box</b><span>Account, limits with numbers, mode, model, context ring.</span></div><div class="pair"><figure data-l="Page drew"><img src="round31/page-meter.png"></figure><figure class="app" data-l="App today"><img src="round31/app-meter.png"></figure></div></div>
+  <div class="it"><div class="hd"><b>Header</b><span>Icons for chat and terminal, outline, previews, changes, Done.</span></div><div class="pair"><figure data-l="Page drew"><img src="round31/page-switch.png"></figure><figure class="app" data-l="App today"><img src="round31/app-switch.png"></figure></div></div>
+</div>
+
+<h3>How the page stays true from now on</h3>
+<p>Redrawing by hand is how round 30 drifted. Two ways to stop it.</p>
+<div class="ways">
+  <div class="way rec"><h4><i>A</i>The page runs the real app<span class="v b">Recommended</span></h4><p>The window on the page is the app's own page, fed by a scripted stand-in for the service. Same idea as the tests.</p>
+    <ul><li>Cannot drift: change the app and the page changes with it</li><li>Visitors can click around in it</li><li class="n">More work first: the stand-in has to play a believable morning</li><li class="n">New ideas must be built before they can be shown</li></ul></div>
+  <div class="way"><h4><i>B</i>Redraw with the app's own styles</h4><p>Keep the hand-made animations, but build them from the app's stylesheet and markup instead of look-alikes.</p>
+    <ul><li>Quicker, and every scene can be staged exactly</li><li class="n">Still a copy: it drifts again whenever the app changes</li><li class="n">Not clickable</li></ul></div>
+</div>
+
+<h3>Open questions</h3>
+<ol>
+  <li><b>1, 2 and 3 above:</b> bring to the app, or drop from the page?</li>
+  <li><b>Staying true:</b> A or B?</li>
+  <li><b>Tagline:</b> "An inbox for your agents." is the headline. Where should "Stop watching terminals." go: above the Get it section, or only in the GitHub description?</li>
+</ol>
+
+</div></body></html>

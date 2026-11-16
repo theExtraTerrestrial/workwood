@@ -5,6 +5,24 @@ const { pathToFileURL } = require('node:url');
 
 if (!app.requestSingleInstanceLock()) app.quit();
 let win = null;
+
+// Opened from the Dock or the app launcher, the window does not get the PATH your terminal has, so `claude`, `node`
+// and `code` may not be found. Ask your login shell for its PATH once (4 seconds at most), and add the usual places.
+function shellPath() {
+  if (process.platform === 'win32' || process.stdin.isTTY) return;
+  const os = require('node:os'), fs = require('node:fs'), sep = path.delimiter, have = (process.env.PATH || '').split(sep).filter(Boolean);
+  let fromShell = [];
+  try {
+    const sh = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash');
+    const out = require('node:child_process').execFileSync(sh, ['-ilc', 'echo __WORKWOOD__; env; echo __WORKWOOD__'],
+      { encoding: 'utf8', timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, DISABLE_AUTO_UPDATE: 'true' } });
+    const m = /^PATH=(.+)$/m.exec(out.split('__WORKWOOD__')[1] || '');
+    if (m) fromShell = m[1].split(sep).filter(Boolean);
+  } catch {}
+  const home = os.homedir(), usual = [path.join(home, '.local', 'bin'), path.join(home, '.claude', 'local'), '/opt/homebrew/bin', '/usr/local/bin'].filter(p => fs.existsSync(p));
+  process.env.PATH = [...new Set([...fromShell, ...have, ...usual])].join(sep);
+}
+shellPath();
 // Quitting ends the background work sessions left running (a dev server, a monitor, an agent): ask first.
 async function sureToQuit(win, more = 0) {
   let list = [];
@@ -23,7 +41,8 @@ async function open() {
   require('electron').ipcMain.handle('folder:pick', async () => { const r = await require('electron').dialog.showOpenDialog(win, { title: 'Choose a project folder', properties: ['openDirectory'] }); return r.canceled ? null : r.filePaths[0] || null; });
   const { start } = await import(pathToFileURL(path.join(__dirname, '..', 'service', 'server.mjs')).href);
   const { address } = await start();
-  Menu.setApplicationMenu(null);
+  // macOS keeps its menu bar: without one there is no Cmd+C, Cmd+V or Cmd+Q.
+  Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]) : null);
   const size = { width: 1400, height: 900, minWidth: 900, minHeight: 600 }, place = require('./window-state.cjs')(size);
   win = new BrowserWindow({
     ...size, ...place.options,
@@ -33,7 +52,11 @@ async function open() {
   if (place.maximized) win.maximize();
   place.track(win);
   // The microphone, for dictation, and nothing else.
-  win.webContents.session.setPermissionRequestHandler((wc, what, done, d) => done(what === 'media' && !(d.mediaTypes || []).includes('video')));
+  win.webContents.session.setPermissionRequestHandler((wc, what, done, d) => {
+    if (!(what === 'media' && !(d.mediaTypes || []).includes('video'))) return done(false);
+    if (process.platform !== 'darwin') return done(true);
+    require('electron').systemPreferences.askForMediaAccess('microphone').then(done, () => done(false));   // macOS asks you once
+  });
   // Links in a conversation open in your browser, never inside the app window.
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(new URL(address).origin)) { e.preventDefault(); shell.openExternal(url); } });

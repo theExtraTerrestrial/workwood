@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood: an inbox for your agents</title>
+<meta name="description" content="Run many Claude Code sessions at once. Workwood shows which are working and which are waiting for you.">
+<link rel="icon" href="icon.svg">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root{color-scheme:dark;--hue:168;
+    --page:#0c0d0f;--bg:#18191c;--surface:#222428;--surface2:#2c2f34;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.14);
+    --text:#f0f1f3;--dim:#a6aab2;--faint:#6d717a;--accent:hsl(var(--hue) 62% 62%);--accent-soft:hsl(var(--hue) 62% 60%/.14);
+    --warn:#ffb955;--warn-soft:rgba(255,185,85,.09);--go:#4fd6a4;--hot:#f0706a;--btn:#f0f1f3;--btn-ink:#121315;--term:#0a0b0d;
+    --chrome:radial-gradient(520px 320px at 0 0,hsl(var(--hue) 62% 30%/.38),transparent 70%),linear-gradient(172deg,hsl(var(--hue) 26% 12%),hsl(calc(var(--hue) + 70) 16% 11%) 46%,#101114);
+    --shadow:0 40px 120px rgba(0,0,0,.6),0 0 0 1px var(--line2);--glow:hsl(var(--hue) 70% 45%/.30);--glow2:hsl(calc(var(--hue) + 80) 60% 50%/.16)}
+  [data-theme=light]{color-scheme:light;
+    --page:#f3f4f6;--bg:#ffffff;--surface:#f2f3f6;--surface2:#e7e9ed;--line:rgba(0,0,0,.085);--line2:rgba(0,0,0,.15);
+    --text:#15171b;--dim:#565b65;--faint:#9a9fa9;--accent:hsl(var(--hue) 70% 31%);--accent-soft:hsl(var(--hue) 70% 40%/.10);
+    --warn:#b97400;--warn-soft:rgba(214,146,30,.10);--go:#0f9d77;--hot:#d2463f;--btn:#15171b;--btn-ink:#fff;--term:#15171a;
+    --chrome:radial-gradient(520px 320px at 0 0,hsl(var(--hue) 72% 78%/.7),transparent 70%),linear-gradient(172deg,hsl(var(--hue) 40% 91%),hsl(calc(var(--hue) + 70) 36% 93%) 46%,#eceef2);
+    --shadow:0 40px 100px rgba(20,30,50,.18),0 0 0 1px var(--line2);--glow:hsl(var(--hue) 75% 60%/.38);--glow2:hsl(calc(var(--hue) + 80) 70% 70%/.28)}
+  *{box-sizing:border-box}html{scroll-behavior:smooth}
+  body{margin:0;background:var(--page);color:var(--text);font:16px/1.55 "Manrope","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  a{color:inherit;text-decoration:none}button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 28px}
+  svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+  /* nav */
+  nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(14px);background:color-mix(in srgb,var(--page) 72%,transparent);border-bottom:1px solid transparent;transition:border-color .3s}
+  nav.stuck{border-color:var(--line)}
+  nav .wrap{display:flex;align-items:center;gap:26px;height:62px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.01em;margin-right:auto}.logo svg{width:28px;height:28px}
+  nav a.l{color:var(--dim);font-size:14px;font-weight:500;transition:color .2s}nav a.l:hover{color:var(--text)}
+  .tg{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--dim);font-size:17px}.tg:hover{background:var(--surface);color:var(--text)}
+  .btn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 20px;border-radius:12px;font-weight:600;font-size:15px;background:var(--btn);color:var(--btn-ink);transition:transform .15s,box-shadow .2s}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 8px 30px var(--glow)}
+  .btn.q{background:var(--surface);color:var(--text);box-shadow:inset 0 0 0 1px var(--line2)}.btn.q:hover{box-shadow:inset 0 0 0 1px var(--faint)}
+  .btn.s{height:36px;padding:0 14px;font-size:14px;border-radius:10px}
+
+  /* hero */
+  .hero{position:relative;text-align:center;padding:84px 0 0}
+  .aur{position:absolute;top:-140px;left:50%;width:100vw;margin-left:-50vw;height:900px;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent);pointer-events:none;z-index:-1;overflow:hidden}
+  .aur i{position:absolute;border-radius:50%;filter:blur(90px);animation:drift 18s ease-in-out infinite alternate}
+  .aur i:nth-child(1){width:620px;height:460px;left:50%;top:60px;margin-left:-520px;background:var(--glow)}
+  .aur i:nth-child(2){width:560px;height:420px;left:50%;top:160px;margin-left:60px;background:var(--glow2);animation-delay:-9s}
+  @keyframes drift{to{transform:translate(70px,-40px) scale(1.15)}}
+  .pill{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--dim);padding:5px 12px 5px 10px;border-radius:99px;box-shadow:inset 0 0 0 1px var(--line2);background:color-mix(in srgb,var(--bg) 60%,transparent)}
+  .pill i{width:7px;height:7px;border-radius:50%;background:var(--go);box-shadow:0 0 0 0 var(--go);animation:ping 2s infinite}
+  @keyframes ping{70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+  h1{font-size:clamp(40px,6.6vw,80px);line-height:1.02;letter-spacing:-.04em;font-weight:800;margin:22px auto 18px;max-width:900px;text-wrap:balance}
+  h1 em,h2 em{font-style:normal;background:linear-gradient(100deg,var(--accent),hsl(calc(var(--hue) + 60) 70% 66%));-webkit-background-clip:text;background-clip:text;color:transparent}
+  [data-theme=light] h1 em,[data-theme=light] h2 em{background-image:linear-gradient(100deg,var(--accent),hsl(calc(var(--hue) + 50) 70% 36%))}
+  .sub{font-size:clamp(16px,1.6vw,19px);color:var(--dim);max-width:560px;margin:0 auto 30px;text-wrap:balance}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .swap{animation:swap .5s both}@keyframes swap{from{opacity:0;transform:translateY(10px);filter:blur(6px)}}
+
+  /* the app window */
+  .stage{perspective:1800px;margin:64px auto 0;max-width:1040px}
+  .win{position:relative;display:flex;height:540px;border-radius:16px;overflow:hidden;background:var(--bg);box-shadow:var(--shadow);text-align:left;font-size:13px;line-height:1.45;transform:rotateX(calc(var(--tilt,0)*7deg)) scale(calc(1 - var(--tilt,0)*.04));transform-origin:50% 0;will-change:transform}
+  .sb{width:262px;flex:none;background:var(--chrome);padding:14px 10px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--line)}
+  .sbh{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;padding:2px 8px 10px}
+  .chip{font-size:11px;font-weight:600;padding:1px 8px;border-radius:99px;color:var(--warn);background:var(--warn-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warn) 35%,transparent);opacity:0;transform:scale(.8);transition:.3s}.chip.on{opacity:1;transform:none}
+  .grp{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);padding:10px 8px 4px}
+  .row{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:10px;transition:background .3s,box-shadow .3s}
+  .row.sel{background:linear-gradient(180deg,rgba(255,255,255,.115),rgba(255,255,255,.065));box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 1px 2px rgba(0,0,0,.3)}
+  [data-theme=light] .row.sel{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08),0 6px 16px rgba(0,0,0,.06)}
+  .av{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff;background:hsl(var(--c) 45% 42%);flex:none}
+  .rt{min-width:0;flex:1}.rt b{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rt small{display:block;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .3s}
+  .dot{width:16px;height:16px;flex:none;display:grid;place-items:center;position:relative}
+  .dot::before{content:"";width:7px;height:7px;border-radius:50%;background:transparent;transition:.3s}
+  [data-st=work] .dot::before{background:var(--go)}[data-st=work] .dot::after{content:"";position:absolute;inset:1px;border-radius:50%;border:1.5px solid var(--go);border-top-color:transparent;animation:spin 1s linear infinite}
+  [data-st=wait] .dot::before{background:var(--warn);box-shadow:0 0 0 4px var(--warn-soft)}
+  [data-st=wait] small{color:var(--warn)}[data-st=wait]:not(.sel){background:var(--warn-soft)}
+  [data-st=wait] .dot{animation:nudge .5s 2}
+  [data-st=done] b{font-weight:700}[data-st=done] .dot::before{width:9px;height:5px;border-radius:0;background:none;border:solid var(--accent);border-width:0 0 2px 2px;transform:rotate(-45deg) translate(1px,-1px)}
+  @keyframes spin{to{transform:rotate(360deg)}}@keyframes nudge{50%{transform:scale(1.5)}}
+  .mn{flex:1;min-width:0;display:flex;flex-direction:column}
+  .mh{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line)}
+  .mh div:first-child{flex:1;min-width:0}.mh b{display:block;font-size:14px}.mh small{color:var(--faint);font-size:12px}
+  .seg{display:flex;background:var(--surface);border-radius:9px;padding:2px;font-size:12px;font-weight:500;position:relative}
+  .seg span{padding:3px 11px;border-radius:7px;color:var(--dim);transition:.25s;position:relative;z-index:1}.seg span.on{background:var(--bg);color:var(--text);box-shadow:0 0 0 1px var(--line2)}
+  .cv{flex:1;min-height:0;padding:18px 22px 6px;display:flex;flex-direction:column;justify-content:flex-end;gap:10px;overflow:hidden}
+  .cv>*{animation:rise .45s both}@keyframes rise{from{opacity:0;transform:translateY(8px)}}
+  .me{align-self:flex-end;max-width:70%;background:var(--surface);padding:8px 13px;border-radius:14px 14px 4px 14px}
+  .ai{max-width:84%;color:var(--text)}
+  .stp{display:flex;align-items:center;gap:8px;font:12px "JetBrains Mono",ui-monospace,monospace;color:var(--dim)}.stp svg{color:var(--accent);font-size:13px}
+  .stp.run::after{content:"";width:10px;height:10px;border-radius:50%;border:1.5px solid var(--go);border-top-color:transparent;animation:spin 1s linear infinite}
+  .q{border-radius:14px;padding:14px;background:var(--warn-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warn) 32%,transparent);transition:.4s}
+  .q b{display:block;margin-bottom:9px}.q .os{display:flex;gap:8px;flex-wrap:wrap}
+  .o{padding:7px 13px;border-radius:9px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line2);font-weight:500;transition:.2s}
+  .o.pk{background:var(--btn);color:var(--btn-ink);box-shadow:none;transform:scale(.97)}
+  .q.ok{background:var(--accent-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent)}
+  .cp{padding:8px 18px 14px}
+  .box{display:flex;align-items:center;height:44px;padding:0 8px 0 14px;border-radius:13px;background:var(--surface);color:var(--faint);box-shadow:inset 0 0 0 1px var(--line)}
+  .box u{margin-left:auto;width:28px;height:28px;border-radius:9px;background:var(--btn);color:var(--btn-ink);display:grid;place-items:center;text-decoration:none}
+  .mt{display:flex;gap:16px;align-items:center;padding:8px 6px 0;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden}
+  .mt span{display:flex;align-items:center;gap:6px}.mt .p i{width:7px;height:7px;border-radius:50%;background:hsl(215 80% 65%)}
+  .bar{display:block;width:44px;height:4px;border-radius:2px;background:var(--surface2);overflow:hidden}.bar u{display:block;height:100%;border-radius:2px;background:var(--go);transition:width 1.2s cubic-bezier(.3,.8,.3,1),background .4s}
+  .cur{position:absolute;left:0;top:0;z-index:5;width:22px;height:22px;pointer-events:none;opacity:0;transition:transform .8s cubic-bezier(.5,.1,.2,1),opacity .3s;filter:drop-shadow(0 3px 6px rgba(0,0,0,.5))}
+  .cur.on{opacity:1}.cur::after{content:"";position:absolute;left:-9px;top:-9px;width:24px;height:24px;border-radius:50%;border:2px solid var(--accent);opacity:0}
+  .cur.clk::after{animation:clk .45s}@keyframes clk{from{opacity:1;transform:scale(.3)}to{opacity:0;transform:scale(1.6)}}
+
+  iframe.live{position:absolute;top:0;left:0;border:0;transform-origin:0 0;background:var(--bg)}
+  .win{display:block;height:auto}
+  .hint{margin:18px 0 0;font-size:14px;color:var(--faint)}
+  .vis{padding:0;height:420px;min-height:0;display:block;box-shadow:0 30px 80px rgba(0,0,0,.35),0 0 0 1px var(--line2)}
+  .tag{font-size:clamp(34px,5.4vw,64px);font-weight:800;letter-spacing:-.04em;line-height:1.05;margin:0 0 70px}
+  .tag em{font-style:normal;background:linear-gradient(100deg,var(--accent),hsl(calc(var(--hue) + 60) 70% 66%));-webkit-background-clip:text;background-clip:text;color:transparent}
+  /* strengths */
+  section.f{display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:center;padding:74px 0}
+  section.f:nth-of-type(even) .copy{order:2}
+  .k{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+  h2{font-size:clamp(30px,3.6vw,46px);line-height:1.08;letter-spacing:-.03em;font-weight:800;margin:10px 0 14px;text-wrap:balance}
+  .copy p{color:var(--dim);font-size:17px;margin:0;max-width:430px}
+  .vis{position:relative;border-radius:22px;padding:30px;min-height:330px;display:grid;place-items:center;background:var(--chrome);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden;font-size:13px;line-height:1.45}
+  .card{width:100%;max-width:380px;background:var(--bg);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35),0 0 0 1px var(--line2);padding:12px}
+  [data-theme=light] .card{box-shadow:0 20px 50px rgba(20,30,50,.12),0 0 0 1px var(--line2)}
+  .card .row{transition:background .3s,transform .5s cubic-bezier(.3,.8,.3,1)}
+  .rv{opacity:0;transform:translateY(28px);transition:opacity .8s,transform .8s cubic-bezier(.2,.7,.2,1)}.rv.in{opacity:1;transform:none}
+  /* compare */
+  .pv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+  .pg{border-radius:10px;background:var(--surface);padding:8px;display:flex;flex-direction:column;gap:5px;height:104px;box-shadow:inset 0 0 0 1px var(--line);transition:.3s;position:relative}
+  .pg.on{box-shadow:inset 0 0 0 2px var(--accent);transform:translateY(-3px)}
+  .pg::before{content:attr(data-n);position:absolute;right:7px;top:6px;font-size:10px;font-weight:700;color:var(--faint)}
+  .pg i{border-radius:4px;background:var(--surface2)}.pg .hd{height:14px;width:55%}.pg .hd.t{height:34px;width:100%;background:var(--accent-soft)}.pg .ln{height:5px}.pg .ln.s{width:60%}
+  /* limits */
+  .pr{padding:10px 10px 12px;border-radius:12px;transition:.4s}.pr.on{background:var(--surface)}
+  .pr h4{margin:0 0 8px;font-size:13px;display:flex;align-items:center;gap:8px}.pr h4 i{width:8px;height:8px;border-radius:50%;background:hsl(var(--c) 75% 65%)}
+  .pr h4 em{font-style:normal;font-size:11px;font-weight:600;color:var(--accent);margin-left:auto;opacity:0;transition:.3s}.pr.on h4 em{opacity:1}
+  .lb{display:grid;grid-template-columns:22px 1fr 38px;gap:10px;align-items:center;font-size:11.5px;color:var(--faint);margin-top:5px}.lb .bar{width:100%;height:6px;border-radius:3px}.lb b{text-align:right;color:var(--dim);font-weight:600;font-variant-numeric:tabular-nums}
+  .full .bar u{background:var(--hot)}.full b{color:var(--hot)}
+  .tst{margin-top:8px;display:flex;align-items:center;gap:10px;padding:9px 9px 9px 12px;border-radius:12px;background:var(--warn-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warn) 32%,transparent);font-weight:500;opacity:0;transform:translateY(8px);transition:.4s}
+  .tst.on{opacity:1;transform:none}.tst .o{margin-left:auto;white-space:nowrap}
+  /* terminal */
+  .tv{height:214px;border-radius:12px;margin-top:10px;position:relative;overflow:hidden;background:var(--surface)}
+  .tv>div{position:absolute;inset:0;padding:14px;display:flex;flex-direction:column;gap:9px;justify-content:flex-end;transition:opacity .4s,transform .5s cubic-bezier(.3,.8,.3,1)}
+  .tv .t{background:var(--term);color:#d5d7db;font:12px/1.6 "JetBrains Mono",ui-monospace,monospace;justify-content:flex-start;gap:0;opacity:0;transform:translateX(30px)}
+  .tv.term .t{opacity:1;transform:none}.tv.term .c{opacity:0;transform:translateX(-30px)}
+  .t .g{color:#4fd6a4}.t .d{color:#777c86}.t .y{color:#ffb955}.blink{display:inline-block;width:7px;height:14px;background:#d5d7db;vertical-align:-2px;animation:bl 1s steps(1) infinite}@keyframes bl{50%{opacity:0}}
+
+  /* get it */
+  .get{margin:60px 0 0;padding:64px 0 80px;text-align:center;position:relative}
+  .get .sub{margin-bottom:28px}
+  .tabs{display:inline-flex;background:var(--surface);border-radius:13px;padding:3px;gap:2px;flex-wrap:wrap;justify-content:center}
+  .tabs button{padding:8px 16px;border-radius:10px;font-size:14px;font-weight:600;color:var(--dim);transition:.2s}.tabs button.on{background:var(--bg);color:var(--text);box-shadow:0 0 0 1px var(--line2)}
+  .code{max-width:640px;margin:18px auto 0;text-align:left;border-radius:16px;background:var(--term);box-shadow:var(--shadow);overflow:hidden}
+  .code .bar2{display:flex;align-items:center;gap:6px;padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.07);color:#777c86;font-size:12px}
+  .code .bar2 i{width:10px;height:10px;border-radius:50%;background:#33363b}.code .bar2 span{margin-left:8px}
+  .code .bar2 button{margin-left:auto;font-size:12px;font-weight:600;color:#a6aab2;padding:3px 10px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}.code .bar2 button:hover{color:#fff}
+  .code pre{margin:0;padding:18px 20px 20px;font:14px/1.9 "JetBrains Mono",ui-monospace,monospace;color:#e6e7ea;overflow-x:auto}
+  .code pre s{text-decoration:none;color:#4fd6a4;user-select:none}.code pre q{quotes:none;color:#777c86}
+  .after{margin:18px auto 0;color:var(--dim);font-size:15px;max-width:560px}.after b{color:var(--text)}
+  .why{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;margin-top:34px;color:var(--faint);font-size:14px}.why span{display:flex;align-items:center;gap:8px}.why svg{color:var(--accent);font-size:16px}
+  footer{border-top:1px solid var(--line);padding:26px 0 40px;color:var(--faint);font-size:14px}footer .wrap{display:flex;gap:20px;align-items:center}footer a:hover{color:var(--text)}
+
+  @media(max-width:900px){
+    section.f{grid-template-columns:1fr;gap:28px;padding:48px 0}section.f:nth-of-type(even) .copy{order:0}
+    .sb{width:64px;padding:14px 8px}.sb .rt,.sb .grp,.sbh{display:none}.sb .dot{position:absolute;right:0;top:0;background:var(--bg);border-radius:50%}.sb .row{position:relative;justify-content:center}
+    .win{height:480px}.mt span:nth-child(n+3){display:none}nav a.l{display:none}
+  }
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}}
+
+  /* review only: not part of the page */
+  .ctl{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:50;display:flex;align-items:center;gap:6px;padding:6px 8px 6px 14px;border-radius:14px;background:#1f2124;color:#e9eaec;font-size:13px;box-shadow:0 10px 40px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.14)}
+  .ctl b{color:#7fe0c4;font-weight:600}.ctl button{width:30px;height:30px;border-radius:9px;background:#33363b;font-size:16px;line-height:1}.ctl button:hover{background:#44484e}
+  .notes{background:var(--bg);border-top:1px dashed var(--line2);padding:40px 0 110px;font-size:14px;color:var(--dim)}
+  .notes h5{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:0 0 14px}.notes h6{font-size:15px;color:var(--text);margin:30px 0 10px}
+  .plan{display:grid;grid-template-columns:150px 1fr 1fr;gap:1px;background:var(--line);border-radius:12px;overflow:hidden;box-shadow:0 0 0 1px var(--line);max-width:860px}
+  .plan>*{background:var(--bg);padding:10px 14px}.plan b{color:var(--text)}.plan .h{font-size:12px;font-weight:600;color:var(--faint)}
+  .notes ol{margin:0;padding-left:18px;max-width:700px}.notes li{margin:6px 0}.notes li b{color:var(--text)}.notes code{font:13px "JetBrains Mono",monospace;color:var(--text)}
+</style></head><body>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M5 7l5 5-5 5M13 17h6"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></symbol>
+  <symbol id="logo" viewBox="0 0 256 256"><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1f5148"/><stop offset="1" stop-color="#131518"/></linearGradient><rect x="12" y="12" width="232" height="232" rx="54" fill="url(#lg)"/><g fill="none" stroke="#f2f2f4" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"><path d="M128 204V78"/><path d="M128 164c0-34 52-22 52-58"/><path d="M128 132c0-26-48-18-48-46"/></g><circle cx="128" cy="68" r="18" fill="#f2f2f4"/><circle cx="80" cy="80" r="18" fill="#f2f2f4"/><circle cx="180" cy="98" r="19" fill="#4cd3a2"/></symbol>
+</defs></svg>
+
+<nav id="nav"><div class="wrap">
+  <a class="logo" href="#"><svg><use href="#logo"/></svg>Workwood</a>
+  <a class="l" href="#why">Why</a><a class="l" href="#get">Get it</a><a class="l" href="https://github.com/theExtraTerrestrial/workwood">GitHub</a>
+  <button class="tg" id="theme" title="Light / dark"><svg class="i"><use href="#i-sun"/></svg></button>
+  <a class="btn s" href="#get">Get it</a>
+</div></nav>
+
+<header class="hero wrap">
+  <div class="aur"><i></i><i></i></div>
+  <span class="pill"><i></i>For Claude Code · macOS, Linux, Windows</span>
+  <h1>An inbox for <em>your agents.</em></h1>
+  <p class="sub">Run many Claude Code sessions at once. Workwood shows which are working and which are waiting for you.</p>
+  <div class="cta"><a class="btn" href="#get">Get it in four lines <svg class="i"><use href="#i-arrow"/></svg></a><a class="btn q" href="https://github.com/theExtraTerrestrial/workwood">View on GitHub</a></div>
+
+  <div class="stage"><div class="win" id="win"><iframe class="live" data-scene="hero" data-w="1280" data-h="760" title="Workwood, running a scripted demo"></iframe></div></div>
+  <p class="hint">This is the app itself, playing a scripted morning. Click anything.</p>
+</header>
+
+<main class="wrap" id="why">
+  <section class="f"><div class="copy rv"><span class="k">One list</span><h2>See who <em>needs you.</em></h2><p>Working, waiting, done. Every session sits in one inbox, each one labelled the moment it needs you. Sessions you started in a terminal show up too.</p></div>
+    <div class="vis rv"><iframe class="live" data-scene="hero" data-w="1100" data-h="525" data-x="0" title="Workwood demo"></iframe></div></section>
+
+  <section class="f"><div class="copy rv"><span class="k">One click</span><h2>Answer without <em>digging.</em></h2><p>Questions, permissions and plans arrive as cards. What the agent made opens right beside the question, so you pick with your eyes, not from a description.</p></div>
+    <div class="vis rv"><iframe class="live" data-scene="answer" data-w="1100" data-h="525" data-x="0" title="Workwood demo"></iframe></div></section>
+
+  <section class="f"><div class="copy rv"><span class="k">Many accounts</span><h2>Never stuck on <em>a limit.</em></h2><p>All your Claude accounts and their limits, always in view. When one runs out, the session carries on with another. Same conversation, next message.</p></div>
+    <div class="vis rv"><iframe class="live" data-scene="limit" data-w="760" data-h="525" data-x="50" title="Workwood demo"></iframe></div></section>
+
+  <section class="f"><div class="copy rv"><span class="k">Nothing new to learn</span><h2>Still <em>Claude Code.</em></h2><p>Same sessions, same history, same skills. The real terminal is one switch away, and everything runs on your own machine.</p></div>
+    <div class="vis rv"><iframe class="live" data-scene="terminal" data-w="1100" data-h="525" data-x="0" title="Workwood demo"></iframe></div></section>
+</main>
+
+<section class="get" id="get"><div class="wrap">
+  <p class="tag rv">Stop watching <em>terminals.</em></p>
+  <span class="k rv">Get it</span>
+  <h2 class="rv">Four lines. <em>Built on your machine.</em></h2>
+  <p class="sub rv">No installer to download, so nothing for your antivirus to argue with.</p>
+  <div class="tabs rv" id="tabs"></div>
+  <div class="code rv"><div class="bar2"><i></i><i></i><i></i><span id="sh"></span><button id="copy">Copy</button></div><pre id="pre"></pre></div>
+  <p class="after rv" id="after"></p>
+  <div class="why rv"><span><svg class="i"><use href="#i-shield"/></svg>Runs only on your machine</span><span><svg class="i"><use href="#i-code"/></svg>Every line open to read</span><span><svg class="i"><use href="#i-lock"/></svg>Uses your own Claude sign-in</span></div>
+</div></section>
+
+<footer><div class="wrap"><span style="margin-right:auto">Workwood · built for our own team, shared as it is.</span><a href="https://github.com/theExtraTerrestrial/workwood">GitHub</a></div></footer>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],calm=matchMedia('(prefers-reduced-motion:reduce)').matches;
+const ic=n=>`<svg class="i"><use href="#i-${n}"/></svg>`;
+
+$('#theme').onclick=()=>theme(document.documentElement.dataset.theme=='dark'?'light':'dark');
+addEventListener('scroll',()=>{$('#nav').classList.toggle('stuck',scrollY>8);$('#win').style.setProperty('--tilt',calm?0:Math.max(0,1-scrollY/420))},{passive:true});dispatchEvent(new Event('scroll'));
+const io=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add('in')),{threshold:.15});$$('.rv').forEach(e=>io.observe(e));
+
+/* the windows on this page are the app itself (app/), each opened on one part of a scripted story */
+const live=$$('iframe.live');
+function fit(f){const box=f.parentElement,hero=box.id=='win';let w=+f.dataset.w,ht=+f.dataset.h,k=.8;
+  if(hero){if(box.clientWidth<700){w=760;ht=620}k=box.clientWidth/w;box.style.height=ht*k+'px'}
+  f.style.cssText=`width:${w}px;height:${hero?ht:box.clientHeight/k}px;transform:scale(${k});left:${hero||box.clientWidth<420?0:-(+f.dataset.x||0)*k}px`}
+const see=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting&&!e.target.src){e.target.src='app/?scene='+e.target.dataset.scene;see.unobserve(e.target)}}),{rootMargin:'300px'});
+function theme(t){const r=document.documentElement;if(t){r.dataset.theme=t;try{localStorage.setItem('ww.theme',t)}catch{}}
+  live.forEach(f=>{try{f.contentDocument.documentElement.dataset.theme=r.dataset.theme}catch{}})}
+live.forEach(f=>{fit(f);see.observe(f);f.addEventListener('load',()=>theme())});addEventListener('resize',()=>live.forEach(fit));
+try{theme(localStorage.getItem('ww.theme')||'dark')}catch{}
+
+/* get it */
+const repo='https://github.com/theExtraTerrestrial/workwood';
+const OS={
+  mac:['macOS','Terminal','Workwood is now in <b>Applications</b>.','Needs Node 22 or newer, git and Claude Code.'],
+  linux:['Linux','Terminal','Workwood is now in your <b>app launcher</b>.','Needs Node 22 or newer, git, build-essential and Claude Code.'],
+  win:['Windows','PowerShell','Workwood is now in the <b>Start menu</b>.','Needs Node 22 or newer, git and Claude Code for Windows.'],
+  wsl:['Windows + WSL','WSL terminal','Workwood is now in the <b>Start menu</b>, and your sessions run in WSL.','Run it inside WSL. Needs Node 22 or newer, git and Claude Code there.']};
+const lines=[`git clone ${repo}`,'cd workwood','npm install','npm run install-app'];
+let os=/Mac/.test(navigator.platform)?'mac':/Win/.test(navigator.platform)?'win':'linux';
+function tab(k){os=k;$('#tabs').innerHTML=Object.entries(OS).map(([id,o])=>`<button class="${id==k?'on':''}" data-k="${id}">${o[0]}</button>`).join('');
+  $('#sh').textContent=OS[k][1];$('#pre').innerHTML=lines.map(l=>`<s>$ </s>${l}`).join('\n');$('#after').innerHTML=`${OS[k][2]} <span style="color:var(--faint)">${OS[k][3]}</span>`}
+$('#tabs').onclick=e=>e.target.dataset.k&&tab(e.target.dataset.k);tab(os);
+$('#copy').onclick=e=>{navigator.clipboard?.writeText(lines.join('\n'));e.target.textContent='Copied';setTimeout(()=>e.target.textContent='Copy',1400)};
+</script>
+</body></html>

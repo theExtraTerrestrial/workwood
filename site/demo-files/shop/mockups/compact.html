@@ -1,0 +1,17 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Compact header</title>
+<style>
+  body{margin:0;font:15px/1.5 system-ui,"Segoe UI",sans-serif;color:#1c1f24;background:#f4f5f7}
+  .bar{display:flex;align-items:center;gap:28px;padding:14px 32px;background:#fff;border-bottom:1px solid #e3e5ea}
+  .sum{display:flex;align-items:center;justify-content:space-between;padding:22px 32px;background:#12332d;color:#fff}
+  .sum small{display:block;opacity:.7}.sum b{font-size:22px}
+  .logo{font-size:18px;letter-spacing:-.01em}
+  .steps{display:flex;gap:6px;list-style:none;margin:0 auto 0 0;padding:0}
+  .steps li{padding:5px 14px;border-radius:99px;background:#eef0f3;color:#6b7280;font-weight:600;font-size:13px}.steps li.on{background:#d9f3ea;color:#0f7a5c}
+  .total{font-weight:700}
+  main{max-width:720px;margin:28px auto;padding:0 32px;display:grid;gap:12px}
+  .f{height:46px;border-radius:10px;background:#fff;border:1px solid #e3e5ea}.f.s{width:55%}
+  .pay{height:48px;border-radius:10px;background:#12332d;color:#fff;display:grid;place-items:center;font-weight:700;margin-top:8px}
+</style></head><body>
+<header class="bar"><b class="logo">Northwind</b><ol class="steps"><li class="on">Cart</li><li class="on">Delivery</li><li>Payment</li></ol><span class="total">€ 84.00</span></header>
+<main><h2 style="margin:0 0 4px">Payment</h2><div class="f"></div><div class="f s"></div><div class="f"></div><div class="pay">Pay € 84.00</div></main>
+</body></html>

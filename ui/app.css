@@ -63,6 +63,7 @@
   .l1{display:flex;gap:8px;align-items:baseline}
   .l1 b{flex:1;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .l1 time{font-size:11px;color:var(--faint);flex:none}
+  .l2{display:block;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:-1px}   /* what it is doing, while it works */
   .l2{display:flex;gap:6px;font-size:11.5px;color:var(--faint);white-space:nowrap}
   .l2 em{font-style:normal;color:var(--dim);flex:none}
   .l2 span{overflow:hidden;text-overflow:ellipsis}
@@ -429,7 +430,34 @@
   .mark svg{width:11px;height:11px;stroke-width:3;display:none}.on .mark svg{display:block}
   .qopt b{display:block;font-weight:600;font-size:13px}
   .qopt .d{display:block;font-size:12px;color:var(--dim);line-height:1.4;margin-top:1px}
-  .qopt .eye{margin-left:auto;font-size:11px;color:var(--accent);font-weight:600;white-space:nowrap;align-self:center}
+  .qopt .eye{margin-left:auto;font-size:11px;color:var(--faint);font-weight:600;white-space:nowrap;align-self:center;padding:2px 6px;border-radius:6px}
+  .qopt .eye:hover{color:var(--text);background:var(--surface2)}.qopt .eye.on{color:var(--accent)}
+  /* an option that is a picture of what the agent made */
+  .qbody{container-type:inline-size}
+  .qgrid.pics{grid-template-columns:repeat(var(--n,2),1fr)}
+  .qgrid+.qgrid{margin-top:8px}
+  .qopt.pic{flex-direction:column;gap:0;padding:0;overflow:hidden;position:relative}
+  .qopt.pic .th{display:block;width:100%;aspect-ratio:16/10;background:var(--surface2);border-bottom:1px solid var(--line);overflow:hidden;position:relative;color:var(--faint)}
+  .qopt.pic .th.pg{background:#fff}
+  .qopt.pic .th iframe{position:absolute;left:0;top:0;width:400%;height:400%;transform:scale(.25);transform-origin:0 0;border:0;pointer-events:none}
+  .qopt.pic .th img,.qopt.pic .th video{width:100%;height:100%;object-fit:cover;display:block}
+  .qopt.pic .th>svg{width:22px;height:22px;position:absolute;inset:0;margin:auto}
+  .qopt.pic .th.txt{padding:8px 10px;font-size:10.5px;line-height:1.5;color:var(--dim);white-space:pre;text-align:left}
+  .qopt.pic .cap{display:flex;gap:9px;align-items:flex-start;padding:8px 10px 9px;width:100%}
+  .qopt.pic .cap>span:last-child{min-width:0}.qopt.pic b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qopt.pic .big{position:absolute;right:6px;top:6px;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 82%,transparent);color:var(--dim);box-shadow:0 0 0 1px var(--line2);opacity:0;transition:opacity .15s;backdrop-filter:blur(6px)}
+  .qopt.pic:hover .big,.qopt.pic .big.on,.qopt.pic:focus-visible .big{opacity:1}.qopt.pic .big:hover{color:var(--text)}
+  .qopt.pic .big.on{color:var(--accent);box-shadow:0 0 0 1px var(--accent)}.qopt.pic .big svg{width:13px;height:13px}
+  .qlook{font:inherit;color:var(--dim);background:none;border:0;cursor:pointer;display:inline-flex;align-items:center;gap:7px;margin-top:8px;padding:4px 8px;border-radius:8px;font-size:12px;font-weight:600}
+  .qlook:hover,.qlook.on{color:var(--accent);background:var(--accent-soft)}.qlook svg{width:14px;height:14px}
+  @container (max-width:430px){                                    /* a narrow card: back to rows, the picture kept small */
+    .qgrid.pics{grid-template-columns:1fr}
+    .qopt.pic{flex-direction:row;align-items:center}
+    .qopt.pic .th{width:74px;flex:none;border-bottom:0;border-right:1px solid var(--line)}
+    .qopt.pic .th iframe{width:800%;height:800%;transform:scale(.125)}
+    .qopt.pic .th.txt{font-size:5px;padding:4px}
+    .qopt.pic .big{position:static;opacity:1;margin-right:8px;flex:none;backdrop-filter:none}
+  }
   .qtype{display:flex;align-items:center;gap:8px;margin-top:8px;padding:4px 4px 4px 11px;border-radius:10px;background:var(--bg);box-shadow:0 0 0 1px var(--line);color:var(--faint)}
   .qtype span{flex:1}
   .qfoot{display:flex;align-items:center;gap:8px;margin-top:10px}

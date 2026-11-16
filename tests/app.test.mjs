@@ -1224,14 +1224,27 @@ ui('window: plan card', async () => {
   await page.waitForSelector('.ai:has-text("PLAN APPROVED")');
 });
 
-ui('window: a question about mockups opens them next to it; options and tabs follow each other; side by side', async () => {
+ui('window: a question about mockups shows them as pictures to pick; the corner button opens one large; options and tabs follow each other', async () => {
   await startNew('a MOCKUP then ASK');
   await page.waitForSelector('#qcard:has-text("Which mockup?")');
-  await page.waitForSelector('#cmw:not([hidden]) #cmSeg');                       // opens by itself
+  await page.waitForSelector('#qcard .qgrid.pics .qopt.pic');
+  assert.deepEqual(await page.locator('#qcard .qopt.pic b').allInnerTexts(), ['Light', 'Dark']);
+  assert.equal(await page.frameLocator('#qcard .qopt.pic >> nth=0 >> iframe').locator('h1').innerText(), 'Light direction');
+  assert.equal(await page.frameLocator('#qcard .qopt.pic >> nth=1 >> iframe').locator('h1').innerText(), 'Dark direction');
+  assert.equal(await page.locator('#panel').isHidden(), true);                   // the panel stays shut until you ask for it
+  await page.evaluate(() => { document.querySelector('#qcard .qopt.pic iframe').dataset.same = '1'; });
+  await page.click('#qcard .qopt.pic:has-text("Dark") .cap');                    // picking lights the picture, and nothing else moves
+  await page.waitForSelector('#qcard .qopt.pic.on:has-text("Dark")');
+  assert.equal(await page.locator('#panel').isHidden(), true);
+  assert.equal(await page.locator('#qcard .qopt.pic iframe[data-same]').count(), 1);   // the pictures were not loaded again
+  await page.hover('#qcard .qopt.pic:has-text("Light")');
+  await page.click('#qcard .qopt.pic:has-text("Light") .big');                   // the corner button opens that one large
+  await page.waitForSelector('#cmw:not([hidden]) #cmSeg button.on:has-text("Light")');
   assert.deepEqual(await page.locator('#cmSeg button').allInnerTexts(), ['Light', 'Dark', 'Side by side']);
   assert.equal(await page.frameLocator('#cmStage iframe').locator('h1').innerText(), 'Light direction');
-  assert.equal(await page.locator('#qcard .qopt:has(.eye) b').innerText(), 'Light');
-  await page.click('#qcard .qopt:has-text("Dark")');                            // picking an option shows its mockup
+  assert.equal(await page.locator('#qcard .qopt.pic:has(.big.on) b').innerText(), 'Light');
+  assert.equal(await page.locator('#qcard .qopt.pic.on b').innerText(), 'Dark');   // opening one large does not pick it
+  await page.click('#qcard .qopt.pic:has-text("Dark") .cap');                    // with the panel open, picking an option shows it there
   await page.waitForSelector('#cmSeg button.on:has-text("Dark")');
   assert.equal(await page.frameLocator('#cmStage iframe').locator('h1').innerText(), 'Dark direction');
   await page.click('#cmSeg button:has-text("Light")');                          // and a tab picks its option
@@ -1239,32 +1252,56 @@ ui('window: a question about mockups opens them next to it; options and tabs fol
   await page.click('#cmSeg button:has-text("Side by side")');
   await page.waitForFunction(() => document.querySelectorAll('#cmStage iframe').length === 2);
   assert.deepEqual(await page.locator('#cmStage .cmlab').allInnerTexts(), ['Light', 'Dark']);
-  assert.equal(await page.locator('#qcard .eye').count(), 0);
+  assert.equal(await page.locator('#qcard .big.on').count(), 0);
   await page.click('.hc:has-text("shot.png")');                                  // any other file from the turn can still be opened
   await page.waitForSelector('#pvw:not([hidden])'); assert.equal(await page.locator('#cmw').isHidden(), true);
   assert.equal(await page.locator('#qcard').isVisible(), true);                  // beside the question, not over it
-  await page.click('#qcard .qopt:has-text("Dark")');                            // an option brings the comparison back
+  await page.click('#qcard .qopt.pic:has-text("Dark") .big');                    // a corner button brings the comparison back
   await page.waitForSelector('#cmw:not([hidden]) #cmSeg button.on:has-text("Dark")');
+  await page.click('#qcard .qopt.pic:has-text("Dark") .big');                    // and the one of the picture shown closes the panel
+  await page.waitForSelector('#panel', { state: 'hidden' });
+  await page.click('#qcard .qopt.pic:has-text("Dark") .big'); await page.waitForSelector('#cmw:not([hidden])');
   await page.click('#cmClose'); await page.waitForSelector('#panel', { state: 'hidden' });
   assert.equal(await page.locator('#qcard').isVisible(), true);                  // closing it leaves the question
+  const size = page.viewportSize();
+  try {                                                                          // a narrow window: rows again, the picture kept small
+    await page.setViewportSize({ width: 470, height: size.height });
+    await page.waitForFunction(() => { const [a, b] = document.querySelectorAll('#qcard .qopt.pic'); return a.getBoundingClientRect().top < b.getBoundingClientRect().top - 10 && a.querySelector('.th').offsetWidth < 100; });
+  } finally { await page.setViewportSize(size); }
+  await page.waitForFunction(() => { const [a, b] = document.querySelectorAll('#qcard .qopt.pic'); return Math.abs(a.getBoundingClientRect().top - b.getBoundingClientRect().top) < 2; });
   await page.click('#qcard [data-act="send"]');
-  await page.waitForSelector('.ai:has-text("PICKED")'); assert.match(await page.locator('.ai:has-text("PICKED")').innerText(), /Dark/);
+  await page.waitForSelector('.ai:has-text("PICKED")'); assert.match(await page.locator('.ai:has-text("PICKED")').innerText(), /Light/);   // the tab picked it; opening Dark large did not change that
   assert.equal(await page.locator('#cmw').isHidden(), true);
 });
 
-ui('window: a question whose options carry their own text shows that text; a plain question opens nothing', async () => {
+ui('window: a question whose options carry their own text shows that text in the pictures; a plain question has none', async () => {
   await startNew('show me SNIPPETS');
-  await page.waitForSelector('#cmw:not([hidden]) .cmtext:has-text("top")');
-  await page.click('#qcard .qopt:has-text("Split")');
+  await page.waitForSelector('#qcard .qopt.pic .th.txt:has-text("top")');
+  assert.equal(await page.locator('#panel').isHidden(), true);
+  await page.click('#qcard .qopt.pic:has-text("Split") .cap');
+  await page.hover('#qcard .qopt.pic:has-text("Split")'); await page.click('#qcard .qopt.pic:has-text("Split") .big');
   await page.waitForSelector('#cmStage .cmtext:has-text("| a  | b  |")');
   await page.click('#qcard [data-act="send"]'); await page.waitForSelector('.ai:has-text("PICKED")');
   await page.waitForSelector('#panel', { state: 'hidden' });
   await startNew('just ASK me');
   await page.waitForSelector('#qcard:has-text("Which direction")');
   assert.equal(await page.locator('#panel').isHidden(), true);
+  assert.equal(await page.locator('#qcard .qopt.pic, #qcard [data-big]').count(), 0);
   await page.click('#qcard .qopt:has-text("Light")'); await page.click('#qcard [data-act="next"]');
   await page.click('#qcard .qopt:has-text("Tests")'); await page.click('#qcard [data-act="send"]');
   await page.waitForSelector('.ai:has-text("ANSWERS")');
+});
+
+ui('window: a session working in the app says what it is doing under its name; not one in a terminal, not in the compact sidebar', async () => {
+  await startNew('be SLOW for the second line');
+  await page.waitForSelector('.sess.sel .l2:has-text("Running Wait a long time")');
+  assert.equal(await page.locator(`.sess[data-id="${sb.sessions.alphaOutside}"] .l2`).count(), 0);   // working, but in a terminal
+  assert.equal(await page.locator('.sess .l2').count(), 1);
+  await page.keyboard.press('Control+b');
+  await page.waitForSelector('.app.compact'); assert.equal(await page.locator('.sess.sel .l2').isHidden(), true);
+  await page.keyboard.press('Control+b'); await page.waitForSelector('.app:not(.compact)');
+  await page.click('#send'); await page.waitForSelector('.sys:has-text("Interrupted")');
+  await page.waitForFunction(() => !document.querySelector('.sess .l2'));       // it goes when the session stops
 });
 
 ui('window: limit card continues on another profile, and goes the moment you press', async () => {

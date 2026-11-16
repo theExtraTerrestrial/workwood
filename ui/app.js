@@ -172,7 +172,7 @@ function drawList(){
     return `<div class="grp ${shut?'shut':''}" data-grp="${esc(k)}" title="${esc(k)}">${tile(g.name,'s')}</span><b>${esc(g.name)}</b>${shut?`<small>${n?`<i class="dot"></i>`:''}${g.list.length}</small>`:''}<span class="gnew" data-gnew data-tip="New session in ${esc(g.name)}">${svg('plus')}</span></div>`+(shut?'':
       g.list.map(s=>{const sel=!V.isNew&&s.id===V.sel,tip=V.compact||s.line?` data-tip="${esc(s.title+' — '+s.project+(s.line?' · '+s.line:''))}"`:'';
         return s.id===V.renaming?`<div class="sess ren ${sel?'sel':''}" data-id="${s.id}">${tile(s.project)}</span><input id="renIn" maxlength="120" autocomplete="off" spellcheck="false" aria-label="Session name"></div>`
-        :`<button class="sess ${s.status} ${sel?'sel':''} ${s.unread?'unread':''} ${s.done?'isdone':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}"${tip}>${tile(s.project)}${s.status==='work'?'<u class="go"></u>':needsYou(s)?`<u class="${s.status==='wait'?'warn':'new'}"></u>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b>${s.outside||s.term?`<em class="xb">${svg('term')}</em>`:''}<span class="st">${stateOf(s)}</span><span class="sact"><span data-done data-tip="${s.done?'Back to the inbox':'Mark done (Ctrl+D)'}">${svg(s.done?'refresh':'check')}</span><span data-dots>${svg('dots')}</span></span></span></span></button>`}).join(''));
+        :`<button class="sess ${s.status} ${sel?'sel':''} ${s.unread?'unread':''} ${s.done?'isdone':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}"${tip}>${tile(s.project)}${s.status==='work'?'<u class="go"></u>':needsYou(s)?`<u class="${s.status==='wait'?'warn':'new'}"></u>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b>${s.outside||s.term?`<em class="xb">${svg('term')}</em>`:''}<span class="st">${stateOf(s)}</span><span class="sact"><span data-done data-tip="${s.done?'Back to the inbox':'Mark done (Ctrl+D)'}">${svg(s.done?'refresh':'check')}</span><span data-dots>${svg('dots')}</span></span></span>${s.status==='work'&&!s.outside&&!s.term&&s.line?`<span class="l2">${esc(s.line)}</span>`:''}</span></button>`}).join(''));
   }).join('')||`<div class="none inbox0">Nothing needs you.<br>Older sessions are under Done.</div>`;
 }
 $('list').onclick=e=>{
@@ -492,6 +492,28 @@ function compareSet(){
   let tabs=of.map((x,k)=>x&&{...x,opt:k,label:q.options[k].label}).filter(Boolean);
   if(!tabs.length&&files.length>1&&files.length<=4)tabs=files.map(f=>({file:f,opt:null,label:f.name}));
   return tabs.length>1?{q,tabs}:null;
+}
+// The options of a question. When 2 to 4 of them match something the agent made, those are pictures you pick
+// directly, and the rest stay rows under them. `data-big` opens that one large in the side panel.
+function optionsHtml(q,set){
+  const tabOf=k=>set?set.tabs.findIndex(t=>t.opt===k):-1,mark=`<span class="mark ${q.multiSelect?'sq':''}">${svg('check')}</span>`;
+  const words=o=>`<span><b>${esc(o.label)}</b><span class="d">${esc(o.description||'')}</span></span>`;
+  const row=(o,k)=>`<button class="qopt" data-opt="${k}">${mark}${words(o)}${tabOf(k)>=0?`<span class="eye" data-big="${tabOf(k)}" data-tip="Open it beside the question">view</span>`:''}</button>`;
+  const all=q.options.map((o,k)=>k),withPic=all.filter(k=>tabOf(k)>=0);
+  if(withPic.length<2||withPic.length>4){
+    const loose=set&&set.tabs[0].opt===null;   // files nothing could be matched to by name: offered under their own names
+    return `<div class="qgrid ${q.options.length>4||set&&!loose?'one':''}">${all.map(k=>row(q.options[k],k)).join('')}</div>${loose?`<button class="qlook" data-big="0">${svg('monitor')}Look at the ${set.tabs.length} files it made</button>`:''}`;
+  }
+  const pic=k=>{const t=set.tabs[tabOf(k)];
+    return `<button class="qopt pic" data-opt="${k}"><span class="th ${t.file?(t.file.kind==='page'?'pg':''):'txt mono'}">${t.file?thumb(t.file):esc(t.text)}</span><span class="cap">${mark}${words(q.options[k])}</span><span class="big" data-big="${tabOf(k)}" data-tip="Open it large, beside the question">${svg('max')}</span></button>`};
+  const rest=all.filter(k=>tabOf(k)<0);
+  return `<div class="qgrid pics" style="--n:${withPic.length===3?3:2}">${withPic.map(pic).join('')}</div>${rest.length?`<div class="qgrid one">${rest.map(k=>row(q.options[k],k)).join('')}</div>`:''}`;
+}
+// What you picked, and which one the side panel is showing.
+function qState(set){
+  const picked=V.q.picks[V.q.step]||[],eye=shownOpt(set),c=$('qcard');
+  c.querySelectorAll('[data-opt]').forEach(o=>o.classList.toggle('on',picked.includes(+o.dataset.opt)));
+  c.querySelectorAll('[data-big]').forEach(b=>{const on=eye!=null&&set.tabs[+b.dataset.big]?.opt===eye;b.classList.toggle('on',on);if(b.classList.contains('eye'))b.textContent=on?'shown →':'view'});
 }
 let cmStaged=null;
 function renderCompare(set){
@@ -1051,15 +1073,13 @@ function renderCard(){
   if(p.kind==='question'){
     const qs=p.input.questions,i=Math.min(V.q.step,qs.length-1),q=qs[i],picked=V.q.picks[i]||[];
     const set=compareSet();
-    if(set&&V.q.auto!==i){V.q.auto=i;V.side='compare';V.pv=null}       // opens once by itself; after that it is yours to close
     if(set||V.side==='compare')renderPanel();
-    const eye=shownOpt(set);
     put(`<div class="steps2">${qs.map((x,k)=>`<span class="qhd ${k===i?'':'off'}">${esc(x.header||'Question '+(k+1))}</span>`).join('')}${qs.length>1?`<span class="cnt">${i+1} of ${qs.length}</span>`:''}</div>
       <div class="qbody"><div class="qq">${esc(q.question)}${q.multiSelect?'<small>Pick any</small>':''}</div>
-      <div class="qgrid ${q.options.length>4||set?.tabs[0].opt!=null?'one':''}">${q.options.map((o,k)=>`<button class="qopt ${picked.includes(k)?'on':''}" data-opt="${k}"><span class="mark ${q.multiSelect?'sq':''}">${svg('check')}</span><span><b>${esc(o.label)}</b><span class="d">${esc(o.description||'')}</span></span>${eye===k?'<span class="eye">shown →</span>':''}</button>`).join('')}</div></div>
+      ${optionsHtml(q,set)}</div>
       ${typeBox('Or type your own answer…')}
       <div class="qfoot"><button class="qbtn" data-act="stop" data-tip="Stop the turn without answering (Esc)">Stop</button><span class="gap"></span>${i>0?'<button class="qbtn" data-act="back">Back</button>':''}${i<qs.length-1?'<button class="qbtn" data-act="skip">Skip</button>':''}<button class="qbtn pri" data-act="${i<qs.length-1?'next':'send'}">${i<qs.length-1?'Next':qs.length>1?'Send answers':'Send answer'} ${KEY.enter}</button></div>`);
-    if($('qText').value!==(V.q.typed[i]||''))$('qText').value=V.q.typed[i]||'';
+    if($('qText').value!==(V.q.typed[i]||''))$('qText').value=V.q.typed[i]||'';qState(set);
   }else if(p.kind==='plan'){
     put(`<div class="steps2"><span class="qhd">Plan</span></div><div class="qq">Start on this plan?</div>
       <div class="qbody"><div class="planbody ai">${md(p.input.plan||'')}</div></div>
@@ -1128,9 +1148,13 @@ $('qcard').onclick=async e=>{
   if(a?.dataset.act==='dismiss'){V.dismissed=V.run.startedAt;render();return}
   if(a?.dataset.act==='term'){api(`sessions/${V.sel}/stop`,{}).catch(err=>oops(err.message));setView(V.sel,'term');return}
   if(!p)return;
+  const big=e.target.closest('[data-big]');
+  if(big&&p.kind==='question'){const i=V.q.step,t=+big.dataset.big,open=V.side==='compare'&&!V.pv&&(V.q.show[i]??0)===t;
+    if(open){V.side=null;V.full=false}else{V.q.show[i]=t;V.side='compare';V.pv=null}
+    renderPanel();renderCard();return}
   if(o){const i=V.q.step,k=+o.dataset.opt,multi=p.input.questions[i].multiSelect,cur=V.q.picks[i]||[];
     V.q.picks[i]=multi?(cur.includes(k)?cur.filter(x=>x!==k):[...cur,k]):[k];V.q.typed[i]='';
-    const t=compareSet()?.tabs.findIndex(x=>x.opt===k);if(t>=0){V.q.show[i]=t;V.side='compare';V.pv=null}
+    const t=compareSet()?.tabs.findIndex(x=>x.opt===k);if(t>=0&&V.side==='compare'&&V.q.show[i]!=='all')V.q.show[i]=t;   // the open panel follows your pick
     renderCard();return}
   if(e.target.closest('[data-mic]')){if(e.detail===0)R?stopVoice():startVoice('qText');return}   // the mouse is handled on pointerdown
   if(!a)return;

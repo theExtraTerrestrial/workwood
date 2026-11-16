@@ -83,6 +83,8 @@ On a fresh WSL install the Electron window needs GTK once:
   done session brings it back. Sessions started in a terminal appear only while
   they are running or waiting. Ctrl+K, or the Done row, finds any session by its
   name or project.
+  While a session is working in the app, a faint second line under its name says
+  what it is doing (not in the compact sidebar, and not for sessions in a terminal).
 - A session in a git worktree is listed under the project the worktree was made
   from. Under the title, always in the same place, the header names the worktree
   (or the branch when there is none), then the project.
@@ -157,11 +159,15 @@ On a fresh WSL install the Electron window needs GTK once:
 - New session: the project menu also takes a typed folder or "Browse…".
 - "Open at login" (Windows window): in the gear menu and Settings.
 - Compare: when the agent asks a question about things it made in the same
-  turn, they open next to the question. Each option is matched to the file its
-  wording names (or to the text the agent attached to the option); picking an
-  option shows its file, the tabs above the file pick the option, and "Side by
-  side" shows up to three at once. If nothing can be matched by name, the
-  turn's files are offered under their own names.
+  turn, the options become pictures of them, and you pick by clicking one. Each
+  option is matched to the file its wording names (or to the text the agent
+  attached to the option). Two or three pictures sit in a row and four go two by
+  two; with five or more, the options stay rows with a "view" link. An option
+  with nothing to show stays a row under the pictures, and in a narrow window
+  the pictures shrink into rows. The button in a picture's corner opens it large
+  beside the question; there the tabs pick the option, a pick changes the tab,
+  and "Side by side" shows up to three at once. If nothing can be matched by
+  name, "Look at the files it made" opens the turn's files under their own names.
 - Previews: pages, images, videos and PDFs the agent wrote appear as cards under
   its reply. A card opens the file at full width (beside the conversation while
   a question waits there); the header button opens it as a side panel. Either

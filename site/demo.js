@@ -195,12 +195,12 @@
     if (scene === 'hero') {
       play(S.get('invoice')); await sleep(900); play(S.get('checkout'));
       if (!await until(() => option('Tall'))) return;
-      await sleep(2600); press(option('Tall')); await sleep(2600); press(option('Compact')); await sleep(1500); press('#qcard [data-act=send]');
+      await sleep(2400); press(option('Tall')); await sleep(2000); press(option('Tall')?.querySelector('.big')); await sleep(2800); press(option('Compact')); await sleep(2200); press('#qcard [data-act=send]');
       await until(() => S.get('checkout').run?.status === 'idle', 20000); await sleep(3500);
       if (press(`.sess[data-id="login"]`)) { await sleep(3200); press([...document.querySelectorAll('#qcard .qbtn')].find(b => b.textContent.includes('Allow this session'))); }
       await until(() => S.get('login').run?.status === 'idle', 12000); await sleep(6000);
     } else if (scene === 'answer') {
-      for (let i = 0; i < 4 && await until(() => option('Tall')); i++) { await sleep(2600); press(option(i % 2 ? 'Compact' : 'Tall')); }
+      for (let i = 0; i < 4 && await until(() => option('Tall')); i++) { await sleep(2400); press(option(i % 2 ? 'Compact' : 'Tall')); if (i === 1) { await sleep(1500); press(option('Compact')?.querySelector('.big')); } }
       await sleep(2600);
     } else if (scene === 'limit') {
       await until(() => el('#qcard .qbtn')); await sleep(4200); press([...document.querySelectorAll('#qcard .qbtn')].find(b => b.textContent.includes('Continue on side')));

@@ -10,6 +10,33 @@
   let touched = false;   // once the visitor uses the window, the story stops playing by itself
   for (const t of ['pointerdown', 'keydown', 'wheel']) addEventListener(t, e => { if (e.isTrusted) touched = true; }, { capture: true, passive: true });
 
+  // The app moves focus and scrolls things into view as a session runs. Inside a page that would drag the whole
+  // page along to this window, so here both stay inside the window.
+  const focus = HTMLElement.prototype.focus;
+  HTMLElement.prototype.focus = function (o) { return focus.call(this, { ...o, preventScroll: true }); };
+  Element.prototype.scrollIntoView = function (o) {
+    let box = this.parentElement; while (box && !(box.scrollHeight > box.clientHeight && /auto|scroll/.test(getComputedStyle(box).overflowY))) box = box.parentElement;
+    if (!box) return;
+    const a = this.getBoundingClientRect(), b = box.getBoundingClientRect(), center = o && typeof o === 'object' && o.block === 'center';
+    if (center) box.scrollTop += a.top - b.top - (b.height - a.height) / 2;
+    else if (a.top < b.top) box.scrollTop += a.top - b.top;
+    else if (a.bottom > b.bottom) box.scrollTop += a.bottom - b.bottom;
+  };
+
+  // Only the basics answer a visitor: opening a session, answering its card, looking at what it made, and the
+  // chat / terminal switch. Everything else (typing, menus, settings, new sessions) is left out of the demo.
+  const OPEN = '.sess, #qcard .qopt, #qcard .qbtn, #qcard [data-act], #qcard button, #cmw button, #vChat, #vTerm';
+  const SHUT = '[data-done], [data-dots], .sact';
+  const allowed = t => t instanceof Element && !!t.closest(OPEN) && !t.closest(SHUT);
+  for (const t of ['pointerdown', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu'])
+    addEventListener(t, e => { if (e.isTrusted && !allowed(e.target)) { e.preventDefault(); e.stopImmediatePropagation(); } }, { capture: true });
+  addEventListener('keydown', e => { if (e.isTrusted) { e.preventDefault(); e.stopImmediatePropagation(); } }, { capture: true });
+  addEventListener('DOMContentLoaded', () => {
+    const css = document.createElement('style');
+    css.textContent = `body *{cursor:default!important}body :is(${OPEN}):not(:is(${SHUT})){cursor:pointer!important}#input,#qcard input,#qcard textarea{pointer-events:none}`;
+    document.head.append(css);
+  });
+
   /* ---------- what the service would know ---------- */
   const prof = (name, h5, d7, more = {}) => ({ name, global: false, email: `you@${name}.example`, org: 'Personal', plan: 'max', lapsed: false, h5, d7,
     r5: nowS() + 1700, r7: nowS() + 400000, at: nowS(), reading: false, failed: null, stop: null, ...more });

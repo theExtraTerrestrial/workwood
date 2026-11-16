@@ -103,6 +103,7 @@
   iframe.live{position:absolute;top:0;left:0;border:0;transform-origin:0 0;background:var(--bg)}
   .win{display:block;height:auto}
   .hint{margin:18px 0 0;font-size:14px;color:var(--faint)}
+  .vis{pointer-events:none}
   .vis{padding:0;height:420px;min-height:0;display:block;box-shadow:0 30px 80px rgba(0,0,0,.35),0 0 0 1px var(--line2)}
   .tag{font-size:clamp(34px,5.4vw,64px);font-weight:800;letter-spacing:-.04em;line-height:1.05;margin:0 0 70px}
   .tag em{font-style:normal;background:linear-gradient(100deg,var(--accent),hsl(calc(var(--hue) + 60) 70% 66%));-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -198,21 +199,21 @@
   <div class="cta"><a class="btn" href="#get">Get it in four lines <svg class="i"><use href="#i-arrow"/></svg></a><a class="btn q" href="https://github.com/theExtraTerrestrial/workwood">View on GitHub</a></div>
 
   <div class="stage"><div class="win" id="win"><iframe class="live" data-scene="hero" data-w="1280" data-h="760" title="Workwood, running a scripted demo"></iframe></div></div>
-  <p class="hint">This is the app itself, playing a scripted morning. Click anything.</p>
+  <p class="hint">This is the app itself, playing a scripted morning. Open a session or answer its question.</p>
 </header>
 
 <main class="wrap" id="why">
   <section class="f"><div class="copy rv"><span class="k">One list</span><h2>See who <em>needs you.</em></h2><p>Working, waiting, done. Every session sits in one inbox, each one labelled the moment it needs you. Sessions you started in a terminal show up too.</p></div>
-    <div class="vis rv"><iframe class="live" data-scene="hero" data-w="1100" data-h="525" data-x="0" title="Workwood demo"></iframe></div></section>
+    <div class="vis rv"><iframe class="live" inert tabindex="-1" aria-hidden="true" data-scene="hero" data-w="1100" data-h="525" data-x="0" title="Workwood demo"></iframe></div></section>
 
   <section class="f"><div class="copy rv"><span class="k">One click</span><h2>Answer without <em>digging.</em></h2><p>Questions, permissions and plans arrive as cards. What the agent made opens right beside the question, so you pick with your eyes, not from a description.</p></div>
-    <div class="vis rv"><iframe class="live" data-scene="answer" data-w="1100" data-h="525" data-x="0" title="Workwood demo"></iframe></div></section>
+    <div class="vis rv"><iframe class="live" inert tabindex="-1" aria-hidden="true" data-scene="answer" data-w="1100" data-h="525" data-x="0" title="Workwood demo"></iframe></div></section>
 
   <section class="f"><div class="copy rv"><span class="k">Many accounts</span><h2>Never stuck on <em>a limit.</em></h2><p>All your Claude accounts and their limits, always in view. When one runs out, the session carries on with another. Same conversation, next message.</p></div>
-    <div class="vis rv"><iframe class="live" data-scene="limit" data-w="760" data-h="525" data-x="50" title="Workwood demo"></iframe></div></section>
+    <div class="vis rv"><iframe class="live" inert tabindex="-1" aria-hidden="true" data-scene="limit" data-w="760" data-h="525" data-x="50" title="Workwood demo"></iframe></div></section>
 
   <section class="f"><div class="copy rv"><span class="k">Nothing new to learn</span><h2>Still <em>Claude Code.</em></h2><p>Same sessions, same history, same skills. The real terminal is one switch away, and everything runs on your own machine.</p></div>
-    <div class="vis rv"><iframe class="live" data-scene="terminal" data-w="1100" data-h="525" data-x="0" title="Workwood demo"></iframe></div></section>
+    <div class="vis rv"><iframe class="live" inert tabindex="-1" aria-hidden="true" data-scene="terminal" data-w="1100" data-h="525" data-x="0" title="Workwood demo"></iframe></div></section>
 </main>
 
 <section class="get" id="get"><div class="wrap">

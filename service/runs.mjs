@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { Builder, ERRORS, describeTool, learnWindow, parseNotification } from './transcript.mjs';
+import { lastCwd } from './sources.mjs';
 
 export const runs = new Map(); // sessionId -> run
 let liveSeq = 1_000_000;        // live items are numbered above anything read from a file
@@ -85,6 +86,8 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
   let tailAt = null, tailBuf = '', reading = null;
   const transcriptFile = () => run.sessionId && transcript ? transcript(run.sessionId) : null;
   try { const f = sessionId && transcript?.(sessionId); tailAt = f && fs.existsSync(f) ? fs.statSync(f).size : 0; } catch { tailAt = 0; }
+  // A resumed session's shell starts where it was left, which may be a worktree: relative names in commands are read from there.
+  if (sessionId && transcript) { const f = transcript(sessionId); if (f) lastCwd(f, null).then(d => { if (d && !run.builder.shellDir) run.builder.shellDir = d; }); }
   function readNotes() { return reading ||= (async () => {
     const file = transcriptFile(); if (!file) return;
     let size; try { size = (await fsp.stat(file)).size; } catch { return; }

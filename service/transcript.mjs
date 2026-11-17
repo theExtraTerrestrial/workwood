@@ -261,9 +261,11 @@ export class Builder {
     if (unnamed > 0) mine.images = unnamed;
     return out;
   }
-  assistant(message, ts, effort) {
+  /** `cwd`: where Claude Code's shell was when the message was saved, which a transcript line records. */
+  assistant(message, ts, effort, cwd) {
     const out = [];
     if (ts) this.lastTs = ts;
+    if (cwd) this.shellDir = cwd;   // better than following cd's: the shell may have moved in a command we never saw
     if (message.model === '<synthetic>') return out;
     if (message.model) this.model = message.model;   // what the session last ran on, shown and reused for the next message
     if (effort) this.effort = effort;
@@ -332,6 +334,49 @@ export class Builder {
 
 const TAIL = 6 * 1024 * 1024;
 
+// What a long session made before the part that is read: only previewable files are looked for there, once, and
+// remembered per file. Each later read continues from where the last one stopped.
+const SHOWABLE = new RegExp(`\\.(?:${Object.keys(KINDS).join('|')})(?![\\w.-])`, 'i');
+const early = new Map();   // transcript -> { upto, cwd, groups: newest first, [{path, ts}] }
+function earlyWork(file, upto, cwd) {
+  let had = early.get(file);
+  if (had && had.cwd !== cwd) had = null;
+  if (had && had.upto >= upto) return had.done;
+  const from = had?.upto || 0, groups = had ? had.groups : [];
+  const next = { upto: from, cwd, groups };
+  next.done = (async () => {
+    if (had) await had.done;
+    const b = new Builder(0, cwd);
+    const input = fs.createReadStream(file, { start: from }), rl = readline.createInterface({ input, crlfDelay: Infinity });
+    let at = from;
+    for await (const line of rl) {
+      at += Buffer.byteLength(line) + 1;
+      // Only messages that name a previewable file are parsed; the rest give the times commands ended and turns closed.
+      if (line.includes('"type":"assistant"') && line.includes('"tool_use"') && SHOWABLE.test(line)) {
+        let m; try { m = JSON.parse(line); } catch { m = null; }
+        if (m?.message && !m.isSidechain && !m.isMeta && !m.error) b.assistant(m.message, m.timestamp, null, m.cwd);
+      } else if (line.includes('"type":"user"')) {
+        if (!line.includes('"isSidechain":true')) b.toolsDone(/"timestamp":"([^"]+)"/.exec(line)?.[1]);
+      } else if (line.includes('"turn_duration"')) b.flushWork();
+      if (at > upto) break;   // the line the tail read starts inside is finished here
+    }
+    rl.close(); input.destroy();
+    b.flushWork();
+    for (const g of b.groups) groups.unshift(g.map(f => ({ path: f.path, ts: f.ts })));
+    next.upto = at;
+  })().catch(e => { console.error('[workwood] early previews:', String(e.message).split('\n')[0]); early.delete(file); });
+  early.set(file, next);
+  return next.done;
+}
+/** Files from the early part of a long session that are still there, newest first. */
+function earlyFiles(file) {
+  const out = [];
+  for (const g of early.get(file)?.groups || []) for (const { path: p, ts } of g) {
+    try { const st = fs.statSync(p); if (st.isFile()) out.push({ path: p, name: path.basename(p), kind: previewKind(p), v: Math.round(st.mtimeMs), ts }); } catch {}
+  }
+  return out;
+}
+
 /** Reads the whole output of one step from a transcript: what the tool result for `id` said. */
 export async function outputFromTranscript(file, id) {
   if (!file || !fs.existsSync(file) || !/^[\w-]+$/.test(id)) return null;
@@ -360,8 +405,9 @@ export async function readTranscript(file, limit = 400, cwd = null) {
   if (!fs.existsSync(file)) return { items: [], context: null, total: 0, work: [] };
   // Very long sessions are read from the end only, so opening one stays quick.
   const size = fs.statSync(file).size, start = size > TAIL ? size - TAIL : 0;
+  const head = start > 0 ? earlyWork(file, start, cwd) : null;
   const rl = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf8', start }), crlfDelay: Infinity });
-  let skip = start > 0; // the first line of a tail read is cut in half
+  let skip = start > 0; // the first line of a tail read is cut in half (the early part reads it whole)
   let mode = null;      // Claude Code saves the permission mode with each message you write
   for await (const line of rl) {
     if (skip) { skip = false; continue; }
@@ -373,10 +419,16 @@ export async function readTranscript(file, limit = 400, cwd = null) {
     if (m.type === 'user' && m.message) { b.closeText(); b.toolsDone(m.timestamp); b.results(m.message.content, m.timestamp, { result: m.toolUseResult, denial: m.toolDenialKind }); b.user(m.message.content, m.timestamp); }
     // A turn Claude Code could not run (signed out, a limit, an API error) is saved as an answer of its own: it reads back as the stop it was.
     else if (m.type === 'assistant' && m.error && m.isApiErrorMessage) { b.closeText(); b.flushWork(); b.push({ kind: 'note', stop: ERRORS[m.error] || 'error', ts: m.timestamp, ...(ERRORS[m.error] === 'auth' || ERRORS[m.error] === 'limit' ? {} : { text: textOfError(m.message) }) }); }
-    else if (m.type === 'assistant' && m.message) b.assistant(m.message, m.timestamp, typeof m.effort === 'string' ? m.effort : null);
+    else if (m.type === 'assistant' && m.message) b.assistant(m.message, m.timestamp, typeof m.effort === 'string' ? m.effort : null, m.cwd);
     else if (m.type === 'system' && m.subtype === 'turn_duration') b.done(m.durationMs, m.timestamp);
   }
   b.flushWork();
+  let work = b.work();
+  if (head) {
+    await head;
+    const seen = new Set(work.map(f => f.path));
+    work = work.concat(earlyFiles(file).filter(f => !seen.has(f.path) && seen.add(f.path)));
+  }
   const items = b.items.slice(-limit).map(({ open, ...it }) => it);
-  return { items, context: b.context, total: b.items.length, cut: start > 0 || b.items.length > limit, work: b.work(), model: b.model || null, effort: b.effort || null, mode };
+  return { items, context: b.context, total: b.items.length, cut: start > 0 || b.items.length > limit, work, model: b.model || null, effort: b.effort || null, mode };
 }

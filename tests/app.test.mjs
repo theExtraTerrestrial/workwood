@@ -435,6 +435,33 @@ test('previews: files a command made are offered too, live and when read back; a
   assert.deepEqual(names(await readTranscript(file, 400, sb.projects.alpha)), ['home.png', 'report.html']);
 });
 
+test('previews: a command\'s file is found from the folder its shell was in, and early in a long session too', async () => {
+  const { readTranscript } = await import('../service/transcript.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ww-early-')), project = path.join(dir, 'project'), tree = path.join(project, 'trees', 'one');
+  fs.mkdirSync(path.join(tree, 'out'), { recursive: true });
+  const page = path.join(tree, 'out', 'page.html');
+  fs.writeFileSync(page, '<p>hi</p>');
+  const t = Date.parse('2026-01-02T10:00:00Z'), at = ms => new Date(t + ms).toISOString();
+  fs.utimesSync(page, new Date(t + 1000), new Date(t + 1000));
+  // The shell moved into the worktree in a command the transcript does not show; only the line's cwd says so.
+  const made = [
+    { type: 'assistant', cwd: tree, timestamp: at(0), message: { model: 'claude-opus-5-5', content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'node gen.mjs > out/page.html' } }] } },
+    { type: 'user', cwd: tree, timestamp: at(1500), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: '' }] } },
+    { type: 'system', subtype: 'turn_duration', durationMs: 2000, timestamp: at(2000) },
+  ];
+  const padding = n => Array.from({ length: n }, (_, i) => ({ type: 'user', cwd: project, timestamp: at(10000 + i), message: { role: 'user', content: 'x'.repeat(100000) } }));
+  const write = (name, lines) => { const f = path.join(dir, name); fs.writeFileSync(f, lines.map(l => JSON.stringify(l)).join('\n') + '\n'); return f; };
+  try {
+    const short = await readTranscript(write('short.jsonl', made), 400, project);
+    assert.deepEqual(short.work.map(f => f.path), [page]);
+    const long = await readTranscript(write('long.jsonl', [...made, ...padding(80)]), 400, project);   // 8 MB: the page is before the part that is read
+    assert.ok(long.cut && !long.items.some(i => i.kind === 'work'));
+    assert.deepEqual(long.work.map(f => f.path), [page]);
+    fs.rmSync(page);
+    assert.deepEqual((await readTranscript(path.join(dir, 'long.jsonl'), 400, project)).work, []);   // gone since: left out
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('previews: files the agent wrote are listed, and served with their neighbours but nothing else', async () => {
   const id = await newSession('build a MOCKUP'), dir = path.join(sb.projects.alpha, 'mockups');
   const s = await idle(id);

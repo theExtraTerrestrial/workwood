@@ -462,6 +462,32 @@ test('previews: a command\'s file is found from the folder its shell was in, and
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('previews: a named file rewritten later in the turn by a command that does not name it is still offered', async () => {
+  const { readTranscript } = await import('../service/transcript.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ww-again-')), page = path.join(dir, 'mock.html');
+  fs.writeFileSync(page, '<p>hi</p>');
+  const t = Date.parse('2026-01-02T10:00:00Z'), at = ms => new Date(t + ms).toISOString();
+  fs.utimesSync(page, new Date(t + 61000), new Date(t + 61000));   // last written by the second command
+  const run = (id, ms, command) => [
+    { type: 'assistant', cwd: dir, timestamp: at(ms), message: { model: 'claude-opus-5-5', content: [{ type: 'tool_use', id, name: 'Bash', input: { command } }] } },
+    { type: 'user', cwd: dir, timestamp: at(ms + 1500), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: '' }] } },
+  ];
+  const lines = [
+    { type: 'user', cwd: dir, timestamp: at(-1000), message: { role: 'user', content: 'make it' } },
+    ...run('t1', 0, `python3 gen.py && F=${page} && chrome --screenshot file://$F`),
+    ...run('t2', 60000, 'sed -i "" s/a/b/ gen.py && python3 gen.py'),
+    { type: 'system', subtype: 'turn_duration', durationMs: 62000, timestamp: at(62000) },
+  ];
+  const f = path.join(dir, 's.jsonl');
+  fs.writeFileSync(f, lines.map(l => JSON.stringify(l)).join('\n') + '\n');
+  try {
+    const r = await readTranscript(f, 400, dir);
+    assert.deepEqual(r.items.find(i => i.kind === 'work')?.files.map(x => x.path), [page]);
+    fs.utimesSync(page, new Date(t + 3600e3), new Date(t + 3600e3));   // written after the turn: not this turn's
+    assert.deepEqual((await readTranscript(f, 400, dir)).work, []);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('previews: files the agent wrote are listed, and served with their neighbours but nothing else', async () => {
   const id = await newSession('build a MOCKUP'), dir = path.join(sb.projects.alpha, 'mockups');
   const s = await idle(id);

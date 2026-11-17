@@ -303,8 +303,11 @@ export class Builder {
     }
     return out;
   }
-  /** The commands asked for so far have finished (their results arrived at `ts`). */
-  toolsDone(ts) { const at = (ts ? Date.parse(ts) : Date.now()) + 2000; for (const n of this.named) n.to ??= at; }
+  /**
+   * Tool results arrived at `ts`. A file a command named counts when it was written from that command's start up to
+   * the turn's latest result: a later command may write it again without naming it (rerunning the script that makes it).
+   */
+  toolsDone(ts) { const at = (ts ? Date.parse(ts) : Date.now()) + 2000; for (const n of this.named) n.to = Math.max(n.to ?? 0, at); }
   closeText() { const last = this.items[this.items.length - 1]; if (last && last.kind === 'assistant') last.open = false; }
   /** Previewable files written since the last call become one item, shown as cards. Files that are gone are left out. */
   flushWork() {
@@ -356,7 +359,7 @@ function earlyWork(file, upto, cwd) {
         let m; try { m = JSON.parse(line); } catch { m = null; }
         if (m?.message && !m.isSidechain && !m.isMeta && !m.error) b.assistant(m.message, m.timestamp, null, m.cwd);
       } else if (line.includes('"type":"user"')) {
-        if (!line.includes('"isSidechain":true')) b.toolsDone(/"timestamp":"([^"]+)"/.exec(line)?.[1]);
+        if (!line.includes('"isSidechain":true') && line.includes('"tool_result"')) b.toolsDone(/"timestamp":"([^"]+)"/.exec(line)?.[1]);
       } else if (line.includes('"turn_duration"')) b.flushWork();
       if (at > upto) break;   // the line the tail read starts inside is finished here
     }
@@ -416,7 +419,7 @@ export async function readTranscript(file, limit = 400, cwd = null) {
     let m; try { m = JSON.parse(line); } catch { continue; }
     if (m.isSidechain || m.isMeta) continue;
     if (m.type === 'user' && typeof m.permissionMode === 'string') mode = m.permissionMode;
-    if (m.type === 'user' && m.message) { b.closeText(); b.toolsDone(m.timestamp); b.results(m.message.content, m.timestamp, { result: m.toolUseResult, denial: m.toolDenialKind }); b.user(m.message.content, m.timestamp); }
+    if (m.type === 'user' && m.message) { b.closeText(); if (Array.isArray(m.message.content) && m.message.content.some(c => c?.type === 'tool_result')) b.toolsDone(m.timestamp); b.results(m.message.content, m.timestamp, { result: m.toolUseResult, denial: m.toolDenialKind }); b.user(m.message.content, m.timestamp); }
     // A turn Claude Code could not run (signed out, a limit, an API error) is saved as an answer of its own: it reads back as the stop it was.
     else if (m.type === 'assistant' && m.error && m.isApiErrorMessage) { b.closeText(); b.flushWork(); b.push({ kind: 'note', stop: ERRORS[m.error] || 'error', ts: m.timestamp, ...(ERRORS[m.error] === 'auth' || ERRORS[m.error] === 'limit' ? {} : { text: textOfError(m.message) }) }); }
     else if (m.type === 'assistant' && m.message) b.assistant(m.message, m.timestamp, typeof m.effort === 'string' ? m.effort : null, m.cwd);

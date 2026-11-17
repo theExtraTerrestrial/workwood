@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 33: readable in the dark</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<style>
+  /* the page around the mock */
+  :root{color-scheme:dark;--hue:168;--accent:hsl(var(--hue) 62% 62%);--warn:#ffb955;--go:#4fd6a4;--hot:#f0706a}
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0c0e;color:#e8e9ec;font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;padding-bottom:80px}
+  button,input,select{font:inherit;color:inherit}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:baseline;gap:14px;padding:24px 0 2px}.top h1{font-size:17px;margin:0}
+  .intro{color:#b9bcc3;max-width:720px;margin:6px 0 18px;font-size:14px}
+  .intro kbd{font:inherit;font-weight:700;color:#fff;background:#2a2c31;padding:0 6px;border-radius:5px}
+
+  .picker{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+  .picker button{border:0;cursor:pointer;background:#1d1f23;color:#c9ccd2;padding:7px 12px;border-radius:9px;text-align:left;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  .picker button b{display:block;font-size:12.5px;color:#f0f1f3}.picker button small{font-size:11px;color:#9a9ea6}
+  .picker button.on{background:hsl(var(--hue) 40% 22%);box-shadow:inset 0 0 0 1.5px var(--accent)}
+  .picker button i{font-style:normal;color:var(--accent);font-weight:700;margin-right:5px}
+  .now{min-height:20px;margin:0 0 12px;color:#c9ccd2;font-size:13px}.now b{color:#fff}
+
+  /* ===== the mock app: everything inside reads from the variant's variables ===== */
+  .win{--bg:#18191c;--side:#131416;--surface:#222428;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.14);
+    --text:#f0f1f3;--dim:#a6aab2;--faint:#6d717a;--sel:rgba(255,255,255,.075);
+    --fs:13.5px;--lh:1.6;--wt:400;--side-wt:500;--sm:antialiased;
+    display:flex;height:620px;border-radius:14px;overflow:hidden;background:var(--bg);color:var(--text);
+    box-shadow:0 30px 90px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.12);-webkit-font-smoothing:var(--sm)}
+  .win svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .side{width:268px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column}
+  .side-head{display:flex;align-items:center;padding:14px 16px 8px;font-weight:600}
+  .newb{display:flex;align-items:center;gap:8px;height:32px;margin:0 8px 4px;padding:0 9px;border-radius:8px;color:var(--dim);font-weight:500;box-shadow:inset 0 0 0 1px var(--line)}
+  .list{flex:1;padding:0 8px;overflow:hidden}
+  .grp{display:flex;align-items:center;gap:8px;padding:13px 9px 5px;font-size:12.5px;font-weight:600}
+  .grp small{margin-left:auto;font-weight:500;font-size:11px;color:var(--faint)}
+  .tile{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:8.5px;font-weight:700;background:hsl(var(--h) 55% 62%/.17);color:hsl(var(--h) 55% 74%)}
+  .sess{padding:6px 9px 6px 37px;border-radius:8px;margin-bottom:1px}
+  .sess.sel{background:var(--sel)}
+  .l1{display:flex;gap:8px;align-items:center}
+  .l1 b{flex:1;font-weight:var(--side-wt);color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sess.sel .l1 b,.sess.work .l1 b,.sess.wait .l1 b{color:var(--text)}
+  .sess.unread .l1 b{color:var(--text);font-weight:700}
+  .l1 time{font-size:11px;color:var(--faint)}
+  .l2{display:block;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  .spin{width:11px;height:11px;border-radius:50%;border:1.6px solid color-mix(in srgb,var(--accent) 30%,transparent);border-top-color:var(--accent)}
+  .askl{font-size:10.5px;font-weight:600;color:var(--warn);background:color-mix(in srgb,var(--warn) 15%,transparent);padding:1px 6px;border-radius:5px}
+  .more{padding:5px 9px 6px 37px;font-size:11.5px;color:var(--faint)}
+  .side-foot{display:flex;align-items:center;gap:9px;padding:9px 17px;border-top:1px solid var(--line);color:var(--dim);font-size:12.5px}
+  .side-foot kbd{font:inherit;font-size:11px;color:var(--faint);margin-left:auto}
+
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .head{height:58px;flex:none;display:flex;flex-direction:column;justify-content:center;padding:0 20px;border-bottom:1px solid var(--line)}
+  .head h1{margin:0;font-size:14.5px;font-weight:600}
+  .where{display:flex;gap:12px;font-size:12px;color:var(--faint)}.where span{display:inline-flex;gap:5px;align-items:center}.where svg{width:12px;height:12px}
+  .conv{flex:1;overflow:hidden;padding:22px 0}
+  .col{max-width:700px;margin:0 auto;padding:0 24px}
+  .me{margin:0 0 22px auto;width:fit-content;max-width:82%;background:var(--surface);border-radius:14px 14px 4px 14px;padding:10px 14px;font-size:var(--fs);line-height:var(--lh);font-weight:var(--wt)}
+  .ai{margin-bottom:20px;font-size:var(--fs);line-height:var(--lh);font-weight:var(--wt)}
+  .ai p{margin:0 0 10px}
+  .ai ul{margin:0 0 10px;padding-left:22px}.ai li{margin:2px 0}
+  .ai code{font-family:"Cascadia Code","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;font-size:.92em;background:rgba(128,128,128,.16);padding:1px 5px;border-radius:5px}
+  .act{display:inline-flex;align-items:center;gap:6px;color:var(--faint);font-size:12px;margin:0 0 6px}
+  .w2{border-radius:13px;box-shadow:0 0 0 1px var(--line);padding:9px 14px;margin:0 0 18px}
+  .sp{display:flex;align-items:center;gap:10px;padding:2px 0;color:var(--dim);font-size:12.5px}
+  .sp::before{content:"✓";color:var(--go);width:13px;text-align:center;font-size:11px}
+  .sp.now{color:var(--text)}.sp.now::before{content:"";width:9px;height:9px;margin:0 2px;border-radius:50%;border:1.6px solid color-mix(in srgb,var(--accent) 30%,transparent);border-top-color:var(--accent)}
+  .sp .el{margin-left:auto;color:var(--faint);font-size:11.5px}
+  .composer{padding:0 24px 10px}
+  .box{max-width:700px;margin:0 auto;border-radius:14px;background:var(--surface);box-shadow:0 0 0 1px var(--line2);padding:12px 14px}
+  .box .ph{color:var(--faint);font-size:13.5px;height:38px}
+  .bar{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--dim)}.bar i{flex:1}
+  .stat{display:flex;gap:16px;max-width:700px;margin:8px auto 0;font-size:11.5px;color:var(--faint)}.stat i{flex:1}
+
+  /* the knobs */
+  .knobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px 22px;margin:16px 0 0;padding:14px 16px;border-radius:12px;background:#15161a;box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+  .knobs label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:#b9bcc3}
+  .knobs label span{display:flex;justify-content:space-between}.knobs label em{font-style:normal;color:#fff;font-variant-numeric:tabular-nums}
+  .knobs .cr{font-size:11px;color:#8f939b}.knobs .cr.lo{color:var(--hot)}
+  .knobs input[type=range]{width:100%;accent-color:var(--accent)}
+  .knobs .chk{flex-direction:row;align-items:center;gap:8px}
+  .out{display:flex;gap:10px;align-items:center;margin:12px 0 0}
+  .out code{flex:1;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#d5d7db;background:#15161a;padding:8px 10px;border-radius:8px;overflow:auto;white-space:nowrap}
+  .out button{border:0;cursor:pointer;background:#f0f1f3;color:#18191c;font-weight:600;padding:7px 12px;border-radius:8px}
+  h3{font-size:15px;margin:40px 0 6px}
+  .notes{color:#b9bcc3;max-width:760px;font-size:13.5px}.notes li{margin:4px 0}.notes b{color:#fff}
+</style></head><body><div class="wrap">
+
+<div class="top"><h1>Round 33 · Readable in the dark</h1></div>
+<p class="intro">Each preset changes how the dark theme draws its text. Press <kbd>1</kbd>–<kbd>7</kbd> to switch, and hold <kbd>Space</kbd> to see how it looks today. The sliders below let you mix your own. Open this page in Chrome: the app runs on Chromium, so Safari draws text differently.</p>
+
+<div class="picker" id="picker"></div>
+<div class="now" id="now"></div>
+
+<div class="win" id="win">
+  <aside class="side">
+    <div class="side-head">Workwood</div>
+    <div class="newb"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New session</div>
+    <div class="list">
+      <div class="grp"><span class="tile" style="--h:168">SH</span>shop<small>3</small></div>
+      <div class="sess sel"><span class="l1"><b>Checkout redesign</b><time>2m</time></span></div>
+      <div class="sess work"><span class="l1"><b>Invoice PDF export</b><i class="spin"></i></span><span class="l2">Running the tests</span></div>
+      <div class="sess wait"><span class="l1"><b>Coupon codes at checkout</b><span class="askl">1 question</span></span></div>
+      <div class="grp"><span class="tile" style="--h:215">AP</span>api<small>4</small></div>
+      <div class="sess unread"><span class="l1"><b>Rate limits for the public API</b><i class="dot"></i></span></div>
+      <div class="sess"><span class="l1"><b>Fix flaky login test</b><time>12m</time></span></div>
+      <div class="sess"><span class="l1"><b>Upgrade to Node 24</b><time>1d</time></span></div>
+      <div class="sess"><span class="l1"><b>Tidy the readme</b><time>3d</time></span></div>
+      <div class="more">2 more</div>
+      <div class="grp"><span class="tile" style="--h:290">DO</span>docs<small>1</small></div>
+      <div class="sess"><span class="l1"><b>Write the setup guide</b><time>5d</time></span></div>
+    </div>
+    <div class="side-foot"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>Search sessions<kbd>⌘K</kbd></div>
+  </aside>
+  <div class="main">
+    <div class="head"><h1>Checkout redesign</h1><div class="where"><span><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>shop</span><span><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v4a6 6 0 0 0 6 6h4"/></svg>checkout-header</span></div></div>
+    <div class="conv"><div class="col">
+      <div class="me">The order summary jumps when the coupon field opens. Can you make it stay put, and keep the total visible on small screens?</div>
+      <div class="act"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>Read 4 files, edited 2 files · 1m 12s</div>
+      <div class="w2"><div class="sp">Read <code>checkout/summary.tsx</code><span class="el">0.4s</span></div><div class="sp">Edited <code>checkout/coupon.tsx</code><span class="el">2.1s</span></div><div class="sp now">Running the checkout tests<span class="el">18s</span></div></div>
+      <div class="ai">
+        <p>The jump came from the coupon field being added to the page only when it opens, which pushed the summary down by its full height. I changed two things:</p>
+        <ul><li>The coupon field now always keeps its space and fades in, so nothing below it moves.</li>
+        <li>On screens narrower than 640px the total sits in a bar pinned to the bottom, with the <code>Pay</code> button beside it.</li></ul>
+        <p>The tests for the checkout page pass. One thing to check by eye: the pinned bar covers the last line of the terms text when the keyboard is open on iOS.</p>
+      </div>
+    </div></div>
+    <div class="composer"><div class="box"><div class="ph">Reply to the agent…</div><div class="bar"><span>Ask</span><span>Fable · High</span><i></i><span>⏎ Send</span></div></div>
+      <div class="stat"><span>work</span><span>5h 34%</span><span>7d 41%</span><i></i><span>12.4k tokens</span></div></div>
+  </div>
+</div>
+
+<div class="knobs" id="knobs"></div>
+<div class="out"><code id="out"></code><button id="copy">Copy</button></div>
+
+<h3>What each preset changes</h3>
+<ul class="notes" id="notes"></ul>
+</div>
+
+<script>
+/* every knob, with the value the app uses today */
+const K=[
+  {k:'text',  l:'Main text',              t:'color', v:'#f0f1f3'},
+  {k:'dim',   l:'Secondary text',         t:'color', v:'#a6aab2'},
+  {k:'faint', l:'Faint text (times, hints)', t:'color', v:'#6d717a'},
+  {k:'bg',    l:'Session background',     t:'color', v:'#18191c'},
+  {k:'side',  l:'Sidebar background',     t:'color', v:'#131416'},
+  {k:'fs',    l:'Message text size',      t:'range', v:13.5, min:12.5, max:16, step:.5, u:'px'},
+  {k:'lh',    l:'Line height',            t:'range', v:1.6,  min:1.4, max:1.9, step:.05},
+  {k:'wt',    l:'Message weight',         t:'range', v:400,  min:400, max:560, step:10},
+  {k:'side-wt',l:'Sidebar title weight',  t:'range', v:500,  min:400, max:640, step:10},
+  {k:'sm',    l:'Full-weight rendering (macOS)', t:'check', v:false},
+];
+const TODAY=Object.fromEntries(K.map(o=>[o.k,o.v]));
+const P=[
+  {n:'Today',            s:'As shipped',                      d:{}, why:'The current dark theme, for comparison.'},
+  {n:'Brighter greys',   s:'Secondary + faint text up',       d:{dim:'#bcc0c7',faint:'#8a8e97'}, why:'<b>Brighter greys</b>: secondary text (sidebar titles, steps) and faint text (times, hints, placeholders) are lighter. Faint text passes 4.5:1 on the main surfaces. This is what is in the working copy now.'},
+  {n:'Heavier',          s:'Greys + full-weight rendering',   d:{dim:'#bcc0c7',faint:'#8a8e97',sm:true,wt:450,'side-wt':550}, why:'<b>Heavier</b>: on top of the greys, macOS draws light text at its full weight instead of thinning it, and message and sidebar text are a step bolder.'},
+  {n:'Lifted',           s:'Lighter backgrounds, softer white',d:{bg:'#1f2024',side:'#1a1b1e',text:'#e9eaed',dim:'#c0c3c9',faint:'#8f939b'}, why:'<b>Lifted</b>: the backgrounds are less black and the white is a touch softer. Less glare around the letters for some eyes, while every grey still passes 4.5:1.'},
+  {n:'Larger',           s:'Bigger message text, more air',   d:{dim:'#bcc0c7',faint:'#8a8e97',fs:14.5,lh:1.7}, why:'<b>Larger</b>: messages at 14.5px with more space between lines. The greys as in "Brighter greys".'},
+  {n:'High contrast',    s:'Near-white everywhere',           d:{text:'#ffffff',dim:'#d2d5da',faint:'#a3a7af',sm:true,wt:450,'side-wt':550}, why:'<b>High contrast</b>: white main text and much lighter greys, with full-weight rendering. Very easy to read, with less difference between the three levels.'},
+  {n:'All of it',        s:'Lifted + heavier + larger',       d:{bg:'#1f2024',side:'#1a1b1e',text:'#ecedf0',dim:'#c4c7cd',faint:'#9397a0',sm:true,wt:450,'side-wt':550,fs:14.5,lh:1.7}, why:'<b>All of it</b>: lifted backgrounds, full-weight rendering, a bolder weight and bigger text together.'},
+];
+const win=document.getElementById('win'),knobs=document.getElementById('knobs');
+let cur={...TODAY},pi=0;
+
+/* contrast */
+const lum=h=>{const c=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:((v+.055)/1.055)**2.4);return .2126*c[0]+.7152*c[1]+.0722*c[2]};
+const cr=(a,b)=>{const x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)};
+
+function apply(v){
+  for(const o of K){
+    if(o.k==='sm')win.style.setProperty('--sm',v.sm?'auto':'antialiased');
+    else win.style.setProperty('--'+o.k,o.t==='range'&&o.u?v[o.k]+o.u:v[o.k]);
+  }
+}
+function drawKnobs(){
+  knobs.innerHTML=K.map(o=>{
+    const v=cur[o.k];
+    if(o.t==='color'){
+      const fg=['text','dim','faint'].includes(o.k);
+      const r=fg?Math.min(cr(v,cur.bg),cr(v,cur.side)):null;
+      return `<label><span>${o.l}<em>${v}</em></span><input type="color" data-k="${o.k}" value="${v}">${fg?`<span class="cr ${r<4.5?'lo':''}">contrast ${r.toFixed(1)}:1 at worst${r<4.5?' (below 4.5)':''}</span>`:''}</label>`}
+    if(o.t==='range')return `<label><span>${o.l}<em>${v}${o.u||''}</em></span><input type="range" data-k="${o.k}" min="${o.min}" max="${o.max}" step="${o.step}" value="${v}"></label>`;
+    return `<label class="chk"><input type="checkbox" data-k="${o.k}" ${v?'checked':''}>${o.l}</label>`;
+  }).join('');
+  const diff=K.filter(o=>cur[o.k]!==TODAY[o.k]).map(o=>`${o.k}: ${cur[o.k]}`);
+  document.getElementById('out').textContent=diff.length?diff.join(' · '):'No changes from today';
+}
+function drawPicker(){
+  document.getElementById('picker').innerHTML=P.map((p,i)=>`<button data-p="${i}" class="${i===pi?'on':''}"><b><i>${i+1}</i>${p.n}</b><small>${p.s}</small></button>`).join('');
+  document.getElementById('now').innerHTML=pi<0?'<b>Your mix</b>: adjusted with the sliders.':P[pi].why;
+}
+function pick(i){pi=i;cur={...TODAY,...P[i].d};apply(cur);drawKnobs();drawPicker()}
+
+document.getElementById('picker').onclick=e=>{const b=e.target.closest('[data-p]');if(b)pick(+b.dataset.p)};
+function refresh(){ // labels, contrast and the copy line, without rebuilding the inputs
+  for(const lab of knobs.querySelectorAll('label')){const inp=lab.querySelector('input'),o=K.find(x=>x.k===inp.dataset.k),v=cur[o.k];
+    const em=lab.querySelector('em');if(em)em.textContent=v+(o.u||'');
+    const c=lab.querySelector('.cr');if(c){const r=Math.min(cr(v,cur.bg),cr(v,cur.side));c.className='cr'+(r<4.5?' lo':'');c.textContent=`contrast ${r.toFixed(1)}:1 at worst${r<4.5?' (below 4.5)':''}`}}
+  const diff=K.filter(o=>cur[o.k]!==TODAY[o.k]).map(o=>`${o.k}: ${cur[o.k]}`);
+  document.getElementById('out').textContent=diff.length?diff.join(' · '):'No changes from today';
+}
+knobs.oninput=e=>{const k=e.target.dataset.k;if(!k)return;const o=K.find(x=>x.k===k);
+  cur[k]=o.t==='check'?e.target.checked:o.t==='range'?+e.target.value:e.target.value;
+  pi=-1;apply(cur);drawPicker();refresh()};
+document.getElementById('copy').onclick=()=>navigator.clipboard.writeText(document.getElementById('out').textContent);
+addEventListener('keydown',e=>{
+  if(e.target.matches('input'))return;
+  if(e.key>='1'&&e.key<=String(P.length))pick(+e.key-1);
+  if(e.code==='Space'&&!e.repeat){e.preventDefault();apply(TODAY);win.style.outline='2px dashed #f0706a'}
+});
+addEventListener('keyup',e=>{if(e.code==='Space'){apply(cur);win.style.outline=''}});
+document.getElementById('notes').innerHTML=P.slice(1).map(p=>`<li>${p.why}</li>`).join('');
+pick(0);
+</script>
+</body></html>

@@ -604,7 +604,9 @@ test('worktrees: a session in a worktree belongs to its project, and reports the
 });
 
 test('open in terminal: resumes under the session\'s own profile, and not while it is in use', async () => {
+  // One at a time: the two terminals start on their own, so the log would not keep their order otherwise.
   assert.equal((await svc.call(`sessions/${sb.sessions.alphaLive}/terminal`, {})).status, 200);
+  await until(() => readLog(sb).filter(l => l.startsWith('terminal ')).length === 1, 'the first terminal');
   assert.equal((await svc.call(`sessions/${sb.sessions.betaOther}/terminal`, {})).status, 200);
   await until(() => readLog(sb).filter(l => l.startsWith('terminal ')).length === 2, 'both terminals');
   const lines = readLog(sb).filter(l => l.startsWith('terminal '));
@@ -934,8 +936,11 @@ test('creates a project folder, and refuses odd names', async () => {
 
 function findChrome() {
   if (process.env.WORKWOOD_CHROME) return process.env.WORKWOOD_CHROME;
-  const root = path.join(os.homedir(), '.cache', 'ms-playwright');
-  try { for (const d of fs.readdirSync(root).sort().reverse()) for (const rel of ['chrome-headless-shell-linux64/chrome-headless-shell', 'chrome-linux/chrome', 'chrome-linux64/chrome']) { const p = path.join(root, d, rel); if (fs.existsSync(p)) return p; } } catch {}
+  // Where Playwright keeps its browsers: ~/.cache on Linux, ~/Library/Caches on macOS.
+  const root = path.join(os.homedir(), ...(process.platform === 'darwin' ? ['Library', 'Caches'] : ['.cache']), 'ms-playwright');
+  const rels = ['chrome-headless-shell-linux64/chrome-headless-shell', 'chrome-linux/chrome', 'chrome-linux64/chrome',
+    'chrome-headless-shell-mac-arm64/chrome-headless-shell', 'chrome-headless-shell-mac-x64/chrome-headless-shell'];
+  try { for (const d of fs.readdirSync(root).sort().reverse()) for (const rel of rels) { const p = path.join(root, d, rel); if (fs.existsSync(p)) return p; } } catch {}
   return null;
 }
 const chrome = findChrome();
@@ -1985,5 +1990,5 @@ ui('window: an answered card goes at once, and comes back if the answer could no
 
 test('sandbox containment', () => {
   assert.deepEqual(assertContained(sb), []);
-  assert.ok(sb.home.startsWith(os.tmpdir()));
+  assert.ok(sb.home.startsWith(fs.realpathSync(os.tmpdir())));
 });

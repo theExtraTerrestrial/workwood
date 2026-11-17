@@ -19,7 +19,9 @@ const now = () => Math.floor(Date.now() / 1000);
 export const ACCOUNTS = { live: '11111111-1111-4111-8111-111111111111', other: '22222222-2222-4222-8222-222222222222', full: '33333333-3333-4333-8333-333333333333' };
 
 export function makeSandbox() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workwood-test.'));
+  // The real path: on macOS the temp folder is behind a link (/var -> /private/var), and Claude Code and the
+  // service see the resolved one.
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workwood-test.')));
   const home = path.join(root, 'home'), bin = path.join(root, 'bin');
   const creds = name => JSON.stringify({ claudeAiOauth: { accessToken: 'tok-' + name, refreshToken: 'rt-' + name, expiresAt: (now() + 3600) * 1000, subscriptionType: 'pro' } });
   const ident = name => JSON.stringify({ oauthAccount: { emailAddress: `${name}@example.com`, accountUuid: ACCOUNTS[name], organizationName: 'Test' }, hasCompletedOnboarding: true, projects: {} });

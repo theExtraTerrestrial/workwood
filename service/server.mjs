@@ -292,6 +292,7 @@ async function api(req, res, url) {
       if (firstUser) for (let i = t.items.length - 1; i >= 0; i--) if (t.items[i].kind === 'user' && t.items[i].text === firstUser.text) { t.items = t.items.slice(0, i); break; }
       t.items = t.items.concat(live);
     }
+    for (const it of t.items) if (it.stop && !it.profile) it.profile = s.profile;   // a stop read back from the file: on the profile the session ran on
     if (run) { const mine = run.builder.work(), has = new Set(mine.map(f => f.path)); t.work = mine.concat(t.work.filter(f => !has.has(f.path))); }
     for (const f of t.work) previewDirs(s.id).add(path.dirname(f.path));
     for (const f of t.work) knownWork(s.id).add(f.path);

@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { Builder, describeTool, learnWindow, parseNotification } from './transcript.mjs';
+import { Builder, ERRORS, describeTool, learnWindow, parseNotification } from './transcript.mjs';
 
 export const runs = new Map(); // sessionId -> run
 let liveSeq = 1_000_000;        // live items are numbered above anything read from a file
@@ -14,10 +14,6 @@ let liveSeq = 1_000_000;        // live items are numbered above anything read f
 const GRACE = +process.env.WORKWOOD_BG_GRACE || 8000;
 const sleep = ms => new Promise(r => setTimeout(() => r(null), ms));
 
-const ERRORS = {
-  authentication_failed: 'auth', billing_error: 'limit', rate_limit: 'limit',
-  invalid_request: 'error', server_error: 'error', unknown: 'error', max_output_tokens: 'error',
-};
 
 export function publicRun(r) {
   if (!r) return null;

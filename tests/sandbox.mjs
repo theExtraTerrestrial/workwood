@@ -91,6 +91,9 @@ export function addSession(sb, project, owner, prompt, reply, ageSeconds = 0, ra
     { ...base, type: 'assistant', uuid: id + '-a', parentUuid: id + '-u', ...(ran.effort ? { effort: ran.effort } : {}), message: { role: 'assistant', model: ran.model || 'claude-test', content: [{ type: 'tool_use', id: 't1', name: 'Read', input: { file_path: path.join(cwd, 'README.md') } }, { type: 'text', text: reply }], usage: { input_tokens: 40000, output_tokens: 2000 } } },
     { ...base, type: 'system', subtype: 'turn_duration', durationMs: 192000, uuid: id + '-s' },
   ];
+  // a later message Claude Code could not run, saved the way it saves one: an answer of its own that names the error
+  if (ran.stop) lines.push({ ...base, type: 'user', uuid: id + '-u2', parentUuid: id + '-s', message: { role: 'user', content: 'show me the preview again' } },
+    { ...base, type: 'assistant', uuid: id + '-a2', parentUuid: id + '-u2', error: ran.stop, isApiErrorMessage: true, message: { role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: 'Failed to authenticate: OAuth session expired and could not be refreshed' }] } });
   const file = path.join(dir, id + '.jsonl');
   w(file, lines.map(l => JSON.stringify(l)).join('\n') + '\n');
   const t = new Date(Date.now() - ageSeconds * 1000); fs.utimesSync(file, t, t);

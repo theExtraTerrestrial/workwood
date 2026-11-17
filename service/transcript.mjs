@@ -346,6 +346,14 @@ export async function outputFromTranscript(file, id) {
   return found == null ? null : found.length > FULL_CHARS ? found.slice(-FULL_CHARS) : found;
 }
 
+// How Claude Code names what stopped a turn, as the stop it is for you: signed out, a limit, or anything else.
+export const ERRORS = {
+  authentication_failed: 'auth', billing_error: 'limit', rate_limit: 'limit',
+  invalid_request: 'error', server_error: 'error', unknown: 'error', max_output_tokens: 'error',
+};
+
+const textOfError = msg => (msg?.content || []).filter(b => b.type === 'text').map(b => b.text).join(' ').split('\n')[0] || 'something went wrong';
+
 /** Reads a transcript file into items. Returns only the newest `limit` items. */
 export async function readTranscript(file, limit = 400, cwd = null) {
   const b = new Builder(0, cwd);
@@ -363,6 +371,8 @@ export async function readTranscript(file, limit = 400, cwd = null) {
     if (m.isSidechain || m.isMeta) continue;
     if (m.type === 'user' && typeof m.permissionMode === 'string') mode = m.permissionMode;
     if (m.type === 'user' && m.message) { b.closeText(); b.toolsDone(m.timestamp); b.results(m.message.content, m.timestamp, { result: m.toolUseResult, denial: m.toolDenialKind }); b.user(m.message.content, m.timestamp); }
+    // A turn Claude Code could not run (signed out, a limit, an API error) is saved as an answer of its own: it reads back as the stop it was.
+    else if (m.type === 'assistant' && m.error && m.isApiErrorMessage) { b.closeText(); b.flushWork(); b.push({ kind: 'note', stop: ERRORS[m.error] || 'error', ts: m.timestamp, ...(ERRORS[m.error] === 'auth' || ERRORS[m.error] === 'limit' ? {} : { text: textOfError(m.message) }) }); }
     else if (m.type === 'assistant' && m.message) b.assistant(m.message, m.timestamp, typeof m.effort === 'string' ? m.effort : null);
     else if (m.type === 'system' && m.subtype === 'turn_duration') b.done(m.durationMs, m.timestamp);
   }

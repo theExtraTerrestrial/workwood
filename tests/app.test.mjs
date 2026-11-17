@@ -259,6 +259,17 @@ test('a lost sign-in is reported as such, and the profile keeps it until a turn 
   await until(async () => (await state()).profiles.every(p => !p.reading), 'the readings after those turns', 12000);
 });
 
+test('a lost sign-in saved in the history reads back as the stop it was, once no turn holds it in memory', async () => {
+  const id = addSession(sb, 'beta', 'other', 'Earlier work', 'ok', 5, { stop: 'authentication_failed' });
+  await idle(await newSession('nudge a refresh'));
+  await until(() => listed(id), 'the session from before', 15000);
+  const s = await session(id), last = s.items.at(-1);
+  assert.equal(s.run, null);
+  assert.deepEqual([last.kind, last.stop, last.profile, last.text], ['note', 'auth', 'other', undefined]);
+  assert.equal(s.items.filter(x => x.kind === 'assistant' && /authenticate/.test(x.text)).length, 0);
+  sb.sessions.signedOut = id;
+});
+
 test('a failed turn is kept on its profile until dismissed; a limit is not', async () => {
   await idle(await newSession('BREAK it', 'other'));
   const p = await until(async () => (await state()).profiles.find(x => x.name === 'other' && x.stop), 'the stop on the profile');
@@ -1937,6 +1948,18 @@ ui('window: the settings dialog: tabs, default profile for new sessions, sign in
   await page.waitForSelector('#lgx .xterm');
   assert.match(await page.innerText('.lgbar b'), /Sign in to live/);
   await page.click('#dClose');
+});
+
+ui('window: a session whose history ends signed out offers the sign-in, though no turn is in memory', async () => {
+  await page.keyboard.press('Escape');
+  await svc.call(`sessions/${sb.sessions.signedOut}/done`, { on: false });   // cleared as quiet by now: back to the inbox
+  await page.click(`.sess[data-id="${sb.sessions.signedOut}"]`);
+  await page.waitForSelector('.sys:has-text("other was signed out")');
+  await page.waitForSelector('#qcard:has-text("other is signed out") [data-signin="other"]');
+  assert.equal(await page.isVisible('#box'), false);
+  await page.click('#qcard [data-act="dismiss"]');
+  await page.waitForSelector('#box', { state: 'visible' });
+  assert.equal(await page.isHidden('#qcard'), true);
 });
 
 ui('window: a sent message shows at once, before the service answers, and comes back to the box if it could not be sent', async () => {

@@ -1061,7 +1061,7 @@ const KEY={enter:'<kbd>↵</kbd>',esc:'<kbd>Esc</kbd>'};
 const typeBox=ph=>`<div class="qtype"><input id="qText" placeholder="${esc(ph)}" autocomplete="off"><button class="ib qmic" data-mic data-tip="${MICTIP}" data-i="mic"></button></div>`;
 function renderCard(){
   // A card you have just answered, or a stop you have just continued from, goes at once; the service catches up.
-  const c=$('qcard'),p=answered()?null:V.run?.pending,st=!V.pend&&V.run?.status==='stopped'&&V.dismissed!==V.run.startedAt?V.run.stopped:null;
+  const c=$('qcard'),p=answered()?null:V.run?.pending,st=!V.pend&&V.dismissed!==stopKey()?heldStop():null;
   const show=!V.isNew&&(p||st);
   c.hidden=!show;$('box').hidden=!!show;
   if(R?.target==='qText'&&(!show||!p||R.qid!==p.id))stopVoice(false);    // the field it was writing into has gone
@@ -1105,8 +1105,17 @@ function renderCard(){
   }
 }
 const answered=()=>!!V.ans&&V.run?.pending?.id===V.ans;
+// What holds the session for you: the stop of the turn in memory, or, once that is gone (the app restarted, the terminal
+// view took the session), a sign-in or limit stop that ends what the history file says.
+function heldStop(){
+  if(V.run?.status==='stopped')return {...V.run.stopped,profile:V.run.profile};
+  if(V.run&&(V.run.status!=='idle'||V.run.stopped)||selSession()?.done)return null;
+  const last=V.items[V.items.length-1];
+  return last?.kind==='note'&&(last.stop==='auth'||last.stop==='limit')?{reason:last.stop,profile:last.profile}:null;
+}
+const stopKey=()=>V.run?.status==='stopped'?V.run.startedAt:'n'+V.items[V.items.length-1]?.n;
 function stoppedCard(st){
-  const cur=V.run.profile,others=A.profiles.filter(p=>p.name!==cur);
+  const cur=st.profile||V.run?.profile||selSession()?.profile,others=A.profiles.filter(p=>p.name!==cur);
   const head={limit:['Limit reached',`Limit reached on ${cur}`],auth:['Sign-in needed',`${cur} is signed out`]}[st.reason]||['Stopped','The turn stopped'];
   const mine=A.profiles.find(p=>p.name===cur),clears=st.reason==='limit'&&(mine?.d7>=100?mine.r7:mine?.r5);
   const why=st.reason==='auth'?`Its sign-in could not be renewed. Sign in again, then continue. Nothing is lost.`:esc(st.text||'')+(st.reason==='limit'?` Nothing is lost.${clears?' The limit clears in '+esc(until(clears))+'.':''}`:'');
@@ -1145,7 +1154,7 @@ $('qcard').onclick=async e=>{
   const p=V.run?.pending,o=e.target.closest('[data-opt]'),a=e.target.closest('[data-act]'),go=e.target.closest('[data-go]');
   const si=e.target.closest('[data-signin]');if(si){openSettings(1,si.dataset.signin);startLogin(si.dataset.signin);return}
   if(go){sendText('Continue where you left off.',go.dataset.go);return}
-  if(a?.dataset.act==='dismiss'){V.dismissed=V.run.startedAt;render();return}
+  if(a?.dataset.act==='dismiss'){V.dismissed=stopKey();render();return}
   if(a?.dataset.act==='term'){api(`sessions/${V.sel}/stop`,{}).catch(err=>oops(err.message));setView(V.sel,'term');return}
   if(!p)return;
   const big=e.target.closest('[data-big]');

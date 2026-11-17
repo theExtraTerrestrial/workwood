@@ -253,6 +253,9 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
             handOver();
             if (run.status === 'working') { run.activity = 'Thinking'; sayState(); }
           } else if (m.type === 'result') {
+            // Resuming a session with work left over from a closed Claude Code, it reports that work first, with a result
+            // of its own that ran no turn. Your message has not been answered yet: that result does not end the turn.
+            if (m.origin?.kind === 'task-notification' && !m.num_turns) continue;
             for (const [name, u] of Object.entries(m.modelUsage || {})) learnWindow(name, u.contextWindow);
             const win = Object.values(m.modelUsage || {}).map(u => u.contextWindow).filter(Boolean).sort((a, b) => b - a)[0];
             if (win && run.context) run.context = { ...run.context, window: win };

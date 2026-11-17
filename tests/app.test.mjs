@@ -259,6 +259,13 @@ test('a lost sign-in is reported as such, and the profile keeps it until a turn 
   await until(async () => (await state()).profiles.every(p => !p.reading), 'the readings after those turns', 12000);
 });
 
+test('a lost sign-in after Claude Code reports work left over from before still stops the turn as signed out', async () => {
+  const s = await idle(await newSession('ORPHANED and AUTH', 'other'));
+  assert.equal(s.run.status, 'stopped');
+  assert.equal(s.run.stopped.reason, 'auth');
+  assert.equal(s.items.filter(x => x.kind === 'done').length, 0);
+});
+
 test('a lost sign-in saved in the history reads back as the stop it was, once no turn holds it in memory', async () => {
   const id = addSession(sb, 'beta', 'other', 'Earlier work', 'ok', 5, { stop: 'authentication_failed' });
   await idle(await newSession('nudge a refresh'));

@@ -219,6 +219,10 @@ async function turn(prompt, said = prompt, uuid) {
     out({ type: 'assistant', error: 'server_error', message: { id: 'm', type: 'message', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: 'API Error: 500 Internal server error' }] }, parent_tool_use_id: null, session_id: sessionId });
     return finish('API Error: 500 Internal server error', { is_error: true });
   }
+  if (/\bORPHANED\b/.test(prompt)) {   // resumed with background work a closed Claude Code left behind: reported first, with a result that ran no turn
+    sys('task_notification', { task_id: 'task_old', tool_use_id: 'toolu_old', status: 'stopped', output_file: '', summary: 'Orphaned by a previous Claude Code process exit and reported in an aggregate summary.' });
+    out({ type: 'result', subtype: 'success', is_error: false, num_turns: 0, duration_ms: 80, duration_api_ms: 0, origin: { kind: 'task-notification' }, queued_turn_count: 0, session_id: sessionId, uuid: randomUUID() });
+  }
   if (/\bAUTH\b/.test(prompt)) {
     out({ type: 'assistant', error: 'authentication_failed', message: { id: 'm', type: 'message', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: 'OAuth session expired and could not be refreshed' }] }, parent_tool_use_id: null, session_id: sessionId });
     return finish('Failed to authenticate', { is_error: true });

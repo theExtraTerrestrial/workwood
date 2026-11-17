@@ -242,11 +242,10 @@ Not yet tried on a real machine: the macOS app, and installing on a Windows PC w
 npm test
 ```
 
-About 100 seconds, 108 tests. They run the real service inside a throwaway
+About 100 seconds, 112 tests. They run the real service inside a throwaway
 home folder (the same idea as Claudius's own tests), with a scripted stand-in
 for `claude` (`tests/fake-claude.mjs`) and local stand-ins for Claude's usage
-and sign-in servers. The real `claudius` is used where the two must agree: one
-test has both renew the same account at the same moment. No real account is
+and sign-in servers. Claudius is not used. No real account is
 used and nothing is sent to Anthropic. Half of the tests drive the window with
 real clicks in a headless Chromium; they are skipped with a note if none is
 found (`npx playwright install chromium-headless-shell`, or set `WORKWOOD_CHROME`).

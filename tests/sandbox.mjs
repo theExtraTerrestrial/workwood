@@ -1,7 +1,7 @@
 // A throwaway HOME for tests, in the same spirit as Claudius's own test suite:
 // a plausible ~/.claude pool, profiles with made-up tokens, a fake `claude` that
-// plays a scripted agent, and the real `claudius` reading all of it. Nothing here
-// touches the real home; `assertContained` checks that at the end.
+// plays a scripted agent, and a `claudius` that only records being called (Workwood
+// has its own implementation and must never run it). Nothing here touches the real home; `assertContained` checks that at the end.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,7 +11,6 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REAL_HOME = os.homedir();
-const REAL_CLAUDIUS = execFileSync('bash', ['-lc', 'readlink -f "$(command -v claudius)"'], { encoding: 'utf8' }).trim();
 const NODE = process.execPath;
 const w = (file, text, mode) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text, mode ? { mode } : undefined); };
 const now = () => Math.floor(Date.now() / 1000);
@@ -67,8 +66,8 @@ export function makeSandbox() {
 
   // fake commands, first on PATH
   w(path.join(bin, 'claude'), `#!${NODE}\nimport(${JSON.stringify(path.join(HERE, 'fake-claude.mjs'))});\n`, 0o755);
-  // The real claudius does the listing. `refresh` would call the real token endpoint, so it is only recorded.
-  w(path.join(bin, 'claudius'), `#!/usr/bin/env bash\nif [[ "\${1:-}" == "refresh" ]]; then echo "claudius refresh \${2:-}" >> ${JSON.stringify(sb.log)}; exit 0; fi\nif [[ "\${1:-}" == "relogin" ]]; then echo "claudius relogin \${2:-}" >> ${JSON.stringify(sb.log)}; printf 'Open the page and paste the code: '; read -r code; if [[ "$code" == "good" ]]; then echo "Signed in to \${2:-}."; exit 0; fi; echo "That code did not work."; exit 1; fi\nexec ${JSON.stringify(REAL_CLAUDIUS)} "$@"\n`, 0o755);
+  // Workwood never runs claudius: any call is recorded (the tests check the log) and fails.
+  w(path.join(bin, 'claudius'), `#!/usr/bin/env bash\necho "claudius $*" >> ${JSON.stringify(sb.log)}\nexit 1\n`, 0o755);
 
   // Opening an editor or a terminal is only recorded.
   for (const name of ['code', 'terminal']) w(path.join(bin, name), `#!/usr/bin/env bash\necho "${name} $*" >> ${JSON.stringify(sb.log)}\n`, 0o755);
@@ -180,11 +179,4 @@ export function assertContained(sb) {
 }
 
 /** Runs one of Claudius's own functions inside the sandbox, as its tests do: sourced under the sandbox HOME. */
-export function claudiusFn(sb, line, env = {}) {
-  return new Promise(resolve => {
-    const c = spawn('bash', ['-c', `source ${JSON.stringify(REAL_CLAUDIUS)} help >/dev/null 2>&1; ${line}`], { env: { ...sb.env, ...env }, stdio: 'ignore' });
-    c.on('exit', code => resolve(code));
-  });
-}
-
 export const removeSandbox = sb => fs.rmSync(sb.root, { recursive: true, force: true });

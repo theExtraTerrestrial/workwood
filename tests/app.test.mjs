@@ -1,5 +1,5 @@
 // End-to-end tests. Everything runs in a throwaway HOME (see sandbox.mjs): the real
-// Workwood service and the real claudius, with a scripted stand-in for `claude`.
+// Workwood service, with a scripted stand-in for `claude`.
 // No real account is used and nothing is sent to Anthropic.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { makeSandbox, startService, readLog, setLive, assertContained, removeSandbox, addSession, claudiusFn } from './sandbox.mjs';
+import { makeSandbox, startService, readLog, setLive, assertContained, removeSandbox, addSession } from './sandbox.mjs';
 
 let sb, svc, browser, page;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -97,20 +97,6 @@ test('a lapsed sign-in is renewed once, under the lock Claude Code and Claudius 
     await svc.call('limits/refresh', { profile: 'full' });
     await until(async () => { const x = (await state()).profiles.find(q => q.name === 'full'); return !x.failed && !x.reading && sb.renewals.length === from2 + 1 && x; }, 'the stale lock taken over');
   } finally { fs.rmSync(path.join(P, '.oauth_refresh.lock'), { recursive: true, force: true }); fs.writeFileSync(f, was); }
-});
-
-test('Workwood and Claudius renewing the same account at the same moment: one renewal, and both end up signed in', async () => {
-  const f = path.join(sb.home, '.claude-profiles', 'other', '.credentials.json'), was = fs.readFileSync(f, 'utf8');
-  const c = JSON.parse(was); c.claudeAiOauth.expiresAt = Date.now() - 1000; fs.writeFileSync(f, JSON.stringify(c));
-  const rt = c.claudeAiOauth.refreshToken, from = sb.renewals.length;
-  try {
-    const theirs = claudiusFn(sb, `oauth_refresh_creds ${JSON.stringify(f)}`, { CLAUDIUS_OAUTH_TOKEN_URL: svc.tokenUrl });
-    await svc.call('limits/refresh', { profile: 'other' });
-    assert.equal(await theirs, 0);
-    await until(async () => { const x = (await state()).profiles.find(q => q.name === 'other'); return !x.reading && !x.failed && x; }, 'the reading');
-    assert.deepEqual(sb.renewals.slice(from), [rt]);
-    assert.equal(JSON.parse(fs.readFileSync(f, 'utf8')).claudeAiOauth.refreshToken, rt + '+');
-  } finally { fs.writeFileSync(f, was); }
 });
 
 test('the session list names a session as Claude Code titled it, and resumes it in the folder it is filed under', async () => {

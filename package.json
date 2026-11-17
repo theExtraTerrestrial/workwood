@@ -6,6 +6,7 @@
   "type": "module",
   "main": "shell/main.cjs",
   "scripts": {
+    "postinstall": "install-electron && node -e \"for (const a of ['arm64','x64']) { try { require('fs').chmodSync('node_modules/node-pty/prebuilds/darwin-'+a+'/spawn-helper', 0o755) } catch {} }\"",
     "start": "electron .",
     "edge": "node shell/edge.mjs",
     "install-app": "node shell/install-app.mjs",

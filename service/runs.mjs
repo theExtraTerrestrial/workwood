@@ -267,7 +267,9 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
             for (const u of m.user_message_uuids || []) run.sent.delete(u);
             // What you wrote meanwhile and the agent has not read yet runs as a turn of its own, straight away.
             const given = run.stopped || run.interrupted ? 0 : handOver();
-            const more = given || (m.queued_turn_count ?? (run.sent.size || inbox.length));
+            // The queue count leaves out a message Claude Code has already taken off its queue to run next (as it has after
+            // /compact): one handed over that no result has answered yet still has a turn coming.
+            const more = given || Math.max(m.queued_turn_count ?? 0, run.sent.size, inbox.length);
             if (run.stopped || run.interrupted) break;
             if (more > 0) { follows = true; run.activity = 'Reading your message'; sayState(); continue; }
             if (!run.bg.size) break;

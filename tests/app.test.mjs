@@ -403,6 +403,16 @@ test('a message sent while the agent works reaches it: taken into the running tu
   assert.deepEqual(again.items.filter(i => i.kind === 'user').map(i => i.text), ['QUEUE up some work', 'and then this']);
 });
 
+test('a message sent during /compact is answered in the chat, not left to Claude Code alone', async () => {
+  const id = await newSession('hello there');
+  await idle(id);
+  assert.equal((await svc.call(`sessions/${id}/send`, { text: '/compact' })).status, 200);
+  await until(async () => (await session(id)).run?.status === 'working', 'the compact to start');
+  assert.ok((await svc.call(`sessions/${id}/send`, { text: 'carry on after' })).body.queued);
+  const s = await until(async () => { const x = await session(id); return x.run?.status === 'idle' && /Echo: carry on after/.test(lastText(x) || '') && x; }, 'the message after the compact to be answered here');
+  assert.ok(s.items.some(i => i.kind === 'user' && i.text === 'carry on after'));
+});
+
 test('the queue: a message waits until the step ends; it can be taken back to change it, or sent now', async () => {
   const id = await newSession('do these STEPS');
   await until(async () => { const s = await session(id); return s.run?.status === 'working' && s.items.some(i => i.kind === 'tools'); }, 'the slow step to start');

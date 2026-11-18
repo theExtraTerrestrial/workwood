@@ -71,7 +71,7 @@ const say = content => {
 const text = t => say([{ type: 'text', text: t }]);
 const finish = (result, extra = {}) => {
   out({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1200, duration_api_ms: 900, num_turns: 1, result, session_id: sessionId, total_cost_usd: 0,
-    usage: { input_tokens: 50000, output_tokens: 1000 }, modelUsage: { 'claude-test': { contextWindow: 200000 } }, permission_denials: [], uuid: randomUUID(), queued_turn_count: extra.is_error ? 0 : inbox.length, ...extra });
+    usage: { input_tokens: 50000, output_tokens: 1000 }, modelUsage: { 'claude-test': { contextWindow: 200000 } }, permission_denials: [], uuid: randomUUID(), queued_turn_count: extra.is_error ? 0 : inbox.length, ...(turnUuid ? { user_message_uuids: [turnUuid] } : {}), ...extra });
   if (inbox.length && !extra.is_error) { const next = inbox.shift(); setTimeout(() => turn(flat(next.message.content), next.message.content, next.uuid), 150); }
   else if (extra.is_error) setTimeout(() => process.exit(1), 20);
   else idle = setTimeout(() => process.exit(0), bgAlive ? 600000 : 400);   // a message handed over as the turn ends still runs; work in the background keeps it open
@@ -102,8 +102,9 @@ const ask = (toolName, input, suggestions = []) => new Promise(resolve => {
   out({ type: 'control_request', request_id: requestId, request: { subtype: 'can_use_tool', tool_name: toolName, input, tool_use_id: toolUseId, permission_suggestions: suggestions } });
 });
 
-let modeChanged = null;
+let modeChanged = null, turnUuid = null;   // the client's uuid of the message this turn answers, echoed on its result
 async function turn(prompt, said = prompt, uuid) {
+  turnUuid = uuid || null;
   record({ type: 'session-owner', accountUuid: identity.accountUuid });
   if (/\bMODEWAIT\b/.test(prompt)) {  // works until the mode is changed (or 5 s), then says which mode it is in
     record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: said } });
@@ -210,6 +211,18 @@ async function turn(prompt, said = prompt, uuid) {
     await new Promise(r => setTimeout(r, 900));
     text('First part done.');
     return finish('ok');
+  }
+  if (prompt.trim() === '/compact') {  // a while summarising; its closing frames come once the next message has already left the queue
+    await new Promise(r => setTimeout(r, 900));
+    sys('compact_boundary', { compact_metadata: { trigger: 'manual', pre_tokens: 50000 } });
+    out({ type: 'user', message: { role: 'user', content: '<local-command-stdout>Compacted </local-command-stdout>' }, parent_tool_use_id: null, session_id: sessionId, uuid: randomUUID() });
+    await new Promise(r => setTimeout(r, 150));
+    const next = inbox.shift();
+    out({ type: 'result', subtype: 'success', is_error: false, duration_ms: 1000, duration_api_ms: 0, num_turns: 0, result: '', session_id: sessionId, total_cost_usd: 0,
+      usage: {}, modelUsage: {}, permission_denials: [], uuid: randomUUID(), queued_turn_count: inbox.length });
+    if (next) setTimeout(() => turn(flat(next.message.content), next.message.content, next.uuid), 150);
+    else idle = setTimeout(() => process.exit(0), 400);
+    return;
   }
   record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: said } });
   if (/\bLIMIT\b/.test(prompt)) {

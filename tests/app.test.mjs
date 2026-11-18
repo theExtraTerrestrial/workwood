@@ -694,6 +694,7 @@ test('worktrees: a session in a worktree belongs to its project, and reports the
   assert.deepEqual([s.project, s.root], ['beta', sb.projects.beta]);
   assert.deepEqual((await session(id)).place, { cwd: wt, project: 'beta', worktree: 'beta-login-fix', branch: 'login-fix' });
   assert.deepEqual((await session(sb.sessions.betaOther)).place, { cwd: sb.projects.beta, project: 'beta', worktree: null, branch: 'main' });
+
   // VS Code opens where the work is: the worktree's own folder, not the project it was made from
   assert.equal((await svc.call('open-editor', { sessionId: id })).status, 200);
   await until(() => readLog(sb).includes(`code ${wt}`), 'VS Code in the worktree');
@@ -1030,6 +1031,24 @@ test('creates a project folder, and refuses odd names', async () => {
   assert.equal((await svc.call('projects', { name: 'gamma' })).status, 500);
 });
 
+test('updates: checks the folder Workwood runs from against its upstream, and refuses over uncommitted changes', async () => {
+  const head = () => execFileSync('git', ['-C', sb.app, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  await until(async () => (await state()).update?.state === 'current', 'the check at start');
+  upstreamCommit(sb, 'One more thing'); const tip = upstreamCommit(sb, 'Two more things');
+  let u = (await svc.call('update/check', {})).body;
+  assert.equal(u.state, 'ready'); assert.equal(u.behind, 2); assert.deepEqual(u.titles, ['Two more things', 'One more thing']); assert.equal(u.head, tip);
+  assert.equal((await state()).update.state, 'ready');
+  // an edit to a tracked file is in the way; a file git does not know is not
+  fs.appendFileSync(path.join(sb.app, 'package.json'), '\n'); fs.writeFileSync(path.join(sb.app, 'scratch.txt'), 'mine');
+  u = (await svc.call('update/check', {})).body;
+  assert.equal(u.state, 'blocked'); assert.equal(u.why, 'Uncommitted changes in package.json'); assert.deepEqual(u.files, ['package.json']);
+  const refused = await svc.call('update/apply', {});
+  assert.equal(refused.status, 409); assert.match(refused.body.error, /Uncommitted changes/);
+  assert.notEqual(head(), tip);
+  execFileSync('git', ['-C', sb.app, 'checkout', '--', 'package.json']);
+  assert.equal((await svc.call('update/check', {})).body.state, 'ready');   // pulled by the window's test below
+});
+
 /* ---------- the window, driven by real clicks ---------- */
 
 function findChrome() {
@@ -1060,26 +1079,29 @@ const startNew = async (text, pick = {}) => {
   await send(text);
 };
 
-ui('window: shows the inbox by project, the opened conversation, and limits under the message box', async () => {
-  await page.waitForSelector('.me:has-text("Tidy the alpha readme")');
-test('updates: checks the folder Workwood runs from against its upstream, and refuses over uncommitted changes', async () => {
+ui('window: an update shows as a card above the sidebar footer; Update pulls it, Later hides it, Settings says where things stand', async () => {
   const head = () => execFileSync('git', ['-C', sb.app, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-  await until(async () => (await state()).update?.state === 'current', 'the check at start');
-  upstreamCommit(sb, 'One more thing'); const tip = upstreamCommit(sb, 'Two more things');
-  let u = (await svc.call('update/check', {})).body;
-  assert.equal(u.state, 'ready'); assert.equal(u.behind, 2); assert.deepEqual(u.titles, ['Two more things', 'One more thing']); assert.equal(u.head, tip);
-  assert.equal((await state()).update.state, 'ready');
-  // an edit to a tracked file is in the way; a file git does not know is not
-  fs.appendFileSync(path.join(sb.app, 'package.json'), '\n'); fs.writeFileSync(path.join(sb.app, 'scratch.txt'), 'mine');
-  u = (await svc.call('update/check', {})).body;
-  assert.equal(u.state, 'blocked'); assert.equal(u.why, 'Uncommitted changes in package.json'); assert.deepEqual(u.files, ['package.json']);
-  const refused = await svc.call('update/apply', {});
-  assert.equal(refused.status, 409); assert.match(refused.body.error, /Uncommitted changes/);
-  assert.notEqual(head(), tip);
-  execFileSync('git', ['-C', sb.app, 'checkout', '--', 'package.json']);
-  assert.equal((await svc.call('update/check', {})).body.state, 'ready');   // pulled by the window's test below
+  const tip = execFileSync('git', ['-C', sb.app, 'rev-parse', '@{u}'], { encoding: 'utf8' }).trim();
+  await page.waitForSelector('#upd:visible');
+  assert.match(await page.locator('#upd .ut').innerText(), /Update ready/);
+  assert.match(await page.locator('#upd .ud').innerText(), /2 new changes|Restarting stops/);
+  const box = await page.locator('#upd').boundingBox(), foot = await page.locator('.side-foot').boundingBox();
+  const list = await page.locator('#list').boundingBox();
+  assert.ok(box.y + box.height <= foot.y && list.y + list.height <= box.y, 'the card sits above the footer, below the list');
+  // no window around the page (a browser tab), so it updates and then asks for a restart by hand
+  await page.click('#upd [data-u=go]');
+  await page.waitForSelector('#upd .ut:has-text("Updated")');
+  assert.match(await page.locator('#upd .ud').innerText(), /Restart Workwood to use it/);
+  assert.equal(head(), tip);
+  await page.click('#upd [data-u=later]');
+  await page.waitForSelector('#upd', { state: 'hidden' });
+  await page.click('#bGear'); await page.click('#gAll'); await page.click('#stabs [data-st="3"]');
+  await page.waitForSelector('#sUpd:has-text("Updated. Restart Workwood to use it.")');
+  await page.click('#dClose');
 });
 
+ui('window: shows the inbox by project, the opened conversation, and limits under the message box', async () => {
+  await page.waitForSelector('.me:has-text("Tidy the alpha readme")');
   const groups = await page.locator('.grp b').allInnerTexts();
   assert.ok(groups.includes('alpha') && groups.includes('beta') && new Set(groups).size === groups.length, groups.join());
   assert.equal(await page.locator(`.sess[data-id="${sb.sessions.alphaOld}"]`).count(), 0);   // cleared itself; still found by search
@@ -1110,27 +1132,6 @@ ui('window: a reply with a list inside a list shows it nested', async () => {
   assert.deepEqual(await page.locator('.ai > ul > li > ul > li').evaluateAll(l => l.map(li => li.firstChild.textContent.trim())), ['a successful one', 'a failed one']);
   assert.equal(await page.locator('.ai ul ul ol li').innerText(), 'deeper');
 });
-ui('window: an update shows as a card above the sidebar footer; Update pulls it, Later hides it, Settings says where things stand', async () => {
-  const head = () => execFileSync('git', ['-C', sb.app, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-  const tip = execFileSync('git', ['-C', sb.app, 'rev-parse', '@{u}'], { encoding: 'utf8' }).trim();
-  await page.waitForSelector('#upd:visible');
-  assert.match(await page.locator('#upd .ut').innerText(), /Update ready/);
-  assert.match(await page.locator('#upd .ud').innerText(), /2 new changes|Restarting stops/);
-  const box = await page.locator('#upd').boundingBox(), foot = await page.locator('.side-foot').boundingBox();
-  const list = await page.locator('#list').boundingBox();
-  assert.ok(box.y + box.height <= foot.y && list.y + list.height <= box.y, 'the card sits above the footer, below the list');
-  // no window around the page (a browser tab), so it updates and then asks for a restart by hand
-  await page.click('#upd [data-u=go]');
-  await page.waitForSelector('#upd .ut:has-text("Updated")');
-  assert.match(await page.locator('#upd .ud').innerText(), /Restart Workwood to use it/);
-  assert.equal(head(), tip);
-  await page.click('#upd [data-u=later]');
-  await page.waitForSelector('#upd', { state: 'hidden' });
-  await page.click('#bGear'); await page.click('#gAll'); await page.click('#stabs [data-st="3"]');
-  await page.waitForSelector('#sUpd:has-text("Updated. Restart Workwood to use it.")');
-  await page.click('#dClose');
-});
-
 
 ui('window: background work: a closed tray over the message box, a header button, a badge in the sidebar, each task\'s output in the side panel', async () => {
   const id = await newSession('start BACKGROUND work'), row = `.sess[data-id="${id}"]`;

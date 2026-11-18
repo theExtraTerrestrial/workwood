@@ -313,11 +313,11 @@ async function api(req, res, url) {
   }
   if (req.method !== 'POST') return send(res, 404, { error: 'Not found.' });
   const b = await body(req);
-
   if (parts[0] === 'update' && parts[1] === 'check') return send(res, 200, await update.check());
   if (parts[0] === 'update' && parts[1] === 'apply') {
     try { return send(res, 200, await update.apply()); } catch (e) { return send(res, 409, { error: e.message }); }
   }
+
   if (parts[0] === 'settings') {
     if ('defaultProfile' in b) prefs.defaultProfile = state.profiles.some(p => p.name === b.defaultProfile) ? b.defaultProfile : null;
     if ('doneDays' in b) prefs.doneDays = [0, 1, 3, 7, 14, 30].includes(+b.doneDays) ? +b.doneDays : 7;
@@ -616,10 +616,10 @@ export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
   setInterval(refreshLive, 5000).unref();
   setInterval(refreshAll, 30000).unref();
   setInterval(() => readings.add(state.profiles), 5 * 60000).unref();   // limits, every five minutes
+  update.watch(pushState);
   process.on('exit', closeAll);
   return { address };
 }
-  update.watch(pushState);
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { address } = await start();

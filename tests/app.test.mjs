@@ -1999,6 +1999,10 @@ ui('window: the settings dialog: tabs, default profile for new sessions, sign in
   assert.deepEqual(await page.evaluate(() => window.wwOpened), ['https://claude.example/oauth/authorize?code=true&state=s1']);
   await page.evaluate(() => { window.open = window.wwOpen; });
   assert.equal(await page.isVisible('#lgCopy'), true);
+  // the note sits under the title, not squeezed into a column beside the buttons
+  const lg = await page.evaluate(() => { const r = id => document.getElementById(id).getBoundingClientRect(); return { note: r('lgNote'), open: r('lgOpen'), back: r('lgBack') }; });
+  assert.ok(lg.note.height < 40 && lg.note.width > 150, `the note is a line or two: ${JSON.stringify(lg.note)}`);
+  assert.ok(lg.open.height < 34 && Math.abs(lg.open.top - lg.back.top) < 2, 'the buttons stay on one line');
   await page.click('#lgx .xterm');
   await page.keyboard.type('good'); await page.keyboard.press('Enter');
   await page.waitForSelector('#lgNote:has-text("Signed in")');

@@ -149,7 +149,7 @@
   .srow .pren{width:150px;font-weight:500}.srow .sin#sNew{width:130px}
   .srow.sconf{background:color-mix(in srgb,var(--hot) 8%,transparent);border-radius:9px}
   button.sval.danger,button.sval.danger:hover{background:var(--hot);color:#fff}button.sval.danger:hover{filter:brightness(1.1)}
-  .lgbar{display:flex;align-items:center;gap:10px;font-size:12.5px;padding:2px 30px 2px 4px}.lgbar b{font-weight:600}.lgbar span{color:var(--faint);flex:1}
+  .lgbar{display:flex;align-items:center;gap:10px;font-size:12.5px;padding:2px 30px 2px 4px}.lgbar .lgt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}.lgbar b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lgbar span{color:var(--faint)}.lgbar button{flex:none;white-space:nowrap}
   /* where sessions run: a quiet word after the title */
   .side-head .st{flex:none}.side-head .gap{flex:1}
   .envl{display:inline-flex;align-items:center;gap:4px;margin-left:5px;padding:2px 5px;border-radius:6px;color:var(--faint);font-size:12.5px;font-weight:500;position:relative}

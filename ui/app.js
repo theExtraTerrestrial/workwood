@@ -914,7 +914,7 @@ function linkIn(s){
 function copyText(t){return navigator.clipboard?.writeText(t).catch(()=>fallback())??fallback();
   function fallback(){const a=document.createElement('textarea');a.value=t;document.body.append(a);a.select();const ok=document.execCommand('copy');a.remove();if(!ok)throw new Error('copy')}}
 async function startLogin(name,add){
-  $('spage').innerHTML=`<div class="lgbar"><b>${add?'Add':'Sign in to'} ${esc(name)}</b><span id="lgNote">Follow the steps below. A browser page may open.</span><button class="sval pri" id="lgOpen" hidden>Open sign-in page</button><button class="sval" id="lgCopy" hidden>Copy link</button><button class="sval" id="lgBack">Back</button></div><div class="lgx" id="lgx"></div>`;
+  $('spage').innerHTML=`<div class="lgbar"><div class="lgt"><b>${add?'Add':'Sign in to'} ${esc(name)}</b><span id="lgNote">Follow the steps below. A browser page may open.</span></div><button class="sval pri" id="lgOpen" hidden>Open sign-in page</button><button class="sval" id="lgCopy" hidden>Copy link</button><button class="sval" id="lgBack">Back</button></div><div class="lgx" id="lgx"></div>`;
   const term=new Terminal({fontFamily:'"Cascadia Code","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace',fontSize:12.5,cursorBlink:true,theme:termTheme(),linkHandler:TLINKS});
   const fit=new FitAddon.FitAddon();term.loadAddon(fit);term.open($('lgx'));try{fit.fit()}catch{}
   const me=L={name,term};const say=t=>{if(L===me)$('lgNote').textContent=t};

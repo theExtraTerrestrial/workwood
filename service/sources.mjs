@@ -235,18 +235,20 @@ export async function tagSessions(list, profiles) {
 }
 
 // Where a folder sits in git: the main checkout it belongs to, the worktree's name when it is one, and the branch
-// checked out right now. Read from the files git keeps; no git command is run.
+// checked out right now, and the top of this checkout (the worktree's own folder in a worktree). Read from the files
+// git keeps; no git command is run.
 const placeCache = new Map();
 export async function placeOf(cwd) {
   const had = placeCache.get(cwd);
   if (had && Date.now() - had.at < 4000) return had.v;
-  const v = { root: cwd, worktree: null, branch: null };
+  const v = { root: cwd, worktree: null, branch: null, top: cwd };
   try {
     let dir = cwd, dot = null;
     for (let i = 0; i < 8 && !dot; i++) {
       try { await fs.stat(path.join(dir, '.git')); dot = path.join(dir, '.git'); } catch { const up = path.dirname(dir); if (up === dir) break; dir = up; }
     }
     if (dot) {
+      v.top = dir;
       let gitdir = dot;
       if ((await fs.stat(dot)).isFile()) {
         const m = /^gitdir:\s*(.+)$/m.exec(await fs.readFile(dot, 'utf8'));

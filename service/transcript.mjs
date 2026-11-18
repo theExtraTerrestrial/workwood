@@ -130,6 +130,7 @@ export function windowFor(model, used = 0) {
 export class Builder {
   constructor(seq = 0, cwd = null, { keepOutput = false } = {}) {
     this.items = []; this.context = null; this.lastTool = null; this.seq = seq; this.fresh = new Map(); this.groups = []; this.cwd = cwd; this.named = [];
+    this.cmdFrom = null;                        // when the turn's first command started
     this.steps = new Map();                     // tool_use id -> the step and the item it is drawn in
     this.output = keepOutput ? new Map() : null; // a live turn keeps whole outputs, for "Show all output"
   }
@@ -279,7 +280,12 @@ export class Builder {
         this.lastTool = d;
         const file = d.group === 'edit' && b.input?.file_path;
         if (file && path.isAbsolute(file) && previewKind(file)) this.fresh.set(file, this.lastTs || new Date().toISOString());
+        // A picture or page the agent opens to look at, that a command of this turn wrote: made by a script that built
+        // its path (a screenshot), so no command named it.
+        if (b.name === 'Read' && path.isAbsolute(b.input?.file_path || '') && previewKind(b.input.file_path) && this.cmdFrom != null)
+          this.named.push({ files: [b.input.file_path], from: this.cmdFrom, to: null, ts: this.lastTs || new Date().toISOString() });
         if (b.name === 'Bash' || b.name === 'PowerShell') {
+          this.ran(ts);
           const { files, dir } = namedFiles(b.input?.command, [this.shellDir, this.cwd].filter(Boolean));
           if (dir) this.shellDir = dir;   // the shell stays where the last command left it
           // Claude Code may start a command before it reports it (while the rest of the message is still being written).
@@ -303,6 +309,8 @@ export class Builder {
     }
     return out;
   }
+  /** A command started at `ts` (a reader that skips the command itself still reports when it ran). */
+  ran(ts) { if (this.cmdFrom == null) this.cmdFrom = (ts ? Date.parse(ts) : Date.now()) - LEAD; }
   /**
    * Tool results arrived at `ts`. A file a command named counts when it was written from that command's start up to
    * the turn's latest result: a later command may write it again without naming it (rerunning the script that makes it).
@@ -321,7 +329,7 @@ export class Builder {
       if (files.some(f => f.path === file)) continue;
       try { const st = fs.statSync(file); if (st.isFile() && st.mtimeMs >= n.from && st.mtimeMs <= (n.to ?? Infinity)) files.push({ path: file, name: path.basename(file), kind: previewKind(file), v: Math.round(st.mtimeMs), ts: n.ts }); } catch {}
     }
-    this.named = [];
+    this.named = []; this.cmdFrom = null;
     if (!files.length) return [];
     this.closeText(); this.groups.push(files);
     return [this.push({ kind: 'work', files })];
@@ -358,6 +366,8 @@ function earlyWork(file, upto, cwd) {
       if (line.includes('"type":"assistant"') && line.includes('"tool_use"') && SHOWABLE.test(line)) {
         let m; try { m = JSON.parse(line); } catch { m = null; }
         if (m?.message && !m.isSidechain && !m.isMeta && !m.error) b.assistant(m.message, m.timestamp, null, m.cwd);
+      } else if (line.includes('"type":"assistant"') && /"name":"(?:Bash|PowerShell)"/.test(line) && !line.includes('"isSidechain":true')) {
+        b.ran(/"timestamp":"([^"]+)"/.exec(line)?.[1]);   // a command that names nothing to show may still make what a later Read opens
       } else if (line.includes('"type":"user"')) {
         if (!line.includes('"isSidechain":true') && line.includes('"tool_result"')) b.toolsDone(/"timestamp":"([^"]+)"/.exec(line)?.[1]);
       } else if (line.includes('"turn_duration"')) b.flushWork();

@@ -498,6 +498,32 @@ test('previews: a named file rewritten later in the turn by a command that does 
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('previews: a picture a script made under a path no command names is offered once the agent opens it', async () => {
+  const { readTranscript } = await import('../service/transcript.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ww-read-')), shot = path.join(dir, 'shots', 'step.png'), old = path.join(dir, 'old.png');
+  fs.mkdirSync(path.dirname(shot)); fs.writeFileSync(shot, 'png'); fs.writeFileSync(old, 'png');
+  const t = Date.parse('2026-01-02T10:00:00Z'), at = ms => new Date(t + ms).toISOString();
+  fs.utimesSync(shot, new Date(t + 1000), new Date(t + 1000));   // written by the smoke script
+  fs.utimesSync(old, new Date(t - 3600e3), new Date(t - 3600e3)); // from an hour before: looked at, not made
+  const tool = (id, ms, name, input) => [
+    { type: 'assistant', cwd: dir, timestamp: at(ms), message: { model: 'claude-opus-5-5', content: [{ type: 'tool_use', id, name, input }] } },
+    { type: 'user', cwd: dir, timestamp: at(ms + 1500), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: '' }] } },
+  ];
+  const lines = [
+    { type: 'user', cwd: dir, timestamp: at(-1000), message: { role: 'user', content: 'check it' } },
+    ...tool('t1', 0, 'Bash', { command: 'node smoke.js' }),
+    ...tool('t2', 5000, 'Read', { file_path: shot }),
+    ...tool('t3', 6000, 'Read', { file_path: old }),
+    { type: 'system', subtype: 'turn_duration', durationMs: 8000, timestamp: at(8000) },
+  ];
+  const padding = Array.from({ length: 80 }, (_, i) => ({ type: 'user', cwd: dir, timestamp: at(10000 + i), message: { role: 'user', content: 'x'.repeat(100000) } }));
+  const write = (name, l) => { const f = path.join(dir, name); fs.writeFileSync(f, l.map(x => JSON.stringify(x)).join('\n') + '\n'); return f; };
+  try {
+    assert.deepEqual((await readTranscript(write('s.jsonl', lines), 400, dir)).work.map(f => f.path), [shot]);
+    assert.deepEqual((await readTranscript(write('long.jsonl', [...lines, ...padding]), 400, dir)).work.map(f => f.path), [shot]);   // early in a long session too
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('previews: files the agent wrote are listed, and served with their neighbours but nothing else', async () => {
   const id = await newSession('build a MOCKUP'), dir = path.join(sb.projects.alpha, 'mockups');
   const s = await idle(id);
@@ -668,6 +694,11 @@ test('worktrees: a session in a worktree belongs to its project, and reports the
   assert.deepEqual([s.project, s.root], ['beta', sb.projects.beta]);
   assert.deepEqual((await session(id)).place, { cwd: wt, project: 'beta', worktree: 'beta-login-fix', branch: 'login-fix' });
   assert.deepEqual((await session(sb.sessions.betaOther)).place, { cwd: sb.projects.beta, project: 'beta', worktree: null, branch: 'main' });
+  // VS Code opens where the work is: the worktree's own folder, not the project it was made from
+  assert.equal((await svc.call('open-editor', { sessionId: id })).status, 200);
+  await until(() => readLog(sb).includes(`code ${wt}`), 'VS Code in the worktree');
+  assert.equal((await svc.call('open-editor', { sessionId: sb.sessions.betaOther })).status, 200);
+  await until(() => readLog(sb).includes(`code ${sb.projects.beta}`), 'VS Code in the project');
 });
 
 test('open in terminal: resumes under the session\'s own profile, and not while it is in use', async () => {

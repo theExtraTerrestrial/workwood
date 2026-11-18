@@ -297,6 +297,7 @@ async function api(req, res, url) {
     if (run) { const mine = run.builder.work(), has = new Set(mine.map(f => f.path)); t.work = mine.concat(t.work.filter(f => !has.has(f.path))); }
     for (const f of t.work) previewDirs(s.id).add(path.dirname(f.path));
     for (const f of t.work) knownWork(s.id).add(f.path);
+    if (pl.worktree) previewDirs(s.id).add(pl.top);   // a page in the worktree may load its neighbours, as in the project folder
     return send(res, 200, { ...t, place, context: run?.context || t.context, model: run?.builder.model || t.model, effort: run?.effort || t.effort, mode: run?.mode || t.mode || null,
       defaults: await src.defaultsFor(s.cwd, run?.profile || s.profile, state.profiles), run: publicRun(run) });
   }
@@ -525,7 +526,9 @@ async function api(req, res, url) {
   if (parts[0] === 'open-editor') {
     const s = state.sessions.find(x => x.id === b.sessionId);
     if (!s) return send(res, 404, { error: 'No such session.' });
-    spawn('code', [s.cwd], { detached: true, stdio: 'ignore', env: src.cleanEnv(), shell: process.platform === 'win32', windowsHide: true }).on('error', () => {}).unref();
+    // Where it is working now: an agent that moved into a worktree is opened there, at the worktree's top.
+    const now = s.file ? await src.lastCwd(s.file, s.cwd) : s.cwd, pl = await src.placeOf(now);
+    spawn('code', [pl.worktree ? pl.top : s.cwd], { detached: true, stdio: 'ignore', env: src.cleanEnv(), shell: process.platform === 'win32', windowsHide: true }).on('error', () => {}).unref();
     return send(res, 200, { ok: true });
   }
   send(res, 404, { error: 'Not found.' });

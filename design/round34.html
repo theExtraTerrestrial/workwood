@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 34: an update is ready</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<style>
+  :root{color-scheme:dark;--accent:hsl(168 62% 62%);--warn:#ffb955;--go:#4fd6a4;--hot:#f0706a}
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0c0e;color:#e8e9ec;font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;padding-bottom:80px}
+  [data-theme=light] body{background:#e9eaee;color:#1d1e22}
+  button{font:inherit;color:inherit}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:14px;padding:24px 0 2px}.top h1{font-size:17px;margin:0;flex:1}
+  .top button{border:0;cursor:pointer;background:#1d1f23;color:#c9ccd2;padding:6px 11px;border-radius:8px}
+  [data-theme=light] .top button{background:#fff;color:#333}
+  .intro{color:#b9bcc3;max-width:720px;margin:6px 0 18px;font-size:14px}[data-theme=light] .intro{color:#555}
+  .intro kbd{font:inherit;font-weight:700;padding:0 6px;border-radius:5px;background:rgba(128,128,128,.22)}
+
+  .row{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;align-items:center}
+  .row>span{font-size:11.5px;color:#8f939b;width:60px}
+  .row button{border:0;cursor:pointer;background:#1d1f23;color:#c9ccd2;padding:6px 11px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  [data-theme=light] .row button{background:#fff;color:#333;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+  .row button.on{background:hsl(168 40% 22%);color:#fff;box-shadow:inset 0 0 0 1.5px var(--accent)}
+  [data-theme=light] .row button.on{background:hsl(168 45% 88%);color:#123}
+  .row button i{font-style:normal;color:var(--accent);font-weight:700;margin-right:5px}
+  .row button small{color:#8f939b;margin-left:6px}
+
+  /* ===== the mock app ===== */
+  .win{--bg:#18191c;--side:#1a1b1e;--surface:#222428;--pop:#26282d;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.14);
+    --text:#f0f1f3;--dim:#a6aab2;--faint:#6d717a;--sel:rgba(255,255,255,.075);--hov:rgba(255,255,255,.05);
+    display:flex;height:600px;border-radius:14px;overflow:hidden;background:var(--bg);color:var(--text);margin-top:14px;
+    box-shadow:0 30px 90px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.12)}
+  [data-theme=light] .win{--bg:#fbfbfc;--side:#f2f3f5;--surface:#fff;--pop:#fff;--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.14);
+    --text:#1b1c1f;--dim:#5b5f68;--faint:#8d919a;--sel:rgba(0,0,0,.06);--hov:rgba(0,0,0,.04);box-shadow:0 30px 90px rgba(0,0,0,.18),0 0 0 1px rgba(0,0,0,.1)}
+  .win svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .side{position:relative;width:268px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column}
+  .side-head{display:flex;align-items:center;padding:14px 16px 8px;font-weight:600}
+  .newb{display:flex;align-items:center;gap:8px;height:32px;margin:0 8px 4px;padding:0 9px;border-radius:8px;color:var(--dim);font-weight:500;box-shadow:inset 0 0 0 1px var(--line)}
+  .list{flex:1;padding:0 8px;overflow:hidden}
+  .grp{display:flex;align-items:center;gap:8px;padding:13px 9px 5px;font-size:12.5px;font-weight:600}
+  .grp small{margin-left:auto;font-weight:500;font-size:11px;color:var(--faint)}
+  .tile{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:8.5px;font-weight:700;background:hsl(var(--h) 55% 62%/.17);color:hsl(var(--h) 55% 60%)}
+  .sess{padding:6px 9px 6px 37px;border-radius:8px;margin-bottom:1px}.sess.sel{background:var(--sel)}
+  .l1{display:flex;gap:8px;align-items:center}
+  .l1 b{flex:1;font-weight:500;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sess.sel .l1 b,.sess.work .l1 b{color:var(--text)}
+  .l1 time{font-size:11px;color:var(--faint)}
+  .l2{display:block;font-size:11.5px;color:var(--faint)}
+  .spin{width:11px;height:11px;border-radius:50%;border:1.6px solid color-mix(in srgb,var(--accent) 30%,transparent);border-top-color:var(--accent);animation:r 1s linear infinite}
+  @keyframes r{to{transform:rotate(360deg)}}
+  .side-foot{position:relative;display:flex;align-items:center;gap:2px;padding:6px 8px 8px;border-top:1px solid var(--line)}
+  .hist{flex:1;display:flex;align-items:center;gap:9px;height:30px;padding:0 9px;border-radius:8px;color:var(--dim);font-size:12.5px}
+  .hist small{color:var(--faint)}.hist kbd{font:inherit;font-size:11px;color:var(--faint);margin-left:auto}
+  .ib{position:relative;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--dim)}
+  .ib .pip{position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--side)}
+
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .head{height:58px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid var(--line);font-weight:600;font-size:14.5px}
+  .conv{flex:1;padding:22px 0}.col{max-width:620px;margin:0 auto;padding:0 24px}
+  .me{margin:0 0 22px auto;width:fit-content;max-width:82%;background:var(--surface);border-radius:14px 14px 4px 14px;padding:10px 14px;box-shadow:0 0 0 1px var(--line)}
+  .ai p{margin:0 0 10px;line-height:1.6}
+  .composer{padding:0 24px 14px}
+  .box{max-width:620px;margin:0 auto;border-radius:14px;background:var(--surface);box-shadow:0 0 0 1px var(--line2);padding:12px 14px;color:var(--faint);height:74px}
+
+  /* ===== the update pop-ups: all sit just above the footer ===== */
+  .upd{position:absolute;left:8px;right:8px;bottom:calc(100% + 8px);z-index:2;animation:in .32s cubic-bezier(.2,.8,.2,1)}
+  @keyframes in{from{opacity:0;transform:translateY(6px)}}
+  .btn{border:0;cursor:pointer;font-weight:650;font-size:12px;border-radius:7px;padding:5px 11px;background:var(--accent);color:#0d1f1a}
+  .btn.ghost{background:none;color:var(--dim);font-weight:550;padding:5px 6px}
+  .x{border:0;background:none;cursor:pointer;color:var(--faint);width:22px;height:22px;border-radius:6px;display:grid;place-items:center}
+  .x:hover{background:var(--hov);color:var(--text)}
+
+  /* A · card */
+  .A{background:var(--pop);border-radius:12px;padding:11px 12px 10px;box-shadow:0 12px 32px rgba(0,0,0,.35),0 0 0 1px var(--line2)}
+  .A .t{display:flex;align-items:center;gap:8px;font-weight:650;font-size:12.5px}
+  .A .t .ic{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
+  .A .t .x{margin-left:auto}
+  .A .s{font-size:11.5px;color:var(--faint);margin:3px 0 9px 30px}
+  .A .b{display:flex;gap:4px;margin-left:30px}
+
+  /* B · strip */
+  .B{display:flex;align-items:center;gap:8px;height:34px;padding:0 4px 0 11px;border-radius:9px;font-size:12px;font-weight:600;
+     background:color-mix(in srgb,var(--accent) 14%,var(--side));color:var(--text);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent)}
+  .B svg{color:var(--accent)}.B .gap{flex:1}
+  .B small{font-weight:500;color:var(--faint)}
+
+  /* C · card with what changed */
+  .C{background:var(--pop);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.35),0 0 0 1px var(--line2);overflow:hidden}
+  .C .t{display:flex;align-items:center;gap:8px;padding:10px 8px 6px 12px;font-weight:650;font-size:12.5px}.C .t .x{margin-left:auto}
+  .C .t i{font-style:normal;font-weight:500;color:var(--faint);font-size:11.5px}
+  .C ul{list-style:none;margin:0;padding:0 12px 8px;font-size:11.5px;color:var(--dim)}
+  .C li{display:block;padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .C li::before{content:"";display:inline-block;vertical-align:middle;width:4px;height:4px;border-radius:50%;background:var(--faint);margin-right:7px}
+  .C li.more{color:var(--faint)}.C li.more::before{opacity:0}
+  .C .b{display:flex;gap:4px;align-items:center;padding:8px 10px 10px 12px;border-top:1px solid var(--line)}
+  .C .b .gap{flex:1}
+
+  /* states shared by all */
+  .bar2{height:3px;border-radius:2px;background:var(--line2);overflow:hidden;margin:2px 0 0}
+  .bar2 i{display:block;height:100%;width:40%;background:var(--accent);border-radius:2px;animation:slide 1.3s ease-in-out infinite}
+  @keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
+  .warn{color:var(--warn)!important}.bad{color:var(--hot)!important}
+
+  .notes{color:#b9bcc3;max-width:760px;font-size:13.5px}.notes li{margin:5px 0}.notes b{color:#fff}
+  [data-theme=light] .notes{color:#444}[data-theme=light] .notes b{color:#000}
+  h3{font-size:15px;margin:36px 0 6px}
+  details{margin-top:30px;max-width:760px}summary{cursor:pointer;font-weight:650;font-size:14px}
+</style></head><body><div class="wrap">
+
+<div class="top"><h1>Round 34 · An update is ready</h1><button id="theme">Light</button></div>
+<p class="intro">On start, Workwood fetches from GitHub. If <code>main</code> has moved on, a small note appears above the sidebar footer and asks for a restart. Pick a variant with <kbd>A</kbd> <kbd>B</kbd> <kbd>C</kbd> <kbd>D</kbd>, a state with <kbd>1</kbd>–<kbd>4</kbd>.</p>
+
+<div class="row" id="vars"><span>Variant</span></div>
+<div class="row" id="states"><span>State</span></div>
+
+<div class="win" id="win">
+  <aside class="side">
+    <div class="side-head">Sessions</div>
+    <div class="newb"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New session</div>
+    <div class="list">
+      <div class="grp"><span class="tile" style="--h:168">SH</span>shop<small>3</small></div>
+      <div class="sess sel"><span class="l1"><b>Checkout redesign</b><time>2m</time></span></div>
+      <div class="sess work"><span class="l1"><b>Invoice PDF export</b><i class="spin"></i></span><span class="l2">Running the tests</span></div>
+      <div class="sess"><span class="l1"><b>Coupon codes at checkout</b><time>40m</time></span></div>
+      <div class="grp"><span class="tile" style="--h:215">AP</span>api<small>3</small></div>
+      <div class="sess"><span class="l1"><b>Rate limits for the public API</b><time>1h</time></span></div>
+      <div class="sess"><span class="l1"><b>Fix flaky login test</b><time>3h</time></span></div>
+      <div class="sess"><span class="l1"><b>Upgrade to Node 24</b><time>1d</time></span></div>
+    </div>
+    <div class="side-foot" id="foot">
+      <div class="hist"><svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg><span>Done</span><small>12</small><kbd>Ctrl K</kbd></div>
+      <div class="ib" id="gear"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="head">Checkout redesign</div>
+    <div class="conv"><div class="col">
+      <div class="me">The order summary jumps when the coupon field opens. Can you make it stay put?</div>
+      <div class="ai"><p>The coupon field was added to the page only when it opened, which pushed the summary down. It now keeps its space and fades in, so nothing below it moves.</p></div>
+    </div></div>
+    <div class="composer"><div class="box">Reply to the agent…</div></div>
+  </div>
+</div>
+
+<h3>The four variants</h3>
+<ul class="notes">
+  <li><b>A · Card</b> (recommended). One line, how many changes, Restart or Later. Hovering “5 changes” lists their titles.</li>
+  <li><b>B · Strip</b>. A single tinted row, the quietest that still asks. No close button: Later hides it until the next start.</li>
+  <li><b>C · What changed</b>. The card lists the newest commit titles, so you can tell if it is worth restarting now.</li>
+  <li><b>D · Just a dot</b>. Nothing pops up; a dot on the gear, and the restart sits at the top of Settings. For people who never want to be asked.</li>
+</ul>
+
+<details><summary>Under the hood</summary><ul class="notes">
+  <li><b>On start</b>: the service runs <code>git fetch origin</code> in the app folder, then <code>git rev-list --count HEAD..@{u}</code>. Zero → nothing shown. Titles come from <code>git log --format=%s HEAD..@{u}</code>.</li>
+  <li><b>Restart</b>: <code>git pull --ff-only</code>; if <code>package-lock.json</code> changed, <code>npm install</code>; then Electron's <code>app.relaunch()</code> + <code>app.exit()</code>. Sessions are Claude Code sessions on disk, so they come back as they were.</li>
+  <li><b>Can't update</b>: local edits that block the pull, a branch other than <code>main</code>, or no network. The fetch failing silently (offline) shows nothing at all.</li>
+  <li><b>Agents working</b>: a restart would cut running turns, so the button says so and asks once more.</li>
+</ul></details>
+
+<h3>Open questions</h3>
+<ol class="notes">
+  <li><b>Check only on start, or also every few hours</b> while the app stays open? Workwood tends to run all day.</li>
+  <li><b>Agents working</b>: warn and restart anyway (shown), or wait and restart by itself once they're all idle?</li>
+  <li><b>Windows copy</b> (<code>%LOCALAPPDATA%\Workwood</code>, from <code>npm run shortcut</code>): should Restart also redo that copy, or only show “run npm run shortcut again” there?</li>
+  <li><b>Local edits</b> in the app folder (you develop Workwood in it): skip the check entirely when the tree is dirty, or show “Can't update” as drawn?</li>
+</ol>
+
+</div>
+<script>
+const V={A:'Card',B:'Strip',C:'What changed',D:'Just a dot'};
+const S={ready:'Ready',busy:'Agents working',going:'Updating',fail:"Can't update"};
+let v='A',s='ready';
+const ic={up:'<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',x:'<svg viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M6 6l12 12M18 6 6 18"/></svg>',warn:'<svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>'};
+const commits=['A message sent during /compact keeps following the turn','Sign-in bar: the note sits under the title','Sign-in: the link opens in the browser'];
+const sub={ready:'5 changes since you started',busy:'1 agent is working and will be stopped',going:'Pulling and restarting…',fail:'Local edits in the app folder'};
+const title={ready:'Update ready',busy:'Update ready',going:'Updating',fail:"Can't update"};
+const go={ready:'Restart',busy:'Restart anyway',going:'',fail:'Show'};
+function btns(){if(s==='going')return '<div class="bar2" style="flex:1"><i></i></div>';
+  return `<button class="btn${s==='fail'?' ghost':''}">${go[s]}</button><button class="btn ghost">${s==='fail'?'Dismiss':'Later'}</button>`}
+function render(){
+  document.querySelectorAll('.upd').forEach(e=>e.remove());document.querySelector('.pip')?.remove();
+  const foot=document.getElementById('foot');let h='';
+  const cls=s==='fail'?'bad':s==='busy'?'warn':'';
+  const icon=s==='fail'?ic.warn:ic.up;
+  if(v==='A')h=`<div class="upd A"><div class="t"><span class="ic ${cls}">${icon}</span>${title[s]}<button class="x">${ic.x}</button></div><div class="s ${cls}">${sub[s]}</div><div class="b" style="${s==='going'?'margin-right:4px':''}">${btns()}</div></div>`;
+  if(v==='B'){const t={ready:'Update ready <small>· 5</small>',busy:'<span class="warn">1 agent working</span>',going:'Updating…',fail:`<span class="bad">Can't update</span>`}[s];
+    h=`<div class="upd B">${s==='fail'?`<span class="bad">${ic.warn}</span>`:ic.up}<span>${t}</span><span class="gap"></span>${s==='going'?'<div class="bar2" style="width:70px;margin-right:8px"><i></i></div>':`<button class="btn${s==='fail'?' ghost':''}">${s==='fail'?'Why':s==='busy'?'Restart':'Restart'}</button><button class="x">${ic.x}</button>`}</div>`}
+  if(v==='C'){const list=s==='fail'?`<li class="bad">package.json has local edits</li><li class="more">Commit or stash them, then restart</li>`:commits.map(c=>`<li>${c}</li>`).join('')+'<li class="more">and 2 more</li>';
+    h=`<div class="upd C"><div class="t"><span class="${cls}" style="display:flex">${icon}</span>${title[s]}<i>${s==='fail'?'':'5 changes'}</i><button class="x">${ic.x}</button></div><ul>${list}</ul><div class="b">${s==='busy'?'<span class="warn" style="font-size:11.5px">1 agent working</span>':''}<span class="gap"></span>${btns()}</div></div>`}
+  if(v==='D'){document.getElementById('gear').insertAdjacentHTML('beforeend',`<i class="pip" style="${s==='fail'?'background:var(--hot)':''}"></i>`)}
+  if(h)foot.insertAdjacentHTML('beforeend',h);
+  document.querySelectorAll('#vars button').forEach(b=>b.classList.toggle('on',b.dataset.k===v));
+  document.querySelectorAll('#states button').forEach(b=>b.classList.toggle('on',b.dataset.k===s));
+}
+for(const[k,n]of Object.entries(V)){const b=document.createElement('button');b.dataset.k=k;b.innerHTML=`<i>${k}</i>${n}${k==='A'?'<small>Recommended</small>':''}`;b.onclick=()=>{v=k;render()};vars.append(b)}
+Object.entries(S).forEach(([k,n],i)=>{const b=document.createElement('button');b.dataset.k=k;b.innerHTML=`<i>${i+1}</i>${n}`;b.onclick=()=>{s=k;render()};states.append(b)});
+addEventListener('keydown',e=>{const K=e.key.toUpperCase();if(V[K]){v=K;render()}const n=+e.key;if(n>=1&&n<=4){s=Object.keys(S)[n-1];render()}});
+theme.onclick=()=>{const d=document.documentElement,l=d.dataset.theme==='dark';d.dataset.theme=l?'light':'dark';theme.textContent=l?'Dark':'Light'};
+render();
+</script>
+</body></html>

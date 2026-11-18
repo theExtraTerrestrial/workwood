@@ -4,7 +4,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 if (!app.requestSingleInstanceLock()) app.quit();
-let win = null;
+let win = null, sure = false;
 
 // Opened from the Dock or the app launcher, the window does not get the PATH your terminal has, so `claude`, `node`
 // and `code` may not be found. Ask your login shell for its PATH once (4 seconds at most), and add the usual places.
@@ -38,6 +38,8 @@ async function sureToQuit(win, more = 0) {
 async function open() {
   require('electron').ipcMain.on('env:get', e => { e.returnValue = null; });   // one place only here; the Windows window has two
   require('electron').ipcMain.on('login:get', e => { e.returnValue = null; });   // not offered in the Linux window
+  // After an update: start again from the updated folder. The page has already warned about agents that are working.
+  require('electron').ipcMain.handle('app:restart', () => { sure = true; app.relaunch(); app.quit(); });
   require('electron').ipcMain.handle('folder:pick', async () => { const r = await require('electron').dialog.showOpenDialog(win, { title: 'Choose a project folder', properties: ['openDirectory'] }); return r.canceled ? null : r.filePaths[0] || null; });
   const { start } = await import(pathToFileURL(path.join(__dirname, '..', 'service', 'server.mjs')).href);
   const { address } = await start();
@@ -61,7 +63,6 @@ async function open() {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(new URL(address).origin)) { e.preventDefault(); shell.openExternal(url); } });
   win.on('closed', () => { win = null; });
-  let sure = false;
   win.on('close', e => { if (sure) return; e.preventDefault(); sureToQuit(win).then(ok => { if (ok && win) { sure = true; win.close(); } }); });
   await win.loadURL(address);
   // For checking the window without looking at it: WORKWOOD_SHOT=<file.png> saves a picture of it after a few seconds.

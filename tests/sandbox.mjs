@@ -54,7 +54,13 @@ export function makeSandbox() {
   g('init', '-q', '-b', 'main'); g('add', '-A'); g('commit', '-q', '-m', 'start');
   w(path.join(projects.beta, 'notes.txt'), 'one\n2\nthree\nfour\n'); fs.rmSync(path.join(projects.beta, 'old.txt'));
   w(path.join(projects.beta, 'fresh.md'), '# Fresh\nA new file.\n'); fs.writeFileSync(path.join(projects.beta, 'pic.bin'), Buffer.from([1, 0, 2, 0, 3]));
-  const sb = { root, home, bin, projects, log: path.join(root, 'claude.log'), agents: path.join(root, 'agents.json'), sessions: {},
+  // the folder Workwood "runs from", for updates: a clone of a bare repository standing in for GitHub
+  const origin = path.join(root, 'origin.git'), app = path.join(root, 'app');
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main', origin], { stdio: 'ignore' });
+  const ag = (...args) => execFileSync('git', ['-C', app, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', ...args], { env: { ...process.env, HOME: home, GIT_CONFIG_NOSYSTEM: '1' }, stdio: 'ignore' });
+  fs.mkdirSync(app); w(path.join(app, 'README.md'), '# app\n'); w(path.join(app, 'package.json'), '{}\n');
+  ag('init', '-q', '-b', 'main'); ag('add', '-A'); ag('commit', '-q', '-m', 'first'); ag('remote', 'add', 'origin', origin); ag('push', '-q', '-u', 'origin', 'main');
+  const sb = { root, home, bin, projects, app, origin, log: path.join(root, 'claude.log'), agents: path.join(root, 'agents.json'), sessions: {},
     usage: Object.fromEntries(Object.entries(usage).map(([k, v]) => [k, [...v]])), usageReads: [], usageMost: 0, renewals: [] };
   sb.sessions.alphaLive = addSession(sb, 'alpha', 'live', 'Tidy the alpha readme', 'The readme is tidied.', 300);
   sb.sessions.betaOther = addSession(sb, 'beta', 'other', 'Add a beta changelog', 'The changelog is added.', 7200);
@@ -74,8 +80,18 @@ export function makeSandbox() {
 
   sb.env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^CLAUDE|^ANTHROPIC|^WORKWOOD|^NODE_|^npm_/.test(k))),
     HOME: home, PATH: `${bin}:${process.env.PATH}`, ASDF_DATA_DIR: process.env.ASDF_DATA_DIR || path.join(REAL_HOME, '.asdf'),
-    FAKE_CLAUDE_LOG: sb.log, FAKE_CLAUDE_AGENTS: sb.agents, WORKWOOD_TOKEN: 'test-token', WORKWOOD_BG_GRACE: '400', WORKWOOD_STT: path.join(HERE, 'fake-stt.mjs'), WORKWOOD_TERMINAL: path.join(bin, 'terminal') };
+    FAKE_CLAUDE_LOG: sb.log, FAKE_CLAUDE_AGENTS: sb.agents, WORKWOOD_TOKEN: 'test-token', WORKWOOD_BG_GRACE: '400', WORKWOOD_STT: path.join(HERE, 'fake-stt.mjs'), WORKWOOD_TERMINAL: path.join(bin, 'terminal'),
+    WORKWOOD_UPDATE_DIR: app, WORKWOOD_UPDATE_DELAY: '100' };
   return sb;
+}
+
+/** A new commit on the stand-in for GitHub, made from a clone of its own; returns its hash. */
+export function upstreamCommit(sb, message, file = 'README.md') {
+  const work = path.join(sb.root, 'upstream-work'), env = { ...process.env, HOME: sb.home, GIT_CONFIG_NOSYSTEM: '1' };
+  const g = (...args) => execFileSync('git', ['-C', work, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', ...args], { env, encoding: 'utf8' }).trim();
+  if (!fs.existsSync(work)) execFileSync('git', ['clone', '-q', sb.origin, work], { env, stdio: 'ignore' }); else g('pull', '-q');
+  fs.appendFileSync(path.join(work, file), message + '\n'); g('add', '-A'); g('commit', '-q', '-m', message); g('push', '-q');
+  return g('rev-parse', 'HEAD');
 }
 
 let counter = 0;

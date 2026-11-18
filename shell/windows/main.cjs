@@ -11,7 +11,7 @@ const cfg = require('./config.json');   // { distro, dir } written by the instal
 
 if (!app.requestSingleInstanceLock()) app.quit();
 app.setAppUserModelId('Workwood');
-let win = null, wsl = null, quitting = false, current = null;
+let win = null, wsl = null, quitting = false, current = null, sure = false;
 const native = path.join(__dirname, '..', 'native', 'service', 'server.mjs');
 const envs = [...(fs.existsSync(native) ? [{ id: 'windows', label: 'Windows', detail: 'This PC' }] : []), ...(cfg.distro ? [{ id: 'wsl', label: 'WSL', detail: cfg.distro }] : [])];
 const remembered = path.join(app.getPath('userData'), 'workwood-env.json');
@@ -77,7 +77,6 @@ async function open() {
   // the other place, when it was started, may have background work of its own
   const elsewhere = async () => { let n = 0; for (const id of Object.keys(started)) { if (id === current) continue;
     try { const u = new URL(await started[id]); const r = await fetch(`${u.origin}/api/status`, { headers: { 'x-workwood-token': u.searchParams.get('token') }, signal: AbortSignal.timeout(3000) }); if (r.ok) n += (await r.json()).bg || 0; } catch {} } return n; };
-  let sure = false;
   win.on('close', e => { if (sure) return; e.preventDefault(); elsewhere().then(more => sureToQuit(win, more)).then(ok => { if (ok && win) { sure = true; win.close(); } }); });
   // The microphone, for dictation, and nothing else.
   win.webContents.session.setPermissionRequestHandler((wc, what, done, d) => done(what === 'media' && !(d.mediaTypes || []).includes('video')));
@@ -91,6 +90,16 @@ async function open() {
   ipcMain.on('login:get', e => { try { e.returnValue = !!app.getLoginItemSettings(atLogin).openAtLogin; } catch { e.returnValue = null; } });
   ipcMain.handle('login:set', (e, on) => { app.setLoginItemSettings({ ...atLogin, openAtLogin: !!on }); return !!app.getLoginItemSettings(atLogin).openAtLogin; });
   ipcMain.handle('folder:pick', async () => { const r = await dialog.showOpenDialog(win, { title: 'Choose a project folder', properties: ['openDirectory'] }); return r.canceled ? null : r.filePaths[0] || null; });
+  // After an update (pulled in WSL): this window closes, WSL makes the Windows copy again from the updated folder
+  // (it cannot while this program holds its files), then opens the window again. Its progress goes to the log.
+  ipcMain.handle('app:restart', () => {
+    sure = true;
+    if (cfg.distro) {
+      const inside = `cd '${cfg.dir.replace(/'/g, `'\\''`)}' && node shell/windows-shortcut.mjs --after-update >> ~/.cache/workwood/workwood.log 2>&1`;
+      spawn('wsl.exe', ['-d', cfg.distro, '--', 'bash', '-lic', inside], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    } else app.relaunch();
+    app.quit();
+  });
   ipcMain.handle('env:set', (e, id) => { if (envs.some(x => x.id === id) && id !== current) show(id); });
   // While you look at one side, ask the other (if it was started) whether an agent there is working or waiting for you.
   setInterval(async () => {

@@ -24,8 +24,12 @@ npm run install-app
   sessions run in WSL (the same as `npm run shortcut`, described below).
 
 On macOS and Linux the app runs straight from this folder: keep the folder where
-it is, and `git pull` is all an update needs. On Windows, run
-`npm run install-app` again after pulling. `npm run install-app -- --remove`
+it is. Workwood checks GitHub for updates when it starts and every three hours
+(or under Settings, About), and offers a restart that pulls them, runs
+`npm install` when the dependencies changed, and starts again. In the Windows
+window (with WSL) the restart also makes the Windows copy again. It will not
+update over uncommitted changes in this folder. The Windows window from before
+this feature has no restart: run `npm run install-app` once more after pulling. `npm run install-app -- --remove`
 takes the app away again; your sessions and settings stay.
 
 ## Run it

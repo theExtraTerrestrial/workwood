@@ -11,6 +11,7 @@ const P={
   min:'<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>',
   ext:'<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>',
   x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  alert:'<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
   refresh:'<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>',
   zap:'<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
   pencil:'<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
@@ -833,10 +834,68 @@ function renderSettings(){
   else if(stab===1)renderProfilePage(pg);
   else if(stab===2){needSkills();const all=skillList();pg.innerHTML=`<div class="pgh">Skills</div>`+(!all?'<div class="cap2">Loading skills…</div>':V.sk.err?`<div class="cap2">${esc(V.sk.err)}</div>`:all.map(s=>`<div class="srow" data-tip="${esc(s.about)}"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">/${esc(s.name)}</span><span class="sstate">${s.from}</span></div>`).join('')+`<div class="cap2" style="padding:10px 8px">As Claude Code reports them for ${V.isNew?'a new session here':'the open session'}.</div>`)}
   else{pg.innerHTML=`<div class="pgh">About</div>`+(about?`<div class="srow"><span>Workwood</span><span class="sstate">${esc(about.version)}</span></div>
+    ${updRow()}
     <div class="srow"><span>Claude Code<small>Runs your sessions.</small></span><span class="sstate ${about.claude?'':'bad'}">${esc(about.claude||'Not found')}</span></div>
     <div class="srow"><span>Speech model<small>${esc(about.speech.model)}, on this computer.</small></span><span class="sstate ${about.speech.state==='failed'?'bad':''}">${{idle:'Not loaded yet',loading:'Loading…',ready:'Ready',failed:'Could not be loaded'}[about.speech.state]}</span></div>
     <div class="srow"><span>Service<small>Node ${esc(about.node)}</small></span><span class="sstate">Running</span></div>`:'<div class="cap2">Loading…</div>');
     if(!about)api('about').then(a=>{about=a;renderSettings()}).catch(()=>{})}
+}
+/* ---------- updates: Workwood runs from a git checkout; when GitHub has more, a card above the sidebar footer offers a restart ---------- */
+const U={later:localStorage.getItem('ww.updLater'),busy:false,err:''};   // later: the upstream commit you said Later to; busy: pulling, then restarting
+const canRestart=()=>!!window.workwood?.restart;
+function running(){const l=A.sessions.filter(x=>!x.outside&&!x.term);return [l.filter(x=>x.status==='work').length,l.reduce((n,x)=>n+(x.bg||0),0)]}
+function updView(){
+  const u=A.update||{};
+  if(U.busy||u.updating)return {k:'going',t:'Updating',d:'Pulling the changes…'};
+  if(U.err)return {k:'fail',t:'Could not update',d:U.err};
+  if(u.head&&u.head===U.later)return null;
+  if(u.state==='updated')return {k:'done',t:'Updated',d:'Restart Workwood to use it'};
+  if(u.state==='blocked')return {k:'fail',t:"Can't update",d:u.why};
+  if(u.state!=='ready')return null;
+  const [w,b]=running(),stops=[w&&plural(w,'working agent'),b&&plural(b,'background task')].filter(Boolean).join(' and ');
+  return stops?{k:'busy',t:'Update ready',d:'Restarting stops '+stops}:{k:'ready',t:'Update ready',d:plural(u.behind,'new change')};
+}
+function renderUpd(){
+  const v=updView(),el=$('upd'),u=A.update||{};
+  $('bGear').classList.toggle('pip',!!v&&v.k!=='going');
+  $('gUpd').hidden=!v||v.k==='going';if(v)$('gUpd').innerHTML=`${svg(v.k==='fail'?'alert':'up')}${esc(v.t)}<span>${v.k==='fail'?'Show':canRestart()?'Restart':'Update'}</span>`;
+  el.hidden=!v;if(!v){el.innerHTML='';el.dataset.k='';return}
+  const titles=(u.titles||[]).join('\n')+(u.behind>3?`\nand ${u.behind-3} more`:''),go=canRestart()?'Restart':'Update';
+  const btns=v.k==='going'?'<div class="ubar"><i></i></div>'
+    :v.k==='fail'?`<button class="ubtn ghost" data-u="show">Show</button><button class="ubtn ghost" data-u="later">Later</button>`
+    :v.k==='done'?(canRestart()?`<button class="ubtn" data-u="restart">Restart</button>`:'')+`<button class="ubtn ghost" data-u="later">Later</button>`
+    :`<button class="ubtn" data-u="go">${v.k==='busy'?go+' anyway':go}</button><button class="ubtn ghost" data-u="later">Later</button>`;
+  const html=`<div class="ut"><span class="uic">${svg(v.k==='fail'?'alert':'up')}</span><b>${esc(v.t)}</b>${v.k==='going'?'':`<button class="ib ux" data-u="later" data-tip="Later">${svg('x')}</button>`}</div><div class="ud"${v.k==='ready'&&titles?` data-tip="${esc(titles)}"`:''}>${esc(v.d)}</div><div class="ub">${btns}</div>`;
+  if(el.innerHTML!==html)el.innerHTML=html;el.dataset.k=v.k;
+}
+async function doUpdate(){
+  U.busy=true;U.err='';renderUpd();
+  try{await api('update/apply',{})}catch(e){U.busy=false;U.err=e.message;renderUpd();return}
+  if(canRestart())try{await window.workwood.restart();return}catch{}   // the window goes away and comes back updated
+  U.busy=false;renderUpd();
+}
+function updAct(k){
+  const u=A.update||{};
+  if(k==='go')doUpdate();
+  else if(k==='restart')window.workwood.restart().catch(()=>{});
+  else if(k==='later'){U.err='';U.later=u.head||'-';localStorage.setItem('ww.updLater',U.later);renderUpd()}
+  else if(k==='show')openSettings(3);
+}
+$('upd').onclick=e=>{const b=e.target.closest('[data-u]');if(b)updAct(b.dataset.u)};
+$('gUpd').onclick=()=>{closePops();const v=updView();updAct(v?.k==='fail'?'show':v?.k==='done'?'restart':'go')};
+// Settings, About: where things stand, and a check right now.
+function updRow(){
+  const u=A.update||{},a=u.at?ago(u.at/1000):'',when=a?` · checked ${a==='now'?'just now':a+' ago'}`:'';
+  const line=u.checking?'Checking GitHub…':U.busy||u.updating?'Updating…':U.err?U.err
+    :u.state==='updated'?'Updated. Restart Workwood to use it.'
+    :u.state==='ready'?`${plural(u.behind,'new change')}: ${(u.titles||[])[0]||''}`
+    :u.state==='blocked'?`${u.why}${u.files?.length>1?': '+u.files.slice(0,3).join(', ')+(u.files.length>3?' …':''):''}. Commit or stash them, then check again.`
+    :u.error?u.error:u.state==='current'?'Up to date'+when:u.why||'Not checked yet';
+  const bad=!!(U.err||u.state==='blocked'||(u.error&&u.state!=='ready'));
+  const btn=u.state==='ready'&&!U.busy?`<button class="sval" data-set="updgo">${canRestart()?'Restart':'Update'}</button>`
+    :u.state==='updated'?(canRestart()?'<button class="sval" data-set="updrestart">Restart</button>':'')
+    :`<button class="sval" data-set="updcheck" ${u.checking||U.busy?'disabled':''}>Check now</button>`;
+  return `<div class="srow" id="sUpd"><span>Updates<small class="${bad?'bad':''}">${esc(line)}</small></span>${btn}</div>`;
 }
 // ---------- the Profiles page: the list on the left, the open profile on the right ----------
 const avHue=n=>[...n].reduce((h,c)=>(h*31+c.charCodeAt(0))>>>0,7)%360;
@@ -962,6 +1021,9 @@ $('spage').onclick=async e=>{
     try{A.prefs=await api('settings',{folders:[...(A.prefs.folders||[]),f]});renderSettings()}catch(err){oops(err.message)}return}
   if(s?.dataset.set==='login'){await setLogin(!loginOn);renderSettings()}
   if(s?.dataset.set==='bypass'){try{A.prefs=await api('settings',{bypass:!A.prefs?.bypass});renderSettings();renderComposer()}catch(err){oops(err.message)}}
+  if(s?.dataset.set==='updcheck'){U.err='';U.later=null;localStorage.removeItem('ww.updLater');api('update/check',{}).catch(err=>oops(err.message));setTimeout(renderSettings,50)}
+  if(s?.dataset.set==='updgo'){U.later=null;localStorage.removeItem('ww.updLater');closeSettings();doUpdate()}
+  if(s?.dataset.set==='updrestart')window.workwood.restart().catch(()=>{});
   if(s?.dataset.set==='theme'){setTheme(root.dataset.theme==='dark'?'light':'dark');renderSettings()}
 };
 $('spage').addEventListener('keydown',async e=>{
@@ -1468,7 +1530,7 @@ function renderHead(){
 function render(){
   const nw=V.isNew,s=selSession();
   if(s?.unread&&!nw&&!document.hidden){s.unread=false;api(`sessions/${s.id}/seen`,{}).catch(()=>{})}   // you are looking at it
-  renderList();renderThread();renderCard();renderQueue();renderComposer();renderPanel();renderTerm();renderHead();
+  renderList();renderUpd();renderThread();renderCard();renderQueue();renderComposer();renderPanel();renderTerm();renderHead();
   $('tools').style.visibility=nw||!s?'hidden':'visible';
   $('main').classList.toggle('newmode',nw&&!V.pend);
 }

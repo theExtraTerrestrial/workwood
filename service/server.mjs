@@ -16,6 +16,7 @@ import { changesFor, changeOf } from './changes.mjs';
 import * as voice from './voice.mjs';
 import * as usage from './usage.mjs';
 import * as prof from './profiles.mjs';
+import * as update from './update.mjs';
 import { createRequire } from 'node:module';
 
 const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui');
@@ -159,7 +160,7 @@ const fileOf = cwd => id => state.sessions.find(x => x.id === id)?.file || trans
 
 const snapshot = () => ({
   profiles: state.profiles.filter(p => !adding.has(p.name)).map(({ account, ...p }) => ({ ...p, reading: reading.has(p.name), failed: failed.get(p.name) || null, stop: stops.get(p.name) || null })), next: state.next, projects: state.projects,
-  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, prefs, plain: src.PLAIN, folders: folders(), home: src.HOME, preview: previewBase,
+  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, prefs, plain: src.PLAIN, folders: folders(), home: src.HOME, preview: previewBase, update: update.status(),
 });
 let lastSent = '';
 function pushState() { const s = JSON.stringify(snapshot()); if (s !== lastSent) { lastSent = s; emit('state', JSON.parse(s)); } }
@@ -312,6 +313,10 @@ async function api(req, res, url) {
   if (req.method !== 'POST') return send(res, 404, { error: 'Not found.' });
   const b = await body(req);
 
+  if (parts[0] === 'update' && parts[1] === 'check') return send(res, 200, await update.check());
+  if (parts[0] === 'update' && parts[1] === 'apply') {
+    try { return send(res, 200, await update.apply()); } catch (e) { return send(res, 409, { error: e.message }); }
+  }
   if (parts[0] === 'settings') {
     if ('defaultProfile' in b) prefs.defaultProfile = state.profiles.some(p => p.name === b.defaultProfile) ? b.defaultProfile : null;
     if ('doneDays' in b) prefs.doneDays = [0, 1, 3, 7, 14, 30].includes(+b.doneDays) ? +b.doneDays : 7;
@@ -611,6 +616,7 @@ export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
   process.on('exit', closeAll);
   return { address };
 }
+  update.watch(pushState);
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { address } = await start();

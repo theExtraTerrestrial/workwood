@@ -901,16 +901,30 @@ function renderProfilePage(pg){
 }
 function openSettings(tab=0,prof){closePops();stab=tab;if(prof){PSel=prof;PAdd=false}about=null;$('sdim').hidden=false;renderSettings()}
 function closeSettings(){dropLogin(true);$('sdim').hidden=true}
+// Links in a terminal open in your browser. xterm's own way opens an empty window and then sends it to the link,
+// so the window was handed about:blank to open, and Windows could not.
+function openLink(e,uri){if(/^https?:\/\//i.test(uri))window.open(uri,'_blank','noopener')}
+const TLINKS={activate:openLink};
+// The sign-in page's link in what the sign-in printed: a terminal link (OSC 8) first, else plain text; one that
+// looks like a sign-in is preferred.
+function linkIn(s){
+  const all=[...s.matchAll(/\x1b\]8;[^;\x07\x1b]*;(https:\/\/[^\x07\x1b]+)(?:\x07|\x1b\\)/g)].map(m=>m[1]);
+  if(!all.length)all.push(...(s.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g,'').replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g,'').match(/https:\/\/[^\s"'<>\x1b]+/g)||[]));
+  return all.filter(u=>/oauth|authorize|login/i.test(u)).pop()||all.pop()||null}
+function copyText(t){return navigator.clipboard?.writeText(t).catch(()=>fallback())??fallback();
+  function fallback(){const a=document.createElement('textarea');a.value=t;document.body.append(a);a.select();const ok=document.execCommand('copy');a.remove();if(!ok)throw new Error('copy')}}
 async function startLogin(name,add){
-  $('spage').innerHTML=`<div class="lgbar"><b>${add?'Add':'Sign in to'} ${esc(name)}</b><span id="lgNote">Follow the steps below. A browser page may open.</span><button class="sval" id="lgBack">Back</button></div><div class="lgx" id="lgx"></div>`;
-  const term=new Terminal({fontFamily:'"Cascadia Code","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace',fontSize:12.5,cursorBlink:true,theme:termTheme()});
+  $('spage').innerHTML=`<div class="lgbar"><b>${add?'Add':'Sign in to'} ${esc(name)}</b><span id="lgNote">Follow the steps below. A browser page may open.</span><button class="sval pri" id="lgOpen" hidden>Open sign-in page</button><button class="sval" id="lgCopy" hidden>Copy link</button><button class="sval" id="lgBack">Back</button></div><div class="lgx" id="lgx"></div>`;
+  const term=new Terminal({fontFamily:'"Cascadia Code","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace',fontSize:12.5,cursorBlink:true,theme:termTheme(),linkHandler:TLINKS});
   const fit=new FitAddon.FitAddon();term.loadAddon(fit);term.open($('lgx'));try{fit.fit()}catch{}
   const me=L={name,term};const say=t=>{if(L===me)$('lgNote').textContent=t};
   try{if(add){me.name=name=PSel=(await api('profiles',{name,cols:term.cols,rows:term.rows})).name;$('spage').querySelector('.lgbar b').textContent='Add '+name}
     else await api(`profiles/${name}/login`,{cols:term.cols,rows:term.rows})}catch(e){return say(e.message)}
   if(L!==me)return;
   const es=me.es=new EventSource(`/api/profiles/${name}/login?token=${TOKEN}`);
-  es.addEventListener('data',e=>term.write(JSON.parse(e.data)));
+  let seen='';
+  es.addEventListener('data',e=>{const d=JSON.parse(e.data);term.write(d);seen=(seen+d).slice(-65536);const u=linkIn(seen);
+    if(u&&u!==me.url&&L===me){me.url=u;$('lgOpen').hidden=$('lgCopy').hidden=false}});
   es.addEventListener('exit',e=>{es.close();say(JSON.parse(e.data).code===0?(add?`${name} is added. You can go back.`:'Signed in. You can go back.'):add?'The sign-in did not finish, so nothing was added.':'The sign-in did not finish. The old one is kept.')});
   let q=Promise.resolve();
   term.onData(d=>{q=q.then(()=>api(`profiles/${name}/login/input`,{data:d}).catch(()=>{}))});
@@ -925,6 +939,8 @@ $('stabs').onclick=e=>{const b=e.target.closest('[data-st]');if(!b)return;dropLo
 $('spage').onclick=async e=>{
   const s=e.target.closest('[data-set]'),l=e.target.closest('[data-login]');
   if(e.target.closest('#lgBack')){dropLogin(true);renderSettings();return}
+  if(e.target.closest('#lgOpen')&&L?.url){openLink(e,L.url);return}
+  if(e.target.closest('#lgCopy')&&L?.url){const b=$('lgCopy');try{await copyText(L.url);b.textContent='Copied'}catch{b.textContent='Select it in the terminal'}setTimeout(()=>{if(b.isConnected)b.textContent='Copy link'},1500);return}
   if(l){PE=null;startLogin(l.dataset.login);return}
   const ps=e.target.closest('[data-psel]');if(ps){PSel=ps.dataset.psel;PAdd=false;PE=null;renderSettings();return}
   if(e.target.closest('[data-padd]')){PAdd=true;PE=null;renderSettings();return}
@@ -1032,7 +1048,7 @@ function renderTerm(){
 }
 async function startTerm(id){
   if(turnBusy()){T={id,wait:true};tnote('<p>The agent is working in the chat. The terminal opens when this turn ends.</p><button class="qbtn" data-stopterm>Stop the turn and open the terminal</button>');return}
-  const term=new Terminal({fontFamily:'"Cascadia Code","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace',fontSize:13,cursorBlink:true,scrollback:5000,theme:termTheme()});
+  const term=new Terminal({fontFamily:'"Cascadia Code","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace',fontSize:13,cursorBlink:true,scrollback:5000,theme:termTheme(),linkHandler:TLINKS});
   const fit=new FitAddon.FitAddon();term.loadAddon(fit);term.open($('xt'));try{fit.fit()}catch{}
   const me=T={id,term};
   const closed=text=>{if(T===me)tnote(`<p>${esc(text)}</p><button class="qbtn" data-again>Start again</button>`)};

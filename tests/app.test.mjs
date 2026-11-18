@@ -1993,6 +1993,13 @@ ui('window: the settings dialog: tabs, default profile for new sessions, sign in
   await page.click('#spage .pfd [data-login="full"]');
   await page.waitForSelector('#lgx .xterm');
   await page.waitForFunction(() => document.querySelector('#lgx .xterm-rows')?.innerText.includes('paste the code'));
+  // the sign-in page opens in the browser itself, not an empty window first (Windows was handed about:blank)
+  await page.evaluate(() => { window.wwOpened = []; window.wwOpen = window.open; window.open = u => { window.wwOpened.push(u); return null; }; });
+  await page.click('#lgOpen');
+  assert.deepEqual(await page.evaluate(() => window.wwOpened), ['https://claude.example/oauth/authorize?code=true&state=s1']);
+  await page.evaluate(() => { window.open = window.wwOpen; });
+  assert.equal(await page.isVisible('#lgCopy'), true);
+  await page.click('#lgx .xterm');
   await page.keyboard.type('good'); await page.keyboard.press('Enter');
   await page.waitForSelector('#lgNote:has-text("Signed in")');
   await page.click('#lgBack');

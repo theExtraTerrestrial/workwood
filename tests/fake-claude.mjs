@@ -15,6 +15,7 @@ if (args[0] === 'agents') { console.log(fs.readFileSync(process.env.FAKE_CLAUDE_
 if (args[0] === 'auth' && args[1] === 'login') {
   const dir = process.env.CLAUDE_CONFIG_DIR || path.join(process.env.HOME, '.claude'), name = path.basename(dir);
   log(`auth login config=${name}`);
+  process.stdout.write('Sign in: \x1b]8;;https://claude.example/oauth/authorize?code=true&state=s1\x07https://claude.example/oauth/authorize?code=true&state=s1\x1b]8;;\x07\r\n');
   process.stdout.write('Open the page and paste the code: ');
   for await (const line of readline.createInterface({ input: process.stdin })) {
     if (line.trim() !== 'good') { process.stdout.write('That code did not work.\r\n'); process.exit(1); }

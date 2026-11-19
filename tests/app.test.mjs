@@ -96,7 +96,12 @@ test('a lapsed sign-in is renewed once, under the lock Claude Code and Claudius 
     const old = new Date(Date.now() - 120e3); fs.utimesSync(path.join(P, '.oauth_refresh.lock'), old, old);
     await svc.call('limits/refresh', { profile: 'full' });
     await until(async () => { const x = (await state()).profiles.find(q => q.name === 'full'); return !x.failed && !x.reading && sb.renewals.length === from2 + 1 && x; }, 'the stale lock taken over');
-  } finally { fs.rmSync(path.join(P, '.oauth_refresh.lock'), { recursive: true, force: true }); fs.writeFileSync(f, was); }
+    // Even when a file was left inside it: the old `<profile>.lock` with a `.claude.json` in it once stopped every reading.
+    lapse(); fs.mkdirSync(P + '.lock'); fs.writeFileSync(path.join(P + '.lock', '.claude.json'), '{}'); fs.utimesSync(P + '.lock', old, old);
+    await svc.call('limits/refresh', { profile: 'full' });
+    await until(async () => { const x = (await state()).profiles.find(q => q.name === 'full'); return !x.failed && !x.reading && sb.renewals.length === from2 + 2 && x; }, 'the stale lock with a file in it taken over');
+    assert.ok(!fs.existsSync(P + '.lock'));
+  } finally { for (const l of [path.join(P, '.oauth_refresh.lock'), P + '.lock']) fs.rmSync(l, { recursive: true, force: true }); fs.writeFileSync(f, was); }
 });
 
 test('the session list names a session as Claude Code titled it, and resumes it in the folder it is filed under', async () => {

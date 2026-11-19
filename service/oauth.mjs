@@ -37,7 +37,9 @@ async function take(p, until) {
     catch (e) {
       if (e.code !== 'EEXIST') throw e;
       let st; try { st = await fs.stat(p); } catch { continue; }   // released between the two calls: try again
-      if (Date.now() - st.mtimeMs > STALE) { await fs.rmdir(p).catch(() => {}); continue; }   // abandoned
+      // Abandoned. A stray file can end up inside one (a `.claude.json` has been seen there); it goes with it,
+      // else the folder could never be taken. Should that fail too, the wait below still ends.
+      if (Date.now() - st.mtimeMs > STALE && await fs.rm(p, { recursive: true }).then(() => true, () => false)) continue;
       if (Date.now() > until) { const err = new Error('Another program is renewing this sign-in.'); err.code = 'ELOCKED'; throw err; }
       await sleep(250 + Math.random() * 250);
     }

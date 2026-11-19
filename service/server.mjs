@@ -53,6 +53,7 @@ const renamed = new Map();   // session -> [when, name], for a list that was bei
 const deleted = new Set();   // gone, but a list read a moment earlier may still name them
 const clients = new Set();
 const workPaths = new Map(); // session -> every previewable file it is known to have made
+const counted = new Map();  // session -> { mt, out }: what fills its context, as of the transcript's last change
 function knownWork(id) { let w = workPaths.get(id); if (!w) workPaths.set(id, w = new Set()); return w; }
 const emit = (type, data) => {
   const msg = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -245,12 +246,17 @@ async function api(req, res, url) {
     const s = state.sessions.find(x => x.id === parts[1]);
     if (!s) return send(res, 404, { error: 'No such session.' });
     const run = runs.get(s.id);
+    // A session at rest is opened to be asked, which takes a moment: the answer holds until its transcript changes.
+    const mt = run?.q ? null : await fs.stat(s.file || '').then(st => st.mtimeMs, () => null), kept = counted.get(s.id);
+    if (mt && kept?.mt === mt) return send(res, 200, kept.out);
     try {
       const env = run?.q ? null : await src.envForProfile(run?.profile || s.profile, state.profiles);
       const u = await contextOf({ sessionId: s.id, cwd: s.cwd, env, claude: state.claude });
-      return send(res, 200, { used: u.total_tokens, window: u.raw_max_tokens, percent: u.percentage,
+      const out = { used: u.total_tokens, window: u.raw_max_tokens, percent: u.percentage,
         rows: (u.categories || []).filter(c => c.kind === 'used' && c.tokens > 0).map(c => ({ name: c.name, tokens: c.tokens })).sort((a, b) => b.tokens - a.tokens),
-        reserve: (u.categories || []).filter(c => c.kind === 'buffer').reduce((n, c) => n + c.tokens, 0) });
+        reserve: (u.categories || []).filter(c => c.kind === 'buffer').reduce((n, c) => n + c.tokens, 0) };
+      if (mt) counted.set(s.id, { mt, out });
+      return send(res, 200, out);
     } catch (e) { return send(res, 502, { error: String(e.message).split('\n')[0] }); }
   }
   if (req.method === 'GET' && parts[0] === 'sessions' && parts[2] === 'changes') {

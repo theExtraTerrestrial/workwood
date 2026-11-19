@@ -254,6 +254,7 @@ async function openSession(id,sending){
   try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.place=d.place||null;V.used={model:d.model||'',effort:d.effort||'',mode:d.mode||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||'',mode:d.defaults?.mode||''}}
   catch(e){oops(e.message)}
   V.loading=false;render();toBottom(true);loadChanges();
+  if(V.sel===id&&V.context)countCtx(id);
 }
 
 /* ---------- conversation ---------- */
@@ -472,9 +473,12 @@ function renderCtx(){const c=V.context,m=$('mCtx');if(!c||V.isNew){m.hidden=true
 $('pCtx').onclick=e=>{e.stopPropagation();const was=$('mCtx').hidden;closePops();hideTip();if(!was)return;
   $('mCtx').hidden=false;$('pCtx').classList.add('open');
   const id=V.sel;
-  if(V.ctx?.id!==id||Date.now()-V.ctx.at>30000){V.ctx={id,at:Date.now()};
-    api(`sessions/${id}/context`).then(r=>{V.ctx={id,at:Date.now(),rows:r.rows}},err=>{V.ctx={id,at:0,err:'The breakdown is not available ('+err.message+')'}}).then(()=>{if(V.sel===id&&!$('mCtx').hidden)renderCtx()})}
+  if(V.ctx?.id!==id||Date.now()-V.ctx.at>30000)countCtx(id);
   renderCtx()};
+// Claude Code's own count: the figure from the last reply is wrong after /compact, and an old session's model may hold more than its name says.
+function countCtx(id){V.ctx={id,at:Date.now()};
+  api(`sessions/${id}/context`).then(r=>{V.ctx={id,at:Date.now(),rows:r.rows};if(V.sel===id&&r.window&&!isWorking()){V.context={used:r.used,window:r.window};renderComposer()}},
+    err=>{V.ctx={id,at:0,err:'The breakdown is not available ('+err.message+')'}}).then(()=>{if(V.sel===id&&!$('mCtx').hidden)renderCtx()})}
 $('mCtx').onclick=e=>{e.stopPropagation();if(e.target.closest('[data-compact]')&&!isWorking()){closePops();sendText('/compact')}};
 
 /* ---------- compare: a question about things the agent just made, with those things next to it ---------- */
@@ -1586,7 +1590,7 @@ function connect(){
     render();{const f=document.activeElement;if(!$('spage').contains(f)||!/^(SELECT|INPUT)$/.test(f.tagName))renderSettings()}if(!$('mProfile').hidden)renderProfiles();
   });
   es.addEventListener('run',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const end=!awayNow();const was=V.run?.status;V.run=d.run;if(V.ans&&d.run?.pending?.id!==V.ans)V.ans=null;
-    if(was==='working'&&d.run?.status!=='working'&&d.run?.status!=='waiting'){const id=V.sel;setTimeout(()=>api('sessions/'+id).then(x=>{if(V.sel===id&&x.place){V.place=x.place;renderHead()}}).catch(()=>{}),900)}   // the agent may have moved to a worktree
+    if(was==='working'&&d.run?.status!=='working'&&d.run?.status!=='waiting'){const id=V.sel;if(V.ctx?.id===id)V.ctx=null;setTimeout(()=>api('sessions/'+id).then(x=>{if(V.sel===id&&x.place){V.place=x.place;renderHead()}}).catch(()=>{}),900)}   // the agent may have moved to a worktree
     if(d.run?.context)V.context=d.run.context;if(d.run?.model)V.used.model=d.run.model;if(d.run?.effort)V.used.effort=d.run.effort;if(d.run?.mode){V.used.mode=d.run.mode;if(V.pick[d.sessionId])delete V.pick[d.sessionId].mode}if(V.qNow&&!(d.run?.queued||[]).some(q=>q.id===V.qNow))V.qNow=null;checkSoon();changesSoon();renderThread();renderCard();renderQueue();renderComposer();renderTerm();follow(end)});
   es.addEventListener('item',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const i=V.items.findIndex(x=>x.n===d.item.n),end=!awayNow();noteArrival(d.item,i<0);if(i>=0)V.items[i]=d.item;else V.items.push(d.item);if(d.item.kind==='work'){addWork(d.item.files);renderPanel()}checkSoon();changesSoon();renderThread();follow(end,i<0&&d.item.kind==='assistant'?d.item.n:null)});
   es.onerror=()=>{};

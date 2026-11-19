@@ -262,6 +262,9 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
             for (const [name, u] of Object.entries(m.modelUsage || {})) learnWindow(name, u.contextWindow);
             const win = Object.values(m.modelUsage || {}).map(u => u.contextWindow).filter(Boolean).sort((a, b) => b - a)[0];
             if (win && run.context) run.context = { ...run.context, window: win };
+            // What the context holds now, as Claude Code counts it: after /compact the last reply's size is no longer it.
+            const exact = await Promise.race([run.q.getContextUsage().catch(() => null), sleep(3000).then(() => null)]);
+            if (exact?.raw_max_tokens) { learnWindow(exact.model, exact.raw_max_tokens); run.context = { used: exact.total_tokens, window: exact.raw_max_tokens }; }
             if (m.is_error && !run.stopped) run.stopped = { reason: /limit/i.test(m.result || '') ? 'limit' : 'error', text: m.result || 'The turn ended with an error.' };
             sayItems(run.stopped ? run.builder.flushWork() : run.builder.done(m.duration_ms, new Date().toISOString()));
             for (const u of m.user_message_uuids || []) run.sent.delete(u);
@@ -409,14 +412,15 @@ export async function sendNow(sessionId, id) {
  * What fills a session's context, as Claude Code itself counts it. Asked of the running turn when there is one;
  * otherwise the session is opened without sending anything, asked, and closed again.
  */
+const learn = u => { learnWindow(u?.model, u?.raw_max_tokens); return u; };
 export async function contextOf({ sessionId, cwd, env, claude }) {
   const live = runs.get(sessionId)?.q;
   const within = p => { let t; return Promise.race([p, new Promise((_, no) => { t = setTimeout(() => no(new Error('Claude Code did not answer.')), 20000); })]).finally(() => clearTimeout(t)); };
-  if (live) return within(live.getContextUsage());
+  if (live) return within(live.getContextUsage()).then(learn);
   let release; const held = new Promise(r => { release = r; });
   const q = query({ prompt: (async function* () { await held; })(), options: { cwd, env, resume: sessionId, pathToClaudeCodeExecutable: claude,
     settingSources: ['user', 'project', 'local'], stderr: () => {} } });
-  try { return await within(q.getContextUsage()); }
+  try { return learn(await within(q.getContextUsage())); }
   finally { release(); try { q.close?.(); } catch {} }
 }
 

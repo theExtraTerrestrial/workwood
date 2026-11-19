@@ -169,6 +169,8 @@ test('starts a session on the global profile without touching Claudius', async (
   const log = readLog(sb).slice(before);
   assert.ok(log.some(l => /account=live@example.com config=global resume=no/.test(l)), log.join('|'));
   assert.ok(!log.some(l => l.startsWith('claudius refresh')));
+  // when the turn ends, the context is Claude Code's own count, not the last reply's size (which /compact leaves behind)
+  assert.deepEqual(s.context, { used: 51000, window: 200000 });
 });
 
 test('starts a session on another profile without Claudius: wired to the shared history, and listed under that profile', async () => {
@@ -1115,8 +1117,9 @@ ui('window: shows the inbox by project, the opened conversation, and limits unde
   assert.match(await page.locator('.tfoot').innerText(), /Worked for 3m 12s/);
   assert.equal(await page.locator('#pProfile').innerText(), 'live');
   assert.match((await page.locator('#lim').innerText()).replace(/\s+/g, ' '), /5h ?34% ?7d ?41%/);
-  assert.equal((await page.locator('#pCtx').innerText()).trim(), '21%');
-  assert.match(await page.locator('#pCtx').getAttribute('data-tip'), /42k of 200k/);
+  // first the last reply's size, then Claude Code's own count of what the context holds
+  await page.waitForFunction(() => document.querySelector('#pCtx').innerText.trim() === '26%');
+  assert.match(await page.locator('#pCtx').getAttribute('data-tip'), /51k of 200k/);
   await page.waitForSelector('.sess .xb');
   assert.equal(await page.locator('.sess .xb').count(), 1);
   assert.equal(await page.locator(`.sess[data-id="${sb.sessions.alphaOutside}"] .st .spin`).count(), 1);

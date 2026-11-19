@@ -1507,6 +1507,7 @@ async function sendText(text,asProfile,attachments){
       await openSession(r.sessionId,true);
     }else{
       V.dismissed=null;
+      if(asProfile)V.pick[V.sel]={...V.pick[V.sel],profile:asProfile};   // continued on another profile: it is this conversation's profile from now on, over one picked before
       const req=api(`sessions/${V.sel}/send`,{text,attachments,profile:asProfile||V.pick[V.sel]?.profile,model:curModel(),effort:curEffort(),mode:V.pick[V.sel]?.mode||undefined});
       if(tmp)V.qSending=req.catch(()=>{});
       const r=await req;

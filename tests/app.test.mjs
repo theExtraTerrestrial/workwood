@@ -1460,6 +1460,7 @@ ui('window: limit card continues on another profile, and goes the moment you pre
   await page.waitForSelector('#qcard:has-text("Limit reached on live")');
   assert.equal(await page.locator('#pProfile').innerText(), 'live');       // a new session starts on the global profile again
   assert.equal(await page.locator('#qcard .qbtn.off').innerText().then(t => /full/.test(t)), true);
+  await page.click('#pProfile'); await page.click('#mProfile [data-prof="live"]');   // picked before: the card's choice still wins
   await page.route('**/api/sessions/*/send', async r => { await sleep(600); await r.continue(); });
   await page.click('#qcard .qbtn:has-text("Continue on other")');
   await page.waitForSelector('#qcard', { state: 'hidden', timeout: 400 });

@@ -833,6 +833,7 @@ function renderSettings(){
     <div class="srow"><span>Theme</span><button class="sval" data-set="theme">${root.dataset.theme==='dark'?'Dark':'Light'}${cd}</button></div>
     <div class="srow"><span>Clear quiet sessions<small>A session nobody has touched for this long leaves the sidebar. Search still finds it.</small></span><select class="sval" id="sDays">${[[1,'After a day'],[3,'After 3 days'],[7,'After 7 days'],[14,'After 14 days'],[30,'After 30 days'],[0,'Never']].map(([v,n])=>`<option value="${v}" ${(pf.doneDays??7)===v?'selected':''}>${n}</option>`).join('')}</select></div>${LOGIN?`<div class="srow"><span>Open at login<small>Start Workwood when you sign in to this computer.</small></span><i class="stog ${loginOn?'on':''}" data-set="login"></i></div>`:''}
     <div class="srow"><span>Offer Bypass mode<small>A permission mode that never asks before edits or commands. Only for work you trust completely.</small></span><i class="stog ${pf.bypass?'on':''}" data-set="bypass"></i></div>
+    ${A.profiles.length>1?`<div class="srow"><span>Continue on another profile at a limit<small>When a session hits a limit, it goes on with the profile that has the most room after 5 minutes. The card counts down, so you can cancel.</small></span><i class="stog ${pf.autoContinue?'on':''}" data-set="auto"></i></div>`:''}
     <div class="srow"><span>Dictation language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>
     <div class="srow"><span>Project folders<small>Folders that hold your projects. Separate several with a semicolon.</small></span><input class="sval sin mono" id="sFolders" spellcheck="false" autocomplete="off" value="${esc((pf.folders||[]).map(short).join('; '))}" placeholder="${esc(short((A.folders||[])[0]||''))}">${window.workwood?.pickFolder?'<button class="sval" id="sBrowse" data-tip="Choose a folder to add">Add…</button>':''}</div>`;
   else if(stab===1)renderProfilePage(pg);
@@ -1024,6 +1025,7 @@ $('spage').onclick=async e=>{
   if(e.target.closest('#sBrowse')){const f=await window.workwood.pickFolder();if(!f)return;
     try{A.prefs=await api('settings',{folders:[...(A.prefs.folders||[]),f]});renderSettings()}catch(err){oops(err.message)}return}
   if(s?.dataset.set==='login'){await setLogin(!loginOn);renderSettings()}
+  if(s?.dataset.set==='auto'){try{A.prefs=await api('settings',{autoContinue:!A.prefs?.autoContinue});renderSettings()}catch(err){oops(err.message)}}
   if(s?.dataset.set==='bypass'){try{A.prefs=await api('settings',{bypass:!A.prefs?.bypass});renderSettings();renderComposer()}catch(err){oops(err.message)}}
   if(s?.dataset.set==='updcheck'){U.err='';U.later=null;localStorage.removeItem('ww.updLater');api('update/check',{}).catch(err=>oops(err.message));setTimeout(renderSettings,50)}
   if(s?.dataset.set==='updgo'){U.later=null;localStorage.removeItem('ww.updLater');closeSettings();doUpdate()}
@@ -1150,7 +1152,7 @@ function renderCard(){
   if(V.side==='compare'&&p?.kind!=='question'){V.side=null;renderPanel()}
   if(!show){c._h=null;return}
   const put=h=>{const k=(p?.id||'')+h;if(c._h===k)return false;c._h=k;if(c.contains($('voice')))$('mic').before($('voice'));c.innerHTML=h;hydrate(c);voiceLook();return true};   // an unchanged card is left alone: its scroll position and typed text survive live updates
-  if(st){put(stoppedCard(st));return}
+  if(st){if(put(stoppedCard(st)))autoTick();return}
   if(V.q.id!==p.id)V.q={id:p.id,step:0,picks:{},typed:{},show:{},auto:null,at:Date.now()};
   if(p.kind==='question'){
     const qs=p.input.questions,i=Math.min(V.q.step,qs.length-1),q=qs[i],picked=V.q.picks[i]||[];
@@ -1200,10 +1202,17 @@ function stoppedCard(st){
   const cur=st.profile||V.run?.profile||selSession()?.profile,others=A.profiles.filter(p=>p.name!==cur);
   const head={limit:['Limit reached',`Limit reached on ${cur}`],auth:['Sign-in needed',`${cur} is signed out`]}[st.reason]||['Stopped','The turn stopped'];
   const mine=A.profiles.find(p=>p.name===cur),clears=st.reason==='limit'&&(mine?.d7>=100?mine.r7:mine?.r5);
+  const auto=st.reason==='limit'&&selSession()?.auto,later=auto&&others.find(p=>p.name===auto.to);
+  if(later)others.sort((a,b)=>(b===later)-(a===later));          // the profile it will continue on comes first
   const why=st.reason==='auth'?`Its sign-in could not be renewed. Sign in again, then continue. Nothing is lost.`:esc(st.text||'')+(st.reason==='limit'?` Nothing is lost.${clears?' The limit clears in '+esc(until(clears))+'.':''}`:'');
-  return `<div class="steps2"><span class="qhd">${head[0]}</span></div><div class="qq">${esc(head[1])}</div><div class="why">${why}</div>
+  return `<div class="steps2"><span class="qhd">${head[0]}</span></div><div class="qq">${esc(head[1])}</div><div class="why">${why}</div>${later?`
+    <div class="auto" data-at="${auto.at}" data-wait="${auto.wait}"><span>Continuing on <b>${esc(later.name)}</b> in <span class="acd"></span></span><button class="qbtn" data-act="stay">Cancel</button><i><b></b></i></div>`:''}
     <div class="qrow">${st.reason==='auth'?`<button class="qbtn pri" data-signin="${esc(cur)}">Sign in again</button>`:''}${st.reason==='limit'?'':`<button class="qbtn ${st.reason==='auth'?'':'pri'}" data-go="${esc(cur)}">${st.reason==='auth'?'I have signed in, continue':'Try again'}</button>`}${others.map((p,i)=>`<button class="qbtn ${st.reason==='limit'&&!i?'pri':''} ${p.h5>=100?'off':''}" data-go="${esc(p.name)}">Continue on ${esc(p.name)}${p.h5!=null?`<small>${p.h5>=100?'5h full':p.h5+'% used'}</small>`:''}</button>`).join('')}<button class="qbtn" data-act="dismiss" ${st.reason==='limit'?'data-tip="Closes this card. Write to the session again once the limit has cleared."':''}>${st.reason==='limit'?'Wait for the limit to clear':'Dismiss'} ${KEY.esc}</button></div>`;
 }
+// The countdown on a limit card that will continue by itself: the time left, and a bar that drains with it.
+function autoTick(){const a=document.querySelector('#qcard .auto[data-at]');if(!a)return;const left=Math.max(0,Math.ceil((+a.dataset.at-Date.now())/1000));
+  a.querySelector('.acd').textContent=left?`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`:'a moment';a.querySelector('i b').style.width=Math.min(100,left*1000/(+a.dataset.wait||3e5)*100)+'%'}
+setInterval(autoTick,250);
 $('qcard').addEventListener('input',e=>{if(e.target.id==='qText')V.q.typed[V.q.step]=e.target.value});
 // Keys for the card: Enter takes the highlighted button, Escape denies (or closes a stopped card), and the arrow and page keys
 // scroll a long card. They work from anywhere in the window except another text field, a focused button, the terminal or an open
@@ -1236,6 +1245,7 @@ $('qcard').onclick=async e=>{
   const p=V.run?.pending,o=e.target.closest('[data-opt]'),a=e.target.closest('[data-act]'),go=e.target.closest('[data-go]');
   const si=e.target.closest('[data-signin]');if(si){openSettings(1,si.dataset.signin);startLogin(si.dataset.signin);return}
   if(go){sendText('Continue where you left off.',go.dataset.go);return}
+  if(a?.dataset.act==='stay'||a?.dataset.act==='dismiss'&&selSession()?.auto){const id=V.sel,s=selSession();if(s)s.auto=null;api(`sessions/${id}/stay`,{}).catch(err=>oops(err.message));if(a.dataset.act==='stay'){renderCard();return}}
   if(a?.dataset.act==='dismiss'){V.dismissed=stopKey();render();return}
   if(a?.dataset.act==='term'){api(`sessions/${V.sel}/stop`,{}).catch(err=>oops(err.message));setView(V.sel,'term');return}
   if(!p)return;

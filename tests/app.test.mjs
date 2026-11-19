@@ -255,6 +255,29 @@ test('a limit stops the turn, and it continues on another profile under the same
   await until(async () => (await state()).sessions.find(x => x.id === id)?.profile === 'other', 'the session to move to the other profile');
 });
 
+test('with the setting on, a limit continues by itself on the profile with most room after the wait, unless cancelled', async () => {
+  assert.equal((await svc.call('settings', { autoContinue: true })).body.autoContinue, true);
+  try {
+    const id = await newSession('hit the LIMIT');
+    const s = await until(async () => (await state()).sessions.find(x => x.id === id && x.auto), 'the planned continue');
+    assert.equal(s.auto.to, 'other'); assert.equal(s.line, 'Limit reached · continuing on other soon');   // "full" is at its limit
+    assert.equal((await session(id)).run.status, 'stopped');                                             // it waits first
+    const before = readLog(sb).length;
+    const t = await until(async () => { const x = await session(id); return x.run.status === 'idle' && x; }, 'the continued turn', 8000);
+    assert.equal(lastText(t), 'Echo: Continue where you left off.');
+    assert.ok(readLog(sb).slice(before).some(l => l.includes(`config=other resume=${id}`)));
+    assert.equal((await state()).sessions.find(x => x.id === id).auto, null);
+
+    const id2 = await newSession('hit the LIMIT again');
+    await until(async () => (await state()).sessions.find(x => x.id === id2)?.auto, 'the planned continue');
+    assert.equal((await svc.call(`sessions/${id2}/stay`, {})).status, 200);
+    assert.equal((await state()).sessions.find(x => x.id === id2).auto, null);
+    await sleep(3000);
+    assert.equal((await session(id2)).run.status, 'stopped');                                            // cancelled: it stays put
+    assert.equal((await state()).sessions.find(x => x.id === id2).profile, 'live');
+  } finally { await svc.call('settings', { autoContinue: false }); }
+});
+
 test('a lost sign-in is reported as such, and the profile keeps it until a turn on it goes well', async () => {
   const id = await newSession('lose AUTH', 'other');
   const s = await idle(id);
@@ -900,11 +923,11 @@ test('dictation: a recording comes back as text, and only with the token', async
 });
 
 test('settings: default profile and dictation language are kept; sign-in again runs Claudius in a terminal', async () => {
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false });
-  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false });
+  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false });
   const kept = JSON.parse(fs.readFileSync(path.join(sb.home, '.config', 'workwood', 'state.json'), 'utf8'));
   assert.deepEqual([kept.defaultProfile, kept.language, typeof kept.done], ['other', 'latvian', 'object']);
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false });
   const a = (await svc.call('about')).body;
   assert.deepEqual([a.version, a.claude, typeof a.speech.model], ['0.1.0', '2.1.322', 'string']);
   assert.equal((await svc.call('profiles/nobody/login', {})).status, 404);
@@ -1969,6 +1992,24 @@ ui('window: small things on the cards: skip a question, approve a plan but be as
   await page.waitForSelector('.sys:has-text("limit reached on live")');           // and the thread says where it stopped
   await page.click('#qcard button:has-text("Wait for the limit to clear")');
   await page.waitForSelector('#qcard', { state: 'hidden' });
+});
+
+ui('window: the setting to continue at a limit by itself, and the card counts down with a way to cancel', async () => {
+  await page.click('#bGear'); await page.click('#gAll');
+  await page.click('#spage [data-set="auto"]');
+  await page.waitForSelector('#spage [data-set="auto"].on');
+  await page.click('#dClose');
+  try {
+    await startNew('hit the LIMIT and wait');
+    await page.waitForSelector('#qcard .auto:has-text("Continuing on other in")');
+    assert.match(await page.locator('#qcard .auto .acd').innerText(), /^0:0\d$/);
+    assert.match(await page.locator('#qcard .qbtn.pri').innerText(), /Continue on other/);   // the one it will take comes first
+    await page.click('#qcard .auto [data-act="stay"]');
+    await page.waitForSelector('#qcard .auto', { state: 'detached' });
+    await page.waitForSelector('#qcard:has-text("Limit reached on live")');                // the card stays, for you to choose
+    await sleep(3000);
+    assert.equal(await page.locator('#qcard:has-text("Limit reached on live")').count(), 1);
+  } finally { await svc.call('settings', { autoContinue: false }); }
 });
 
 ui('window: a project can be given by typing its folder', async () => {

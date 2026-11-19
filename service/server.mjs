@@ -43,7 +43,7 @@ const done = new Map(Object.entries(kept.done || {})); for (const id of kept.arc
 let own = Array.isArray(kept.own) ? new Set(kept.own) : null;   // null until the first list is read: then everything recent is yours
 const unread = new Set(kept.unread || []);
 const prefs = { defaultProfile: kept.defaultProfile || null, language: kept.language || null, folders: Array.isArray(kept.folders) ? kept.folders : [],
-  doneDays: Number.isInteger(kept.doneDays) ? kept.doneDays : 7, bypass: kept.bypass === true };   // your choices in the settings dialog
+  doneDays: Number.isInteger(kept.doneDays) ? kept.doneDays : 7, bypass: kept.bypass === true, autoContinue: kept.autoContinue === true };   // your choices in the settings dialog
 const folders = () => prefs.folders.length ? prefs.folders : [src.WORKSPACE];   // where the project menu looks
 // A mode you may pick: any Workwood offers, but Bypass only once it is turned on in Settings. Null for none.
 const modeOf = m => !m ? null : src.MODES.includes(m) && (m !== 'bypassPermissions' || prefs.bypass) ? m : undefined;
@@ -64,7 +64,8 @@ const emit = (type, data) => {
   if (type === 'bg-failed') { unread.add(data.sessionId); keep(); pushState(); }   // something left running failed after the turn
   if (type === 'turn-end') setTimeout(() => { refreshAll(); refreshLive(); }, 800); // titles, owners and usage may have changed
   if (type === 'turn-end') { const p = state.profiles.find(x => x.name === runs.get(data.sessionId)?.profile); if (p) setTimeout(() => readings.add([p]), 1500); }   // what the turn cost
-  if (type === 'turn-end') noteStop(runs.get(data.sessionId));
+  if (type === 'turn-end') { noteStop(runs.get(data.sessionId)); planAuto(runs.get(data.sessionId)); }
+  if (type === 'run' && data.run?.status !== 'stopped') dropAuto(data.sessionId);   // a new turn, however it began, answers the wait
 };
 
 // Limits, read by Workwood itself (see usage.mjs). A reading newer than the one in the profile list wins; a
@@ -80,6 +81,39 @@ function noteStop(run) {
   const st = run.stopped;
   if (st && st.reason !== 'limit') stops.set(run.profile, { reason: st.reason, text: st.text || '', at: Math.floor(Date.now() / 1000), sessionId: run.sessionId });
   else if (!st) stops.delete(run.profile);
+  pushState();
+}
+// Continuing by itself: with the setting on, a turn stopped by a limit goes on after a wait you can cancel, on the
+// other profile with the most room. The wait is kept here, so it runs whether or not a window shows the session.
+const AUTO_WAIT = +process.env.WORKWOOD_AUTO_WAIT || 5 * 60_000;
+const CONTINUE = 'Continue where you left off.';
+const autos = new Map();   // session -> { to, at, timer }
+// Room is the smaller of the two windows' remaining room; a full window, an unknown reading or a lost sign-in rules a profile out.
+function roomiest(but) {
+  const room = p => Math.min(100 - (p.h5 ?? 0), 100 - (p.d7 ?? 0));
+  return state.profiles.filter(p => p.name !== but && !adding.has(p.name) && (p.h5 != null || p.d7 != null) && room(p) > 0 && stops.get(p.name)?.reason !== 'auth')
+    .sort((a, b) => room(b) - room(a) || (b.name === state.next) - (a.name === state.next))[0] || null;
+}
+function dropAuto(id) { const a = autos.get(id); if (!a) return; clearTimeout(a.timer); autos.delete(id); pushState(); }
+function planAuto(run) {
+  if (!prefs.autoContinue || run?.status !== 'stopped' || run.stopped?.reason !== 'limit' || !run.sessionId || run.interrupted) return;
+  const to = roomiest(run.profile)?.name; if (!to) return;
+  const id = run.sessionId; dropAuto(id);
+  autos.set(id, { to, at: Date.now() + AUTO_WAIT, timer: setTimeout(() => goAuto(id, run), AUTO_WAIT) });
+  pushState();
+}
+async function goAuto(id, run) {
+  const planned = autos.get(id)?.to; autos.delete(id);
+  const s = state.sessions.find(x => x.id === id);
+  if (!s || runs.get(id) !== run || run.status !== 'stopped' || terms.has(id)) return pushState();
+  const p = state.profiles.find(x => x.name === planned), best = roomiest(run.profile);   // the limits may have moved during the wait
+  const to = p && best && Math.min(100 - (p.h5 ?? 0), 100 - (p.d7 ?? 0)) > 0 ? planned : best?.name;
+  if (!to) return pushState();
+  try {
+    const env = await src.envForProfile(to, state.profiles);
+    touch(id); keep();
+    await startTurn({ sessionId: id, cwd: s.cwd, profile: to, env, text: CONTINUE, readable: [src.ATTACH_ROOT], model: run.model, effort: run.effort, mode: modeOf(run.mode) || undefined, claude: state.claude, emit, transcript: fileOf(s.cwd) });
+  } catch (e) { console.error('[workwood] continuing on another profile:', e.message); }
   pushState();
 }
 const readings = usage.makeQueue((name, ev) => {
@@ -132,11 +166,12 @@ function decorate(s) {
   } else if (term) {
     elsewhere('In the terminal view');
   } else if (run?.status === 'stopped') {
-    status = 'wait'; line = { auth: 'Paused · sign-in needed', limit: 'Stopped · limit reached' }[run.stopped.reason] || 'Stopped · something went wrong';
+    status = 'wait'; line = { auth: 'Paused · sign-in needed', limit: autos.has(s.id) ? `Limit reached · continuing on ${autos.get(s.id).to} soon` : 'Stopped · limit reached' }[run.stopped.reason] || 'Stopped · something went wrong';
   } else if (outside) elsewhere('In a terminal');
   return { id: s.id, title: s.title, project: s.project, cwd: s.cwd, branch: s.branch, mts: s.mts,
     root: s.root || s.cwd, profile: run?.profile || s.profile, status, line, outside, term, locked: (outside || term) && !!live && live.status !== 'idle',
-    unread: status === 'idle' && unread.has(s.id), done: isDone(s, status), bg: run?.bg?.size || 0 };
+    unread: status === 'idle' && unread.has(s.id), done: isDone(s, status), bg: run?.bg?.size || 0,
+    auto: autos.has(s.id) ? { to: autos.get(s.id).to, at: autos.get(s.id).at, wait: AUTO_WAIT } : null };
 }
 // Out of the inbox: marked done with nothing new since, never worked on here and not running anywhere, or left
 // untouched for longer than the setting allows. Anything working, waiting or unread is always in.
@@ -328,6 +363,7 @@ async function api(req, res, url) {
     if ('defaultProfile' in b) prefs.defaultProfile = state.profiles.some(p => p.name === b.defaultProfile) ? b.defaultProfile : null;
     if ('doneDays' in b) prefs.doneDays = [0, 1, 3, 7, 14, 30].includes(+b.doneDays) ? +b.doneDays : 7;
     if ('bypass' in b) prefs.bypass = b.bypass === true;
+    if ('autoContinue' in b) { prefs.autoContinue = b.autoContinue === true; if (!prefs.autoContinue) for (const id of [...autos.keys()]) dropAuto(id); }
     if ('language' in b) prefs.language = /^[a-z]{3,20}$/.test(b.language || '') ? b.language : null;
     if ('folders' in b) {
       try { prefs.folders = await src.checkFolders(b.folders); } catch (e) { return send(res, 400, { error: e.message }); }
@@ -457,6 +493,7 @@ async function api(req, res, url) {
   if (parts[0] === 'sessions' && parts[2] === 'unqueue') return send(res, 200, { items: unqueue(parts[1], b.ids) });
   if (parts[0] === 'sessions' && parts[2] === 'now') { try { await sendNow(parts[1], b.id); } catch (e) { return send(res, 409, { error: e.message }); } return send(res, 200, { ok: true }); }
   if (parts[0] === 'sessions' && parts[2] === 'stop-step') { try { await stopStep(parts[1], b.id); } catch (e) { return send(res, 409, { error: e.message }); } return send(res, 200, { ok: true }); }
+  if (parts[0] === 'sessions' && parts[2] === 'stay') { dropAuto(parts[1]); return send(res, 200, { ok: true }); }   // cancel continuing by itself
   if (parts[0] === 'sessions' && parts[2] === 'stop') { await stop(parts[1]); return send(res, 200, { ok: true }); }
   if (parts[0] === 'sessions' && parts[2] === 'term') {
     const s = state.sessions.find(x => x.id === parts[1]);
@@ -471,7 +508,7 @@ async function api(req, res, url) {
       const profile = run?.profile || s.profile;
       const env = await src.envForProfile(profile, state.profiles);
       touch(s.id); keep();
-      runs.delete(s.id);                                 // the chat's last turn is over; from here the history file is the record
+      runs.delete(s.id); dropAuto(s.id);                 // the chat's last turn is over; from here the history file is the record
       const again = () => { pushState(); setTimeout(() => { refreshAll(); refreshLive(); }, 800); };
       openTerm({ sessionId: s.id, cwd: s.cwd, file: state.claude || 'claude', args: ['--resume', s.id], env, cols: b.cols, rows: b.rows, onChange: again });
     } else resize(s.id, b.cols, b.rows);
@@ -508,7 +545,7 @@ async function api(req, res, url) {
         await closeTerm(s.id);
       } else if (live) return send(res, 409, { error: 'This session is open in a terminal. Close it there before deleting it.' });
       await src.deleteSession(s.file, s.id);
-      deleted.add(s.id); runs.delete(s.id); workPaths.delete(s.id); dirsBySession.delete(s.id);
+      deleted.add(s.id); runs.delete(s.id); dropAuto(s.id); workPaths.delete(s.id); dirsBySession.delete(s.id);
       done.delete(s.id); own?.delete(s.id); unread.delete(s.id); await keep();
       state.sessions = state.sessions.filter(x => x.id !== s.id);
       state.projects = await src.loadProjects(state.sessions, folders());

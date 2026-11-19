@@ -43,7 +43,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
   if (existing && existing.status !== 'idle' && existing.status !== 'stopped') throw new Error('This session is still working.');
 
   const run = { sessionId: sessionId || null, cwd, profile, status: 'working', activity: 'Starting', startedAt: Date.now(),
-    pending: null, stopped: null, effort: effort || existing?.effort || null, mode: mode || existing?.mode || null, context: existing?.context || null, q: null, builder: new Builder(liveSeq, cwd, { keepOutput: true }), tasks: new Map(),
+    pending: null, stopped: null, model: model || existing?.model || null, effort: effort || existing?.effort || null, mode: mode || existing?.mode || null, context: existing?.context || null, q: null, builder: new Builder(liveSeq, cwd, { keepOutput: true }), tasks: new Map(),
     bg: new Map(), known: new Map(), lingering: false, turnOver: false };
   liveSeq += 100_000;
   if (sessionId) runs.set(sessionId, run);

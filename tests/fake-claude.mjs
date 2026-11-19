@@ -330,7 +330,7 @@ readline.createInterface({ input: process.stdin }).on('close', () => setTimeout(
       { name: '__internal', description: 'Not for people', argumentHint: '', builtin: true },
       { name: 'extra-usage', description: 'Renamed to /usage-credits', argumentHint: '', builtin: true },
     ], agents: [], output_style: 'default', available_output_styles: ['default'], models: [], account: {} });
-    if (m.request.subtype === 'get_context_usage') return ok({ model: 'claude-test', total_tokens: 51000, raw_max_tokens: 200000, percentage: 26, categories: [
+    if (m.request.subtype === 'get_context_usage') return ok({ model: 'claude-test', totalTokens: 51000, maxTokens: 167000, rawMaxTokens: 200000, percentage: 26, categories: [
       { name: 'Messages', tokens: 30000, kind: 'used' }, { name: 'System tools', tokens: 16000, kind: 'used' }, { name: 'System prompt', tokens: 5000, kind: 'used' },
       { name: 'Free space', tokens: 116000, kind: 'free' }, { name: 'Autocompact buffer', tokens: 33000, kind: 'buffer' }], mcp_tools: [] });
     if (m.request.subtype === 'set_permission_mode') { mode = m.request.mode; log('mode ' + mode); ok(); sys('status', { status: null, permissionMode: mode }); modeChanged?.(); return; }

@@ -252,7 +252,7 @@ async function api(req, res, url) {
     try {
       const env = run?.q ? null : await src.envForProfile(run?.profile || s.profile, state.profiles);
       const u = await contextOf({ sessionId: s.id, cwd: s.cwd, env, claude: state.claude });
-      const out = { used: u.total_tokens, window: u.raw_max_tokens, percent: u.percentage,
+      const out = { used: u.totalTokens, window: u.rawMaxTokens, percent: u.percentage,
         rows: (u.categories || []).filter(c => c.kind === 'used' && c.tokens > 0).map(c => ({ name: c.name, tokens: c.tokens })).sort((a, b) => b.tokens - a.tokens),
         reserve: (u.categories || []).filter(c => c.kind === 'buffer').reduce((n, c) => n + c.tokens, 0) };
       if (mt) counted.set(s.id, { mt, out });

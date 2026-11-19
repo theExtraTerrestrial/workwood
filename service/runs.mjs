@@ -264,7 +264,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
             if (win && run.context) run.context = { ...run.context, window: win };
             // What the context holds now, as Claude Code counts it: after /compact the last reply's size is no longer it.
             const exact = await Promise.race([run.q.getContextUsage().catch(() => null), sleep(3000).then(() => null)]);
-            if (exact?.raw_max_tokens) { learnWindow(exact.model, exact.raw_max_tokens); run.context = { used: exact.total_tokens, window: exact.raw_max_tokens }; }
+            if (exact?.rawMaxTokens) { learnWindow(exact.model, exact.rawMaxTokens); run.context = { used: exact.totalTokens, window: exact.rawMaxTokens }; }
             if (m.is_error && !run.stopped) run.stopped = { reason: /limit/i.test(m.result || '') ? 'limit' : 'error', text: m.result || 'The turn ended with an error.' };
             sayItems(run.stopped ? run.builder.flushWork() : run.builder.done(m.duration_ms, new Date().toISOString()));
             for (const u of m.user_message_uuids || []) run.sent.delete(u);
@@ -412,7 +412,7 @@ export async function sendNow(sessionId, id) {
  * What fills a session's context, as Claude Code itself counts it. Asked of the running turn when there is one;
  * otherwise the session is opened without sending anything, asked, and closed again.
  */
-const learn = u => { learnWindow(u?.model, u?.raw_max_tokens); return u; };
+const learn = u => { learnWindow(u?.model, u?.rawMaxTokens); return u; };
 export async function contextOf({ sessionId, cwd, env, claude }) {
   const live = runs.get(sessionId)?.q;
   const within = p => { let t; return Promise.race([p, new Promise((_, no) => { t = setTimeout(() => no(new Error('Claude Code did not answer.')), 20000); })]).finally(() => clearTimeout(t)); };

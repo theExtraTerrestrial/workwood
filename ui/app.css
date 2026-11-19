@@ -702,6 +702,8 @@
   .tile.s{width:20px;height:20px;border-radius:6px;font-size:8.5px}
   .tile u{position:absolute;right:-3px;bottom:-3px;width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 2px var(--side)}
   .tile u.go{background:var(--go)}.tile u.warn{background:var(--warn)}.tile u.new{background:var(--accent)}
+  /* working spins, so it never reads as the finished-unread dot (accent is green too at the default hue) */
+  .tile u.go{width:10px;height:10px;right:-4px;bottom:-4px;box-sizing:border-box;background:var(--side);border:2px solid color-mix(in srgb,var(--go) 22%,transparent);border-top-color:var(--go);border-right-color:var(--go);animation:spin .8s linear infinite}
   /* sidebar */
   .side{width:268px;border-right:1px solid var(--line);z-index:auto}
   .side-head{padding:10px 8px 8px 16px}.side-head .ib{width:28px;height:28px}

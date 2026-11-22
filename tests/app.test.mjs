@@ -1186,6 +1186,29 @@ ui('window: shows the inbox by project, the opened conversation, and limits unde
   assert.equal(await page.locator(`.sess[data-id="${sb.sessions.alphaOutside}"] .st .spin`).count(), 1);
 });
 
+ui('window: the line under the message box lets things go as it narrows, and never overflows', async () => {
+  const at = w => page.evaluate(async w => {
+    const c = document.querySelector('.composer'); c.style.width = w + 'px'; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const sup = c.querySelector('.support'), shown = s => { const e = document.querySelector(s); return !!e && e.getClientRects().length > 0; };
+    return { over: sup.scrollWidth - sup.clientWidth, bars: shown('#lim .bar'), eff: shown('#pModel .eff'), d7: [...document.querySelectorAll('#lim .m')].filter(m => m.getClientRects().length).length,
+      mode: shown('#pMode .lbl'), pct: shown('#pCtx .pct'), name: shown('#pProfile .nm>span'), initial: getComputedStyle(document.querySelector('#pProfile .nm'), '::before').display !== 'none', text: sup.innerText.replace(/\s+/g, ' ') };
+  }, w);
+  // widths are the composer's; its 24px padding each side leaves the line 48px less
+  try {
+    let r = await at(760); assert.ok(r.bars && r.eff && r.d7 === 2 && r.mode && r.pct && r.name && !r.initial, JSON.stringify(r));
+    r = await at(650); assert.ok(!r.bars && r.eff && r.d7 === 2, JSON.stringify(r));
+    r = await at(570); assert.ok(!r.eff && r.d7 === 2 && r.mode, JSON.stringify(r));
+    r = await at(510); assert.ok(r.d7 === 1 && r.mode && r.pct, JSON.stringify(r));
+    assert.match(r.text, /7d 41%/);                                                // the fuller window is the one kept
+    r = await at(450); assert.ok(!r.mode && !r.pct && r.name, JSON.stringify(r));
+    r = await at(360); assert.ok(!r.name && r.initial && /^41% Test/.test(r.text), JSON.stringify(r));   // "l", the initial, is drawn by CSS
+    // the longest labels it can show still fit at every width
+    await page.evaluate(() => { document.querySelector('#pProfile .nm>span').textContent = 'erhards'; document.querySelector('#pMode .lbl').textContent = 'Accept edits';
+      document.querySelector('#pModel .eff').innerHTML = ' <i>·</i> Medium'; document.querySelector('#pCtx .pct').textContent = '100%'; });
+    for (let w = 800; w >= 300; w -= 5) { const r = await at(w); assert.ok(r.over <= 1, `${w}px overflows by ${r.over}px: ${r.text}`); }
+  } finally { await page.evaluate(() => { document.querySelector('.composer').style.width = ''; renderComposer(); }); }
+});
+
 ui('window: steps expand when the activity line is clicked', async () => {
   await page.click('.act');
   assert.match((await page.locator('.steps').innerText()).replace(/\s+/g, ' '), /Read README\.md/);

@@ -1307,9 +1307,10 @@ function renderComposer(){
   // Under the box: who this conversation runs as and how much of that profile's limits is used, then how it will think.
   const cur=profile(curProfile());
   const mine=cur?Math.max(cur.h5||0,cur.d7||0):0;   // the dot is about this profile only; the others show their state in the menu
-  $('pProfile').innerHTML=`${mine>=80?`<i class="adot ${lvl(mine)}"></i>`:''}<span>${esc(cur?.name||'Profile')}</span>${svg('chev-d','cv')}`;
+  $('pProfile').innerHTML=`${mine>=80?`<i class="adot ${lvl(mine)}"></i>`:''}<span class="nm" data-i="${esc((cur?.name||'P').slice(0,1))}"><span>${esc(cur?.name||'Profile')}</span></span>${svg('chev-d','cv')}`;
   $('pProfile').dataset.tip=(nw?'The profile this session starts on':'The profile this conversation runs on. Pick another to continue on it.')+(mine>=100?' It has reached a limit.':mine>=80?' It is close to a limit.':'');
-  const b=V.limBase&&cur&&V.limBase.name===cur.name&&!working?V.limBase:null,meter=(k,v,was)=>v==null?'':`<span class="m ${lvl(v)} ${was!=null&&was!==v?'fresh':''}">${k}<span class="bar"><i style="width:${Math.min(100,v)}%"></i></span>${was!=null&&was!==v?`<u>${was} →</u> `:''}${v}%</span>`;
+  const b=V.limBase&&cur&&V.limBase.name===cur.name&&!working?V.limBase:null,cool=k=>cur&&cur.h5!=null&&cur.d7!=null&&(k==='7d'?cur.d7<=cur.h5:cur.h5<cur.d7)&&lvl(k==='7d'?cur.d7:cur.h5)==='',   // the emptier window, which a tight row lets go
+    meter=(k,v,was)=>v==null?'':`<span class="m ${lvl(v)} ${was!=null&&was!==v?'fresh':''} ${cool(k)?'cool':''}"><span class="wn">${k}</span><span class="bar"><i style="width:${Math.min(100,v)}%"></i></span>${was!=null&&was!==v?`<u>${was} →</u> `:''}${v}%</span>`;
   $('lim').innerHTML=cur?meter('5h',cur.h5,b?.h5)+meter('7d',cur.d7,b?.d7):'';
   if(b&&(cur.h5!==b.h5||cur.d7!==b.d7)&&!limT)limT=setTimeout(()=>{limT=null;V.limBase=null;renderComposer()},60000);   // what the turn cost stays readable for a minute
   const full7=cur?.d7>=100,top=cur?Math.max(cur.h5||0,cur.d7||0):0,rs=cur&&(full7?cur.r7:cur.r5);
@@ -1318,14 +1319,14 @@ function renderComposer(){
   $('limNote').textContent=top>=100?(rs?`${full7?'7d':'5h'} limit clears in ${until(rs)}`:`${full7?'7d':'5h'} limit reached`):top>=80&&rs?`resets in ${until(rs)}`:'';
   $('limNote').title=$('limNote').textContent;
   const eff=EFFORTS.find(m=>m[0]===shownEffort())?.[1]||shownEffort();
-  $('pModel').innerHTML=`<span>${shownModel()?esc(modelName(shownModel())):'Default model'}${eff&&eff!=='Default'?` <i>·</i> ${esc(eff)}`:''}</span>${svg('chev-d','cv')}`;
+  $('pModel').innerHTML=`<span>${shownModel()?esc(modelName(shownModel())):'Default model'}${eff&&eff!=='Default'?`<span class="eff"> <i>·</i> ${esc(eff)}</span>`:''}</span>${svg('chev-d','cv')}`;
   const md=shownMode();
   $('pMode').className='pick mode k-'+md+($('mMode').hidden?'':' open');
-  $('pMode').innerHTML=`<i class="dot"></i><span>${esc(modeName(md))}</span>${svg('chev-d','cv')}`;
-  $('pMode').dataset.tip=`${MODES.find(x=>x[0]===md)?.[2]||''}. Shift+Tab in the message box switches modes.`;
+  $('pMode').innerHTML=`<i class="dot"></i><span class="lbl">${esc(modeName(md))}</span>${svg('chev-d','cv')}`;
+  $('pMode').dataset.tip=`${modeName(md)}: ${MODES.find(x=>x[0]===md)?.[2]||''}. Shift+Tab in the message box switches modes.`;
   $('box').classList.toggle('m-plan',md==='plan');$('box').classList.toggle('m-bypass',md==='bypassPermissions');
   const c=!nw&&V.context,pct=c?Math.min(100,Math.round(c.used/c.window*100)):0;
-  $('pCtx').innerHTML=c?`<i class="ring" style="--p:${pct}"></i>${pct}%`:'';$('pCtx').className='ctx '+(pct>=80?'mid':'')+($('mCtx').hidden?'':' open');$('sCtx').hidden=!c;
+  $('pCtx').innerHTML=c?`<i class="ring" style="--p:${pct}"></i><span class="pct">${pct}%</span>`:'';$('pCtx').className='ctx '+(pct>=80?'mid':'')+($('mCtx').hidden?'':' open');$('sCtx').hidden=!c;
   $('pCtx').dataset.tip=c?`${pct}% of the agent's memory of this conversation is used: ${kTok(c.used)} of ${kTok(c.window)} tokens`:'';
 }
 const short=p=>A.home&&p&&p.startsWith(A.home)?'~'+p.slice(A.home.length):p||'';

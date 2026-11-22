@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 37: the line under the message box, at any width</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<style>
+  :root{color-scheme:dark;--accent:hsl(168 62% 62%);--warn:#ffb955;--hot:#f0706a}
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0c0e;color:#e8e9ec;font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;padding-bottom:80px}
+  [data-theme=light] body{background:#e9eaee;color:#1d1e22}
+  button{font:inherit;color:inherit}
+  .wrap{max-width:980px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:14px;padding:24px 0 2px}.top h1{font-size:17px;margin:0;flex:1}
+  .top button,.row button{border:0;cursor:pointer;background:#1d1f23;color:#c9ccd2;padding:6px 11px;border-radius:8px}
+  [data-theme=light] .top button,[data-theme=light] .row button{background:#fff;color:#333}
+  .intro{color:#b9bcc3;max-width:720px;margin:6px 0 18px;font-size:14px}[data-theme=light] .intro{color:#555}
+  .row{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;align-items:center;color:#8f939b;font-size:12px}
+  .row button.on{background:hsl(168 40% 22%);color:#fff;box-shadow:inset 0 0 0 1.5px var(--accent)}
+  [data-theme=light] .row button.on{background:hsl(168 45% 88%);color:#123}
+  input[type=range]{width:320px;accent-color:var(--accent)}
+  .wv{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:700;width:52px}
+
+  /* the mock composer */
+  .stage{--bg:#18191c;--surface:#222428;--text:#f0f1f3;--dim:#a6aab2;--faint:#6d717a;--line:rgba(255,255,255,.1);
+    background:var(--bg);border-radius:14px;padding:22px 0 18px;box-shadow:0 0 0 1px rgba(255,255,255,.1);overflow:hidden}
+  [data-theme=light] .stage{--bg:#fbfbfc;--surface:#fff;--text:#1b1c1f;--dim:#5b5f68;--faint:#8d919a;--line:rgba(0,0,0,.1);box-shadow:0 0 0 1px rgba(0,0,0,.1)}
+  .comp{container-type:inline-size;margin:0 auto;padding:0 12px;transition:width .05s}
+  .box{height:74px;border-radius:16px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);position:relative}
+  .box::after{content:"";position:absolute;right:12px;bottom:10px;width:30px;height:30px;border-radius:50%;background:var(--text)}
+
+  .sup{display:flex;align-items:center;gap:10px;margin-top:8px;padding:0 6px;white-space:nowrap;font-size:12px;font-weight:500;color:var(--faint);font-variant-numeric:tabular-nums}
+  .sup .gap{flex:1}
+  .p{color:var(--dim);font-weight:600;display:inline-flex;align-items:center;gap:3px}
+  .p .cv{width:7px;height:7px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translateY(-2px);opacity:.6;margin-left:3px}
+  .p i{font-style:normal;color:var(--faint);font-weight:500}
+  .mode .dot{width:7px;height:7px;border-radius:50%;background:var(--dim);margin-right:3px}
+  .m{display:inline-flex;align-items:center;gap:6px}
+  .m .bar{width:38px;height:3px;border-radius:2px;background:rgba(128,128,128,.25);overflow:hidden}.m .bar b{display:block;height:100%;background:var(--faint)}
+  .m u{text-decoration:none;color:var(--dim)}
+  .m.mid{color:var(--warn)}.m.mid .bar b{background:var(--warn)}.m.mid u{color:var(--warn)}
+  .ctx{display:inline-flex;align-items:center;gap:6px}
+  .ring{width:14px;height:14px;border-radius:50%;background:conic-gradient(var(--faint) calc(var(--p)*1%),rgba(128,128,128,.25) 0);
+    -webkit-mask:radial-gradient(circle,transparent 4px,#000 4.5px);mask:radial-gradient(circle,transparent 4px,#000 4.5px)}
+  .lims{display:inline-flex;gap:12px;margin-left:4px}
+
+  /* ---- the ladder: each step only removes, nothing moves ---- */
+  @container (max-width:560px){ .m .bar{display:none} }                       /* 1 bars go, numbers stay */
+  @container (max-width:500px){ .eff{display:none} }                           /* 2 effort leaves the model label */
+  @container (max-width:440px){ .m.cool{display:none} }                       /* 3 only the fuller window stays */
+  @container (max-width:390px){ .mode .lbl{display:none} .ctx .pct{display:none} } /* 4 mode → dot, context → ring */
+  @container (max-width:330px){ .prof .nm{display:none} .prof::before{content:attr(data-i);color:var(--dim)} .m u{display:none} } /* 5 initial, "67%" alone */
+
+  .steps{display:grid;gap:4px;margin:22px 0 0;padding:0;list-style:none;max-width:640px}
+  .steps li{display:flex;gap:14px;padding:7px 12px;border-radius:9px;color:#b9bcc3;transition:background .15s}
+  [data-theme=light] .steps li{color:#555}
+  .steps li b{width:56px;color:#8f939b;font-weight:600;font-variant-numeric:tabular-nums}
+  .steps li.on{background:rgba(128,128,128,.13);color:inherit}.steps li.on b{color:var(--accent)}
+  h3{font-size:14px;margin:30px 0 8px}
+  .notes{color:#b9bcc3;padding-left:20px;max-width:720px}[data-theme=light] .notes{color:#555}
+  .notes li{margin:4px 0}
+</style></head><body><div class="wrap">
+<div class="top"><h1>Round 37 · the line under the message box, at any width</h1><button id="th">Light</button></div>
+<p class="intro">Drag the width. Each step only takes something away, so nothing jumps around, and the line never wraps or clips. A limit or context that turns amber is never hidden.</p>
+
+<div class="row"><span>Width</span><input type="range" id="w" min="260" max="700" value="600"><span class="wv" id="wv"></span>
+  <button id="hot">7d near limit</button></div>
+
+<div class="stage"><div class="comp" id="comp"><div class="box"></div>
+  <div class="sup">
+    <span class="p prof" data-i="e"><span class="nm">erhards</span><span class="cv"></span></span>
+    <span class="lims"><span class="m" id="m5"><u>5h</u><span class="bar"><b style="width:67%"></b></span>67%</span><span class="m cool" id="m7"><u>7d</u><span class="bar"><b style="width:28%"></b></span>28%</span></span>
+    <span class="gap"></span>
+    <span class="p mode"><span class="dot"></span><span class="lbl">Auto</span><span class="cv"></span></span>
+    <span class="p" style="margin-left:6px">Opus 5.5<span class="eff">&nbsp;<i>·</i> Medium</span><span class="cv"></span></span>
+    <span class="ctx" style="margin-left:6px"><span class="ring" style="--p:20"></span><span class="pct">20%</span></span>
+  </div>
+</div></div>
+
+<ol class="steps" id="steps">
+  <li data-w="9999"><b>full</b>everything</li>
+  <li data-w="560"><b>≤ 560</b>meter bars go; “5h 67%” stays</li>
+  <li data-w="500"><b>≤ 500</b>“· Medium” leaves the model label (still in its menu)</li>
+  <li data-w="440"><b>≤ 440</b>only the fuller of 5h / 7d stays</li>
+  <li data-w="390"><b>≤ 390</b>mode shows as its coloured dot; context as the ring alone</li>
+  <li data-w="330"><b>≤ 330</b>profile as its initial; the limit as “67%” alone</li>
+</ol>
+
+<h3>Open questions</h3>
+<ol class="notes">
+  <li>Is this the right order — status (bars, 7d) goes before controls (effort, mode)?</li>
+  <li>Below ~330px: keep squeezing as drawn, or wrap into two lines (limits above, pickers below)?</li>
+  <li>The “resets in 2h” note that appears near a limit: truncate it as now, or let it replace the meters while it shows?</li>
+</ol>
+</div>
+<script>
+const w=document.getElementById('w'),comp=document.getElementById('comp'),wv=document.getElementById('wv');
+function upd(){const x=+w.value;comp.style.width=x+'px';wv.textContent=x+'px';
+  document.querySelectorAll('#steps li').forEach(li=>li.classList.toggle('on',x<=+li.dataset.w&&![...document.querySelectorAll('#steps li')].some(o=>+o.dataset.w<+li.dataset.w&&x<=+o.dataset.w)))}
+w.oninput=upd;upd();
+let hot=false;document.getElementById('hot').onclick=e=>{hot=!hot;e.target.classList.toggle('on',hot);
+  const m5=document.getElementById('m5'),m7=document.getElementById('m7');
+  m7.innerHTML=`<u>7d</u><span class="bar"><b style="width:${hot?86:28}%"></b></span>${hot?86:28}%`;
+  m7.className='m'+(hot?' mid':' cool');m5.className='m'+(hot?' cool':'')};
+document.getElementById('th').onclick=e=>{const d=document.documentElement,l=d.dataset.theme==='dark';d.dataset.theme=l?'light':'dark';e.target.textContent=l?'Dark':'Light'};
+</script></body></html>

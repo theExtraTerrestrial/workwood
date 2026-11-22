@@ -792,7 +792,13 @@
   .m.fresh{color:var(--text)}.m.fresh .bar i{background:var(--text)}
   .m.mid{color:var(--warn)}.m.mid .bar i{background:var(--warn)}
   .m.hot{color:var(--hot)}.m.hot .bar i{background:var(--hot)}
-  @container (max-width:430px){#lim .m+.m{display:none}}
+  /* A narrow row lets things go in this order, never wrapping or clipping; whatever is amber or red stays (round 37). */
+  .support .nm::before{content:attr(data-i);display:none}#pProfile .nm{max-width:12em;overflow:hidden;text-overflow:ellipsis}
+  @container (max-width:630px){#lim .bar{display:none}}                                   /* the bars; "5h 67%" stays */
+  @container (max-width:545px){#pModel .eff{display:none}}                               /* "· Medium"; still in the menu */
+  @container (max-width:490px){#lim .m.cool{display:none}#lim u{display:none}}           /* only the fuller of 5h and 7d */
+  @container (max-width:435px){#pMode .lbl{display:none}.support .pick.mode{margin-right:6px}.support .ctx:not(.mid) .pct{display:none}}   /* mode as its dot, context as its ring */
+  @container (max-width:325px){#pProfile .nm>span{display:none}#pProfile .nm::before{display:inline}#lim .m:not(.mid):not(.hot) .wn{display:none}}   /* the profile's initial, the limit as "67%" */
   .limnote{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}.limnote.mid{color:var(--warn)}.limnote.hot{color:var(--hot)}
   .support .ctx{height:22px;padding:0 6px;margin:0 -6px;gap:6px;font-size:12px;color:var(--faint);cursor:pointer}
   .support .ctx:hover,.support .ctx.open{background:var(--surface);color:var(--text)}

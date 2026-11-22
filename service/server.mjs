@@ -13,6 +13,7 @@ import { readTranscript, outputFromTranscript } from './transcript.mjs';
 import { runs, startTurn, answer, setMode, stop, stopStep, liveOutput, taskOutput, publicRun, listCommands, addToTurn, unqueue, sendNow, contextOf } from './runs.mjs';
 import { terms, openTerm, attach, typeInto, resize, closeTerm, closeAll } from './terminals.mjs';
 import { changesFor, changeOf } from './changes.mjs';
+import * as home from './home.mjs';
 import * as voice from './voice.mjs';
 import * as usage from './usage.mjs';
 import * as prof from './profiles.mjs';
@@ -232,6 +233,52 @@ async function doRefresh() {
 }
 async function refreshLive() { state.live = await src.loadLive(); pushState(); }
 
+// Home (see home.mjs): where each piece of work was left, what is not committed, what was made lately, and how each
+// profile's limits are moving. Git is asked at most every 15 seconds; the rest is remembered per transcript.
+let uncommitted = { at: 0, list: null, busy: null };
+async function readUncommitted() {
+  const now = nowS(), cands = new Map();
+  for (const s of [...state.sessions].sort((a, b) => b.mts - a.mts)) {
+    if (cands.size >= 12) break;
+    if ((now - s.mts < 7 * 86400 || !isDone(s, decorate(s).status)) && !cands.has(s.cwd)) cands.set(s.cwd, s);
+  }
+  const byTop = new Map();
+  await Promise.all([...cands.values()].map(async s => {
+    const c = await changesFor(s.cwd).catch(() => null);
+    if (!c?.repo || !c.count) return;
+    const had = byTop.get(c.root);
+    if (had && had.mts >= s.mts) return;
+    const pl = await src.placeOf(s.cwd);
+    byTop.set(c.root, { cwd: c.root, project: s.project, root: s.root || s.cwd, worktree: pl.worktree || null, branch: pl.branch || null,
+      count: c.count, add: c.add, del: c.del, sessionId: s.id, mts: s.mts });
+  }));
+  return [...byTop.values()].sort((a, b) => b.mts - a.mts);
+}
+async function homeNow() {
+  if (Date.now() - uncommitted.at > 15000) uncommitted.busy ||= readUncommitted().then(l => { uncommitted = { at: Date.now(), list: l, busy: null }; }, () => { uncommitted.busy = null; });
+  if (!uncommitted.list) await uncommitted.busy;   // the first time, wait for it; afterwards a reading a few seconds old will do
+  const now = nowS(), all = [...state.sessions].sort((a, b) => b.mts - a.mts);
+  // The last words of the newest sessions, and of the newest session in each project worked on this month.
+  const want = new Map(all.slice(0, 12).map(s => [s.id, s]));
+  const roots = new Set();
+  for (const s of all) { const r = s.root || s.cwd; if (now - s.mts > 30 * 86400 || roots.size >= 16) break; if (!roots.has(r)) { roots.add(r); want.set(s.id, s); } }
+  const words = {};
+  await Promise.all([...want.values()].map(async s => {
+    const w = await home.lastWords(s.file);
+    const q = runs.get(s.id)?.pending, ask = q?.kind === 'question' ? q.input?.questions?.[0]?.question : null;
+    if (w || ask) words[s.id] = { ...(w || {}), ...(ask ? { ask: String(ask) } : {}) };
+  }));
+  // What the agents made lately: the newest files of the newest sessions, ones that are still there.
+  const made = [];
+  for (const s of all.filter(x => now - x.mts < 14 * 86400).slice(0, 8)) {
+    for (const f of (await home.madeBy(s.file, s.cwd)).slice(0, 6)) { made.push({ ...f, sessionId: s.id }); previewDirs(s.id).add(path.dirname(f.path)); }
+  }
+  made.sort((a, b) => b.v - a.v);
+  const seenPath = new Set();
+  return { words, uncommitted: uncommitted.list || [], made: made.filter(f => !seenPath.has(f.path) && seenPath.add(f.path)).slice(0, 10),
+    trends: await home.trends(state.profiles.map(p => p.name)) };
+}
+
 const body = req => new Promise((res, rej) => { let s = ''; req.on('data', d => { s += d; if (s.length > 3e8) req.destroy(); }); req.on('end', () => { try { res(s ? JSON.parse(s) : {}); } catch (e) { rej(e); } }); });
 const send = (res, code, data) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(data)); };
 
@@ -270,6 +317,8 @@ async function api(req, res, url) {
     try { return send(res, 200, { skills: await list }); }
     catch (e) { skills.delete(key); return send(res, 502, { error: 'The list of skills could not be read: ' + String(e.message).split('\n')[0] }); }
   }
+  if (req.method === 'GET' && parts[0] === 'home' && parts[1] === 'activity') return send(res, 200, await home.activity(state.sessions));
+  if (req.method === 'GET' && parts[0] === 'home') return send(res, 200, await homeNow());
   if (req.method === 'GET' && parts[0] === 'sessions' && parts[2] === 'work') {
     // When each previewable file last changed, so the window can reload one that was edited, by anyone.
     const all = knownWork(parts[1]);

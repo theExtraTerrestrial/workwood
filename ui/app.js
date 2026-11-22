@@ -46,6 +46,9 @@ const P={
   monitor:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
   branch:'<path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
   moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  home:'<path d="m3 10.5 9-7.5 9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  sliders:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  flag:'<path d="M5 21V4M5 4h12l-2.5 4L17 12H5"/>',
   sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'
 };
 const svg=(n,c='')=>`<svg viewBox="0 0 24 24" class="${c}">${P[n]||''}</svg>`;
@@ -243,7 +246,7 @@ function newSession(project){
   V.profile=startProfile()?.name; // every new session starts on your default profile (the global one unless you chose another); the project stays as last chosen
   if(project){V.project=project;V.profile=lastProfileIn(project)||V.profile} // the + on a project in the sidebar
   else V.project=V.project&&A.projects.some(p=>p.cwd===V.project)?V.project:A.projects[0]?.cwd||null;
-  render();$('input').focus();loadDefaults();
+  render();$('input').focus();loadDefaults();H.sig='';homeSoon();
 }
 async function openSession(id,sending){
   if(!sending)V.pend=null;
@@ -351,8 +354,8 @@ const RANK={video:0,page:1,pdf:2,image:3};
 const fileUrl=f=>`${A.preview}/${V.sel}/${f.path.split(/[\\/]/).filter(Boolean).map(encodeURIComponent).join('/')}?v=${f.v}`;
 const folderOf=f=>{const cwd=selSession()?.cwd||'',d=f.path.slice(0,f.path.lastIndexOf('/'));return d===cwd?'':d.startsWith(cwd+'/')?d.slice(cwd.length+1):d.replace(/^\/home\/[^/]+/,'~')};
 const SANDBOX='allow-scripts allow-forms allow-same-origin allow-popups allow-modals';
-function thumb(f){
-  const u=esc(fileUrl(f));
+function thumb(f,url=fileUrl(f)){
+  const u=esc(url);
   return f.kind==='page'?`<iframe src="${u}" loading="lazy" tabindex="-1" sandbox="allow-scripts allow-same-origin" title=""></iframe>`
     :f.kind==='image'?`<img src="${u}" loading="lazy" alt="">`
     :f.kind==='video'?`<video src="${u}#t=0.5" preload="metadata" muted></video><span class="play">${svg('play')}</span>`
@@ -372,7 +375,7 @@ function renderThread(){
   // What you just sent is shown straight away, and gives way to the real message when the service reports it.
   if(V.pend&&V.items.filter(it=>it.kind==='user').length>=V.pend.need)V.pend=null;
   const pd=V.pend,pend=pd?[['pend',`<div class="me">${esc(pd.text)}${pd.files.length?`<div class="matt">${pd.files.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`]].concat(V.run?.status==='working'&&!nw&&!V.loading?[]:[['pendw','<div class="w1"><i class="spin"></i><span class="shim">Starting</span></div>']]):[];
-  t.hidden=nw&&!pd;$('hello').hidden=!nw||!!pd;
+  t.hidden=nw&&!pd;$('hello').hidden=!nw||!!pd||isHome();
   if(nw&&!pd){renderRail();return}   // a session not started has no turns: clear the rail left by the one you were reading
   if(nw||V.loading){patch(t,pd?pend:[['loading','<div class="loading">Opening…</div>']]);renderRail();return}
   const parts=[],latest=new Map();
@@ -579,7 +582,7 @@ $('thread').onclick=e=>{const o=e.target.closest('[data-open]');if(o){showWork(o
 function tick(){const el=$('elapsed');if(el&&V.run?.startedAt)el.textContent=dur(Date.now()-V.run.startedAt);
   const now=Date.now();for(const c of document.querySelectorAll('[data-from]'))c.textContent=sdur(now-c.dataset.from)}
 setInterval(tick,200);
-setInterval(()=>{if(A.ready)renderList()},60000);
+setInterval(()=>{if(A.ready){renderList();renderHome()}},60000);
 const FOLLOW=160;   // the thread follows the agent while you are within this much of its end
 const awayNow=()=>{const s=$('scroll');return s.scrollHeight-s.scrollTop-s.clientHeight>=FOLLOW};
 function toBottom(force){const s=$('scroll');if(force||!awayNow())s.scrollTop=s.scrollHeight;paintJump()}
@@ -818,14 +821,14 @@ $('vCancel').onclick=()=>stopVoice(false);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&R&&!R.done){e.stopPropagation();stopVoice(false)}},true);
 
 /* ---------- settings dialog ---------- */
-const STABS=['General','Profiles','Skills','About'],LANGS=['english','latvian','russian','german','french','spanish','italian','polish','lithuanian','estonian','finnish','swedish','ukrainian'];
+const STABS=['General','Profiles','Skills','About','Home'],SORDER=[0,4,1,2,3],LANGS=['english','latvian','russian','german','french','spanish','italian','polish','lithuanian','estonian','finnish','swedish','ukrainian'];
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 let stab=0,about=null,L=null,PE=null,PSel=null,PAdd=false,PD=null; // PSel: the profile open on the Profiles page; PAdd: the add form is showing; PD: its Claude Code defaults {name, d}
  // L: the sign-in terminal on screen {name, term, es, ro}; PE: a profile being renamed or asked about {name, kind}
 function dropLogin(close){if(!L)return;const l=L;L=null;l.es?.close();l.ro?.disconnect();l.term?.dispose();if(close)api(`profiles/${l.name}/login/close`,{}).catch(()=>{})}
 function renderSettings(){
   if($('sdim').hidden)return;
-  $('stabs').innerHTML=STABS.map((t,i)=>`<button data-st="${i}" class="${i===stab?'on':''}">${t}</button>`).join('');
+  $('stabs').innerHTML=SORDER.map(i=>`<button data-st="${i}" class="${i===stab?'on':''}">${STABS[i]}</button>`).join('');
   if(L&&stab===1)return;                                     // the sign-in terminal is showing; leave it be
   if(stab===0&&$('spage').contains(document.activeElement)&&document.activeElement.tagName==='SELECT')return; // a menu is open
   const cd=svg('chev-d'),pf=A.prefs||{},pg=$('spage');
@@ -837,6 +840,10 @@ function renderSettings(){
     <div class="srow"><span>Dictation language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>
     <div class="srow"><span>Project folders<small>Folders that hold your projects. Separate several with a semicolon.</small></span><input class="sval sin mono" id="sFolders" spellcheck="false" autocomplete="off" value="${esc((pf.folders||[]).map(short).join('; '))}" placeholder="${esc(short((A.folders||[])[0]||''))}">${window.workwood?.pickFolder?'<button class="sval" id="sBrowse" data-tip="Choose a folder to add">Add…</button>':''}</div>`;
   else if(stab===1)renderProfilePage(pg);
+  else if(stab===4){const k=hbgKind(),list=A.sessions.filter(s=>!s.done).sort((a,b)=>b.mts-a.mts).slice(0,14),[h1,h2,h3]=hbgHues();
+    pg.innerHTML=`<div class="pgh">Home</div><div class="srow" style="border:0"><span>Background<small>Behind the home page only, in the colours of the projects you are working on.</small></span></div>
+    <div class="hbgs">${HBG.map(([v,n])=>`<button class="hbgt ${v===k?'on':''}" data-hbg="${v}"><span class="hbg working" style="--h1:${h1};--h2:${h2};--h3:${h3}">${hbgHTML(v,list)}<span class="fld grain"></span></span><b>${n}</b></button>`).join('')}</div>
+    <div class="srow"><span>Moves with the work<small>Livelier while an agent works, and warm when the profile for your next session is near a limit.</small></span><i class="stog ${hbgLive()?'on':''}" data-set="hlive"></i></div>`}
   else if(stab===2){needSkills();const all=skillList();pg.innerHTML=`<div class="pgh">Skills</div>`+(!all?'<div class="cap2">Loading skills…</div>':V.sk.err?`<div class="cap2">${esc(V.sk.err)}</div>`:all.map(s=>`<div class="srow" data-tip="${esc(s.about)}"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">/${esc(s.name)}</span><span class="sstate">${s.from}</span></div>`).join('')+`<div class="cap2" style="padding:10px 8px">As Claude Code reports them for ${V.isNew?'a new session here':'the open session'}.</div>`)}
   else{pg.innerHTML=`<div class="pgh">About</div>`+(about?`<div class="srow"><span>Workwood</span><span class="sstate">${esc(about.version)}</span></div>
     ${updRow()}
@@ -1003,6 +1010,8 @@ $('stabs').onclick=e=>{const b=e.target.closest('[data-st]');if(!b)return;dropLo
 $('spage').onclick=async e=>{
   const s=e.target.closest('[data-set]'),l=e.target.closest('[data-login]');
   if(e.target.closest('#lgBack')){dropLogin(true);renderSettings();return}
+  const hb=e.target.closest('[data-hbg]');if(hb){localStorage.setItem('ww.hbg',hb.dataset.hbg);renderSettings();renderHomeBg();return}
+  if(s?.dataset.set==='hlive'){localStorage.setItem('ww.hlive',hbgLive()?'off':'on');renderSettings();renderHomeBg();return}
   if(e.target.closest('#lgOpen')&&L?.url){openLink(e,L.url);return}
   if(e.target.closest('#lgCopy')&&L?.url){const b=$('lgCopy');try{await copyText(L.url);b.textContent='Copied'}catch{b.textContent='Select it in the terminal'}setTimeout(()=>{if(b.isConnected)b.textContent='Copy link'},1500);return}
   if(l){PE=null;startLogin(l.dataset.login);return}
@@ -1073,7 +1082,7 @@ const autoCompact=()=>{if(innerWidth<1000)return true;
   return (innerWidth-268)*(innerWidth<=1100?.46:.54)<480};     // a side panel must leave the conversation room to read
 function fitSide(){const c=sidePref==='compact'||(sidePref==='auto'&&autoCompact());if(c===V.compact)return;
   V.compact=c;document.querySelector('.app').classList.toggle('compact',c);hideTip();
-  $('bSide').dataset.tip=c?'Show the full sidebar (Ctrl+B)':'Compact sidebar (Ctrl+B)';$('newBtn').dataset.tip=c?'New session':'';renderList()}
+  $('bSide').dataset.tip=c?'Show the full sidebar (Ctrl+B)':'Compact sidebar (Ctrl+B)';$('newBtn').dataset.tip=c?'Home':'';renderList()}
 function setSide(p){sidePref=p;localStorage.setItem('ww.side',p);fitSide()}
 const toggleSide=()=>{const a=autoCompact();setSide(V.compact?(a?'full':'auto'):(a?'auto':'compact'))};
 $('bSide').onclick=toggleSide;
@@ -1392,10 +1401,15 @@ input.addEventListener('input',()=>{if(V.limBase){V.limBase=null;clearTimeout(li
 input.addEventListener('keydown',e=>{if(slashKey(e))return;
   if(e.key==='Tab'&&e.shiftKey&&!e.ctrlKey&&!e.altKey&&!e.metaKey){e.preventDefault();const l=modeList().map(x=>x[0]).filter(v=>v!=='bypassPermissions'),i=l.indexOf(shownMode());pickMode(l[(i+1)%l.length]);return}   // as in Claude Code
   if(e.key==='ArrowUp'&&!e.shiftKey&&!e.altKey&&!e.ctrlKey&&!e.metaKey&&queued().length&&input.selectionStart===0&&input.selectionEnd===0){e.preventDefault();takeBack();return}
-  if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();if(!isWorking()||hasDraft())$('send').click()}});   // Enter never stops a turn
+  if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();if(!isWorking()||hasDraft()||R?.target==='input')$('send').click()}});   // Enter never stops a turn
 $('send').onclick=async()=>{
-  if(isWorking()&&!hasDraft()){try{await api(`sessions/${V.sel}/stop`,{})}catch(e){oops(e.message)}return}
-  if(R){await stopVoice();return}                                          // finish dictating first; a second press sends
+  const b=$('send');
+  if(R?.target==='input'){                                                 // still dictating: the message goes once it is written down
+    if(b.classList.contains('queued'))return;
+    const r=R,fin=stopVoice();b.classList.add('queued');b.title='Sends once it is written down';$('vtime').textContent='Writing it down, then sending…';
+    await fin;b.classList.remove('queued');b.title=b.dataset.i==='stop'?'Stop':'Send';fitSend();
+    if(r.err)return;                                                       // part of it was not written down: look it over first
+  }else if(isWorking()&&!hasDraft()){try{await api(`sessions/${V.sel}/stop`,{})}catch(e){oops(e.message)}return}
   const text=input.value.trim();if(!text&&!V.att.length)return;
   // The box empties at once; if the message could not be sent, what you wrote comes back.
   const att=V.att;V.att=[];input.value='';renderAtt();grow();fitSend();
@@ -1529,12 +1543,182 @@ async function sendText(text,asProfile,attachments){
   finally{V.busy=false;if(tmp)V.qSending=null;$('hello').textContent='What should the agent do?'}
 }
 
+/* ---------- home: where you left off ---------- */
+// Shown in place of an empty new session: the message box stays under it, so starting new work is still one step.
+// Three views of the same things: what to pick up, each project, and your week.
+const H={seen:new Set(),d:null,act:null,view:localStorage.getItem('ww.home')||'pick',busy:false,again:false,sig:'',actAt:0,actBusy:false};
+const HVIEWS=[['pick','Pick up','Where each piece of work was left'],['projects','Projects','Each project at a glance'],['week','Week','When you worked, this week']];
+const isHome=()=>V.isNew&&!V.pend&&A.ready&&A.sessions.length>0;
+async function loadHome(){
+  if(H.busy){H.again=true;return}H.busy=true;
+  try{H.d=await api('home')}catch{}
+  H.busy=false;if(H.again){H.again=false;return loadHome()}
+  renderHome();
+}
+async function loadActivity(force){
+  if(H.actBusy||(!force&&H.act&&Date.now()-H.actAt<300000))return;H.actBusy=true;
+  try{H.act=await api('home/activity');H.actAt=Date.now()}catch{}
+  H.actBusy=false;renderHome();
+}
+// It follows what changes while you look at it: a session's state or time, a profile's reading.
+const homeSig=()=>A.sessions.map(s=>s.id+s.mts+s.status+(s.unread?1:0)).join()+A.profiles.map(p=>p.name+p.at+p.h5+p.d7+(p.reading?1:0)).join();
+let homeT=null;
+function homeSoon(){if(!isHome())return;const g=homeSig();if(g===H.sig&&H.d)return;H.sig=g;clearTimeout(homeT);homeT=setTimeout(()=>{loadHome();loadActivity()},H.d?2500:0)}
+const homeUrl=f=>`${A.preview}/${f.sessionId}/${f.path.split(/[\\/]/).filter(Boolean).map(encodeURIComponent).join('/')}?v=${f.v}`;
+const dayStart=(back=0)=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-back);return d.getTime()/1000};
+const dayName=ts=>new Date(ts*1000).toLocaleDateString([],{weekday:'short',day:'numeric',month:'short'});
+const hsec=(k,title,right,body)=>[k,`<section class="hs hs-${k}"><h4><span>${title}</span><span class="gap"></span>${right||''}</h4>${body}</section>`];
+// Waiting for you first, then the newest.
+const pickups=n=>A.sessions.filter(s=>!s.done).sort((a,b)=>(b.status==='wait')-(a.status==='wait')||b.mts-a.mts).slice(0,n);
+function leftCard(s){
+  const w=H.d?.words?.[s.id],say=w?.ask||w?.text||(s.status==='work'?s.line:'');
+  const chip=s.status==='wait'?`<span class="hchip w">${esc(askLabel(s.line))}</span>`:s.status==='work'?`<span class="hchip"><i class="spin"></i>Working</span>`:s.unread?'<span class="hchip">New</span>':'';
+  return `<button class="hcard ${s.status==='wait'?'ask':''}" data-sid="${s.id}"><span class="hct">${tile(s.project,'s')}</span><b>${esc(s.title)}</b></span><p>${say?esc(say):'<em>No reply yet</em>'}</p><span class="hcf">${chip}<span class="hpl">${esc(s.branch||s.project)}</span><time>${ago(s.mts)}</time></span></button>`;
+}
+const leftOff=()=>{const l=pickups(3);return l.length?hsec('left','Left off','',`<div class="hcards">${l.map(leftCard).join('')}</div>`):null};
+
+// Profiles, as the Claudius dashboard draws them: one big number per window, a bar for what is used over a bar for
+// how far the window has run, the rate it is used at, and when that rate would reach the limit.
+const spark=(pts,from,to)=>{if(!pts||pts.length<2||to<=from)return '<svg class="spk" viewBox="0 0 60 18"></svg>';
+  const x=t=>1+Math.min(1,Math.max(0,(t-from)/(to-from)))*58,y=v=>17-Math.min(100,Math.max(0,v))*.16;
+  return `<svg class="spk" viewBox="0 0 60 18" preserveAspectRatio="none"><polyline points="${pts.map(([t,v])=>x(t).toFixed(1)+','+y(v).toFixed(1)).join(' ')}"/></svg>`};
+function winBlock(p,k,tr){
+  const v=p[k],[len,rk]=WIN[k],r=p[rk],now=Date.now()/1000,run=r?Math.min(100,Math.max(0,(1-(r-now)/len)*100)):null,h=k==='h5';
+  const rate=tr?.[h?'rate5':'rate7'],eta=tr?.[h?'eta5':'eta7'],pts=tr?.[h?'s5':'s7'];
+  const when=eta?(h?clock(eta*1000):new Date(eta*1000).toLocaleDateString([],{weekday:'short'})+' '+clock(eta*1000)):'';
+  return `<div class="pw ${lvl(v??0)}"><div class="pwt"><span class="pwl">${h?'5<small>h</small>':'7<small>d</small>'}</span><span class="pwv">${v??'–'}<small>%</small></span><span class="pwr">${r?`<small>resets in</small>${until(r)}`:''}</span></div>
+    <div class="pwb" data-tip="${v??0}% used"><i style="width:${Math.min(100,v||0)}%"></i></div><div class="pwb t" data-tip="${run==null?'':Math.round(run)+'% of the window has run'}"><i style="width:${run??0}%"></i></div>
+    <div class="pwf"><span>${rate!=null?(rate>0?'+':'')+rate.toFixed(1)+'%/h':'no rate yet'}</span>${spark(pts,r?r-len:now-len,r||now)}<span class="gap"></span>${when?`<span class="eta" data-tip="At this rate the ${h?'5-hour':'7-day'} limit is reached then, before it resets">${svg('flag')}${esc(when)}</span>`:''}</div></div>`;
+}
+function profCard(p,tr){
+  const full=Math.max(p.h5||0,p.d7||0)>=100,which=(p.d7||0)>=100?'d7':'h5',rs=p[WIN[which][1]],why=p.failed&&WHY[p.failed];
+  const read=p.reading?'<i class="spin"></i>Reading…':why?esc(why)+(p.at?' '+ago(p.at):''):p.at?(ago(p.at)==='now'?'Read just now':`Read ${ago(p.at)} ago`):'Not read yet';
+  return `<div class="pcard ${full?'full':''}" data-prof="${esc(p.name)}" data-tip="Settings for ${esc(p.name)}">
+    <div class="pch"><b>${esc(p.name)}</b>${p.name===A.next&&!full?'<span class="hchip">Most room</span>':''}</div>
+    <div class="pcs">${esc([p.email,p.org].filter(Boolean).join(' · '))||'&nbsp;'}</div>
+    ${full?`<div class="pblk"><small>${which==='h5'?'5-hour':'7-day'} limit reached</small><b>${rs?until(rs):'–'}</b><span>until it clears${which==='h5'&&p.d7!=null?` · 7d at ${p.d7}%`:''}</span></div>`:`<div class="pws">${winBlock(p,'h5',tr)}${winBlock(p,'d7',tr)}</div>`}
+    <div class="pcf">${read}</div></div>`;
+}
+const limits=()=>{if(!A.profiles.length)return null;const tr=new Map((H.d?.trends||[]).map(t=>[t.name,t])),busy=A.profiles.some(p=>p.reading);
+  return hsec('lim','Limits',`<button class="ib hrf ${busy?'busy':''}" data-limrefresh data-tip="Read every profile's limits again. Nothing is sent to Claude.">${svg('refresh')}</button>`,`<div class="pcards n${Math.min(A.profiles.length,3)}">${A.profiles.map(p=>profCard(p,tr.get(p.name))).join('')}</div>`)};
+
+const where=u=>u.worktree?`${svg('tree')}${esc(u.worktree)}`:u.branch?`${svg('branch')}${esc(u.branch)}`:'';
+const notCommitted=()=>{const l=H.d?.uncommitted||[];if(!l.length)return null;
+  return hsec('unc','Not committed','',`<div class="hrows">${l.map(u=>`<button class="hrow" data-ch="${u.sessionId}" data-tip="${esc(short(u.cwd))}">${tile(u.project,'s')}</span><b>${esc(u.project)}</b><span class="hbr">${where(u)}</span><span class="gap"></span><span class="hn">${plural(u.count,'file')} · <i>+${u.add}</i> <u>−${u.del}</u></span><time>${ago(u.mts)}</time></button>`).join('')}</div>`)};
+const madeLately=()=>{const l=H.d?.made||[];if(!l.length||!A.preview)return null;
+  return hsec('made','Made lately','',`<div class="hshots">${l.slice(0,8).map(f=>{const s=A.sessions.find(x=>x.id===f.sessionId);
+    return `<button class="hc hshot" data-made="${esc(f.path)}" data-sid="${f.sessionId}" title="${esc(f.path)}"><span class="ht k-${f.kind}">${thumb(f,homeUrl(f))}</span><span class="cap"><b>${esc(f.name)}</b><span>${esc(s?.title||'')}</span></span></button>`}).join('')}</div>`)};
+
+// Messages you wrote per day, per project, over four weeks: one hue, darker for more.
+function perDay(turns,days){const base=dayStart(days-1),out=new Array(days).fill(0);for(const t of turns){const i=Math.floor((t-base)/86400);if(i>=0&&i<days)out[i]++}return out}
+const activity=()=>{const a=H.act;
+  if(!a)return hsec('act','Last 4 weeks','',`<div class="hwait">Reading your history…</div>`);
+  const rows=a.projects.map(p=>({...p,days:perDay(p.turns,28)})).filter(p=>p.days.some(Boolean)).sort((x,y)=>y.turns.length-x.turns.length).slice(0,6);
+  if(!rows.length)return null;
+  const max=Math.max(1,...rows.flatMap(r=>r.days)),lv=n=>n?Math.max(1,Math.ceil(n/max*4)):0;
+  return hsec('act','Last 4 weeks',`<span class="hleg">Less${[0,1,2,3,4].map(i=>`<i class="c l${i}"></i>`).join('')}More</span>`,
+    `<div class="heat">${rows.map(r=>`<span class="hpn">${tile(r.name,'s')}</span>${esc(r.name)}</span>`+r.days.map((n,i)=>`<i class="c l${lv(n)}" data-tip="${esc(r.name)} · ${dayName(dayStart(27-i))} · ${n?plural(n,'message'):'nothing'}"></i>`).join('')).join('')}
+    <span></span><span class="hax">4 weeks ago</span><span class="hax r">Today</span></div>`)};
+
+// Projects: each one worked on this month, newest first, with where its latest session was left.
+function projectsView(){
+  const now=Date.now()/1000,by=new Map();
+  for(const s of [...A.sessions].sort((a,b)=>b.mts-a.mts)){const k=s.root||s.cwd;if(now-s.mts>30*86400)continue;if(!by.has(k))by.set(k,{root:k,name:s.project,list:[]});by.get(k).list.push(s)}
+  const act=new Map((H.act?.projects||[]).map(p=>[p.root,p]));
+  const cards=[...by.values()].slice(0,12).map(g=>{const s=g.list[0],w=H.d?.words?.[s.id],open=g.list.filter(x=>!x.done).length,ask=g.list.some(x=>x.status==='wait');
+    const unc=(H.d?.uncommitted||[]).filter(u=>u.root===g.root),files=unc.reduce((n,u)=>n+u.count,0),d=act.has(g.root)?perDay(act.get(g.root).turns,14):null,mx=Math.max(1,...(d||[0]));
+    return `<div class="pj ${ask?'ask':''}" data-sid="${s.id}"><div class="pjt">${tile(g.name)}</span><span class="pjn"><b>${esc(g.name)}</b><small>${open?plural(open,'open session'):'nothing open'}</small></span><span class="gap"></span><button class="ib" data-pnew="${esc(g.root)}" data-tip="New session in ${esc(g.name)}">${svg('plus')}</button></div>
+      <div class="pjl"><b>${esc(s.title)}</b><time>${ago(s.mts)}</time></div><p>${esc(w?.ask||w?.text||'')}</p>
+      <div class="pjm">${s.branch?`<span>${svg('branch')}${esc(s.branch)}</span>`:''}${files?`<span class="w">${plural(files,'file')} not committed</span>`:''}<span class="gap"></span>${d?`<span class="bars" data-tip="${plural(d.reduce((a,b)=>a+b,0),'message')} in the last 2 weeks">${d.map(n=>`<i style="height:${n?3+Math.round(n/mx*17):1}px" class="${n?'':'z'}"></i>`).join('')}</span>`:''}</div></div>`}).join('');
+  return [['projects',`<section class="hs"><div class="pjs">${cards}<button class="pj add" data-pnew="">${svg('plus')}<span>New session somewhere else</span></button></div></section>`]];
+}
+
+// Your week: how much, then when, per project, a bar for each stretch of work.
+function weekView(){
+  const a=H.act,start=dayStart(6),end=dayStart(-1),span=end-start,now=Date.now()/1000;
+  const msgs=(a?.projects||[]).reduce((n,p)=>n+p.turns.filter(t=>t>=start).length,0);
+  const lanes=(a?.projects||[]).map(p=>({...p,b:p.blocks.filter(b=>b[1]>start)})).filter(p=>p.b.length).sort((x,y)=>y.b.reduce((n,b)=>n+b[1]-b[0],0)-x.b.reduce((n,b)=>n+b[1]-b[0],0)).slice(0,8);
+  const secs=lanes.reduce((n,p)=>n+p.b.reduce((m,b)=>m+Math.min(b[1],end)-Math.max(b[0],start),0),0);
+  const unc=(H.d?.uncommitted||[]).length;
+  const stat=(v,l)=>`<div class="hstat"><b>${a?v:'–'}</b><span>${l}</span></div>`;
+  const pos=t=>((t-start)/span*100).toFixed(2)+'%';
+  const days=[...Array(7)].map((_,i)=>new Date((start+i*86400+43200)*1000).toLocaleDateString([],{weekday:'short'}));
+  const body=!a?`<div class="hwait">Reading your history…</div>`:!lanes.length?`<div class="hwait">Nothing this week yet.</div>`:
+    `<div class="lanes">${lanes.map(p=>`<div class="lane"><span class="hpn">${tile(p.name,'s')}</span>${esc(p.name)}</span><span class="ltrk" style="--h:${hueOf(p.name)}">${days.map((_,i)=>`<u style="left:${(i/7*100).toFixed(2)}%"></u>`).join('')}${p.b.map(b=>`<b style="left:${pos(Math.max(b[0],start))};width:max(3px,${((Math.min(b[1],end)-Math.max(b[0],start))/span*100).toFixed(2)}%)" data-tip="${esc(p.name)} · ${esc(new Date(b[0]*1000).toLocaleDateString([],{weekday:'short'}))} ${clock(b[0]*1000)}–${clock(b[1]*1000)}${b[2]?' · '+plural(b[2],'message'):''}"></b>`).join('')}<s style="left:${pos(now)}"></s></span></div>`).join('')}
+      <div class="lane days"><span></span><span class="ltrk">${days.map((d,i)=>`<em style="left:${((i+.5)/7*100).toFixed(2)}%">${d}</em>`).join('')}</span></div></div>`;
+  return [['wstats',`<section class="hs"><div class="hstats">${stat(a?.sessions7??0,'sessions')}${stat(msgs,'messages')}${stat((secs/3600).toFixed(secs<36000?1:0),'hours of work')}${stat(unc,unc===1?'project not committed':'projects not committed')}</div></section>`],
+    hsec('lanes','This week','',body),leftOff()].filter(Boolean);
+}
+function renderHome(){
+  const on=isHome(),d=$('dash');
+  d.hidden=!on;$('dseg').hidden=$('hset').hidden=!on;$('main').classList.toggle('home',on);renderHomeBg();
+  if(!on)return;
+  $('dseg').innerHTML=HVIEWS.map(([k,n,t])=>`<button class="${H.view===k?'on':''}" data-hv="${k}" data-tip="${t}">${n}</button>`).join('');
+  const parts=H.view==='projects'?projectsView():H.view==='week'?weekView():[leftOff(),limits(),notCommitted(),madeLately(),activity()].filter(Boolean);
+  patch(d,parts.map(([k,h])=>[H.view+':'+k,h]));fitThumbs();
+  // A section fades in when it first appears, not each time a reading redraws it.
+  for(const el of d.children){if(H.seen.has(el.dataset.k))el.style.animation='none';H.seen.add(el.dataset.k)}
+}
+$('dseg').onclick=e=>{const b=e.target.closest('[data-hv]');if(!b)return;H.view=b.dataset.hv;localStorage.setItem('ww.home',H.view);hideTip();renderHome();$('scroll').scrollTop=0};
+$('dash').onclick=async e=>{
+  const t=e.target;
+  const pn=t.closest('[data-pnew]');if(pn){e.stopPropagation();hideTip();if(pn.dataset.pnew)newSession(pn.dataset.pnew);else{newSession();$('pProject').click()}return}
+  if(t.closest('[data-limrefresh]')){api('limits/refresh',{}).catch(err=>oops(err.message));A.profiles.forEach(p=>p.reading=true);renderHome();return}
+  const pr=t.closest('[data-prof]');if(pr){hideTip();openSettings(STABS.indexOf('Profiles'),pr.dataset.prof);return}
+  const m=t.closest('[data-made]');if(m){hideTip();await openSession(m.dataset.sid);if(V.sel===m.dataset.sid&&V.work.some(f=>f.path===m.dataset.made))showWork(m.dataset.made,true);return}
+  const c=t.closest('[data-ch]');if(c){hideTip();await openSession(c.dataset.ch);if(V.sel===c.dataset.ch){V.side='changes';V.pv=null;renderPanel();loadChanges()}return}
+  const s=t.closest('[data-sid]');if(s){hideTip();openSession(s.dataset.sid)}
+};
+new ResizeObserver(fitThumbs).observe($('dash'));
+
+// The background behind Home: one of a few slow fields, in the colours of the projects you are working on. It moves
+// with the work: faster and brighter while an agent works, and warm while the next session's profile is near a limit.
+// Chosen under Settings, Home; kept in this window.
+const HBG=[['none','None'],['aurora','Aurora'],['caustics','Caustics'],['orbits','Orbits'],['constel','Constellation']];
+const hbgKind=()=>{const k=localStorage.getItem('ww.hbg');return HBG.some(x=>x[0]===k)?k:'aurora'};
+const hbgLive=()=>localStorage.getItem('ww.hlive')!=='off';
+const seeded=seed=>{let s=seed>>>0||1;return ()=>(s=(s*1664525+1013904223)>>>0)/4294967296};
+// Stars: the newest sessions, each in its project's colour, joined to the next star of the same project.
+function constelHTML(list){
+  const pts=list.map(s=>{const r=seeded(hueOf(s.id)*7919+s.id.length);return {x:8+r()*84,y:10+r()*78,h:hueOf(s.project),p:s.root||s.cwd,w:s.status==='work'}});
+  let edges='';const last=new Map();
+  for(const p of pts){const q=last.get(p.p);last.set(p.p,p);if(!q)continue;const dx=p.x-q.x,dy=p.y-q.y;
+    edges+=`<span class="edge" style="--h:${p.h};left:${q.x}%;top:${q.y}%;width:${Math.hypot(dx,dy).toFixed(1)}%;transform:rotate(${(Math.atan2(dy,dx)*180/Math.PI).toFixed(1)}deg)"></span>`}
+  return `<span class="fld tone"></span><span class="fld constel"><span class="cfig">${edges}${pts.map((p,i)=>`<span class="vx ${p.w?'w':''}" style="--h:${p.h};left:${p.x}%;top:${p.y}%;animation-delay:-${(i*1.3).toFixed(1)}s"></span>`).join('')}</span></span>`;
+}
+function hbgHTML(kind,list){
+  if(kind==='aurora')return '<span class="fld blob b1"></span><span class="fld blob b2"></span><span class="fld blob b3"></span>';
+  if(kind==='caustics')return '<span class="fld caustic c1"></span><span class="fld caustic c2"></span><span class="fld caustic c3"></span>';
+  if(kind==='orbits')return '<span class="fld tone"></span><span class="fld orbits"><i style="--h:var(--h1)"></i><i style="--h:var(--h2)"></i><i style="--h:var(--h3)"></i></span>';
+  if(kind==='constel')return constelHTML(list);
+  return '';
+}
+// Its colours: the projects of the newest sessions in the inbox, up to three, as their tiles show them.
+function hbgHues(){
+  const hs=[];for(const s of A.sessions.filter(x=>!x.done).sort((a,b)=>b.mts-a.mts)){const h=hueOf(s.project);if(!hs.includes(h))hs.push(h);if(hs.length===3)break}
+  if(!hs.length)hs.push(168);while(hs.length<3)hs.push((hs[hs.length-1]+50)%360);return hs;
+}
+let hbgKey='';
+function renderHomeBg(){
+  const el=$('hbg'),kind=hbgKind(),on=isHome()&&kind!=='none';el.hidden=!on;
+  if(!on){hbgKey='';el.innerHTML='';return}
+  const live=hbgLive(),list=A.sessions.filter(s=>!s.done).sort((a,b)=>b.mts-a.mts).slice(0,14);
+  const working=live&&A.sessions.some(s=>s.status==='work'),p=profile(V.profile),use=p?Math.max(p.h5||0,p.d7||0):0;
+  const [h1,h2,h3]=hbgHues();
+  el.style.cssText=`--h1:${h1};--h2:${h2};--h3:${h3}`;
+  el.className='hbg '+(working?'working ':'')+(live&&use>=100?'hot ':live&&use>=80?'warm ':'');
+  const key=kind+'|'+(kind==='constel'?list.map(s=>s.id+s.status).join():'');
+  if(key!==hbgKey){hbgKey=key;el.innerHTML=hbgHTML(kind,list)+'<span class="fld glow"></span><span class="fld grain"></span>'}
+}
+document.addEventListener('visibilitychange',()=>$('hbg').classList.toggle('paused',document.hidden));
+$('hset').onclick=()=>openSettings(STABS.indexOf('Home'));
+
 /* ---------- everything together ---------- */
 // Under the title, always starting at the same place: where the work is happening. The worktree when there is one,
 // else the branch; the project comes after it.
 function renderHead(){
   const nw=V.isNew,s=selSession(),w=$('where');
-  $('title').textContent=nw?'New session':s?.title||'';
+  $('title').textContent=nw?(isHome()?'Home':'New session'):s?.title||'';
   if(nw||!s){w.innerHTML='';return}
   const pl=V.place||{project:s.project,worktree:null,branch:s.branch,cwd:s.cwd};
   w.dataset.tip=pl.cwd||s.cwd;
@@ -1545,7 +1729,7 @@ function renderHead(){
 function render(){
   const nw=V.isNew,s=selSession();
   if(s?.unread&&!nw&&!document.hidden){s.unread=false;api(`sessions/${s.id}/seen`,{}).catch(()=>{})}   // you are looking at it
-  renderList();renderUpd();renderThread();renderCard();renderQueue();renderComposer();renderPanel();renderTerm();renderHead();
+  renderList();renderUpd();renderThread();renderHome();renderCard();renderQueue();renderComposer();renderPanel();renderTerm();renderHead();
   $('tools').style.visibility=nw||!s?'hidden':'visible';
   $('main').classList.toggle('newmode',nw&&!V.pend);
 }
@@ -1595,10 +1779,10 @@ function connect(){
   const es=new EventSource('/api/events?token='+TOKEN);
   es.addEventListener('state',e=>{
     Object.assign(A,JSON.parse(e.data));
-    if(first&&A.ready){first=false;const s=A.sessions.find(x=>x.id===location.hash.slice(1))||A.sessions.find(x=>!x.done);if(s&&location.hash!=='#new')openSession(s.id);else newSession();return}
+    if(first&&A.ready){first=false;const s=A.sessions.find(x=>x.id===location.hash.slice(1));if(s)openSession(s.id);else newSession();return}   // home, unless the address names a session
     if(!V.isNew&&V.sel&&A.fresh&&!V.loading&&!A.sessions.some(x=>x.id===V.sel)){leave(V.sel);return} // deleted somewhere else
     if(V.isNew){if(!V.profile)V.profile=startProfile()?.name;if(!V.project)V.project=A.projects[0]?.cwd||null}
-    render();{const f=document.activeElement;if(!$('spage').contains(f)||!/^(SELECT|INPUT)$/.test(f.tagName))renderSettings()}if(!$('mProfile').hidden)renderProfiles();
+    render();homeSoon();{const f=document.activeElement;if(!$('spage').contains(f)||!/^(SELECT|INPUT)$/.test(f.tagName))renderSettings()}if(!$('mProfile').hidden)renderProfiles();
   });
   es.addEventListener('run',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const end=!awayNow();const was=V.run?.status;V.run=d.run;if(V.ans&&d.run?.pending?.id!==V.ans)V.ans=null;
     if(was==='working'&&d.run?.status!=='working'&&d.run?.status!=='waiting'){const id=V.sel;if(V.ctx?.id===id)V.ctx=null;setTimeout(()=>api('sessions/'+id).then(x=>{if(V.sel===id&&x.place){V.place=x.place;renderHead()}}).catch(()=>{}),900)}   // the agent may have moved to a worktree

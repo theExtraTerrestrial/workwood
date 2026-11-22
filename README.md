@@ -92,6 +92,15 @@ On a fresh WSL install the Electron window needs GTK once:
 - A session in a git worktree is listed under the project the worktree was made
   from. Under the title, always in the same place, the header names the worktree
   (or the branch when there is none), then the project.
+- Home: Workwood opens on it, and the Home button at the top of the sidebar brings it back. The message box
+  stays under it, so a new session starts there. "Pick up" shows the last words of the newest sessions (one
+  waiting for you first), a card per profile with its 5-hour and 7-day limits (how fast each is being used, from
+  the usage log Claudius and Workwood keep, and when that pace would reach the limit), the projects with changes
+  not committed, the pages and pictures the agents made lately, and four weeks of your messages per project.
+  "Projects" has a card per project worked on this month; "Week" shows when you worked, per project. A profile
+  card opens that profile's settings. Behind Home runs a slow background (Aurora, Caustics, Orbits or
+  Constellation, or none) in the colours of your projects, livelier while an agent works and warm when the
+  profile for the next session is near a limit; the button beside the view switch picks it (Settings, Home).
 - Under the message box: the profile the conversation runs on with its 5-hour and
   7-day limits, then model and effort, and how full the context is. Pressing the
   profile continues the conversation on another one from your next message.

@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 35: where you left off</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<style>
+  :root{color-scheme:dark;--accent:hsl(168 62% 62%);--warn:#ffb955;--go:#4fd6a4;--hot:#f0706a}
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0c0e;color:#e8e9ec;font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;padding-bottom:80px}
+  [data-theme=light] body{background:#e9eaee;color:#1d1e22}
+  button{font:inherit;color:inherit}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:14px;padding:24px 0 2px}.top h1{font-size:17px;margin:0;flex:1}
+  .top button{border:0;cursor:pointer;background:#1d1f23;color:#c9ccd2;padding:6px 11px;border-radius:8px}
+  [data-theme=light] .top button{background:#fff;color:#333}
+  .intro{color:#b9bcc3;max-width:720px;margin:6px 0 18px;font-size:14px}[data-theme=light] .intro{color:#555}
+  .intro kbd{font:inherit;font-weight:700;padding:0 6px;border-radius:5px;background:rgba(128,128,128,.22)}
+
+  .row{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;align-items:center}
+  .row>span{font-size:11.5px;color:#8f939b;width:60px}
+  .row button{border:0;cursor:pointer;background:#1d1f23;color:#c9ccd2;padding:6px 11px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  [data-theme=light] .row button{background:#fff;color:#333;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+  .row button.on{background:hsl(168 40% 22%);color:#fff;box-shadow:inset 0 0 0 1.5px var(--accent)}
+  [data-theme=light] .row button.on{background:hsl(168 45% 88%);color:#123}
+  .row button i{font-style:normal;color:var(--accent);font-weight:700;margin-right:5px}
+  .row button small{color:#8f939b;margin-left:6px}
+
+  /* ===== the mock app ===== */
+  .win{--bg:#18191c;--side:#1a1b1e;--surface:#222428;--pop:#26282d;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.14);
+    --text:#f0f1f3;--dim:#a6aab2;--faint:#6d717a;--sel:rgba(255,255,255,.075);--hov:rgba(255,255,255,.05);
+    display:flex;height:600px;border-radius:14px;overflow:hidden;background:var(--bg);color:var(--text);margin-top:14px;
+    box-shadow:0 30px 90px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.12)}
+  [data-theme=light] .win{--bg:#fbfbfc;--side:#f2f3f5;--surface:#fff;--pop:#fff;--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.14);
+    --text:#1b1c1f;--dim:#5b5f68;--faint:#8d919a;--sel:rgba(0,0,0,.06);--hov:rgba(0,0,0,.04);box-shadow:0 30px 90px rgba(0,0,0,.18),0 0 0 1px rgba(0,0,0,.1)}
+  .win svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .side{position:relative;width:268px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column}
+  .side-head{display:flex;align-items:center;padding:14px 16px 8px;font-weight:600}
+  .newb{display:flex;align-items:center;gap:8px;height:32px;margin:0 8px 4px;padding:0 9px;border-radius:8px;color:var(--dim);font-weight:500;box-shadow:inset 0 0 0 1px var(--line)}
+  .list{flex:1;padding:0 8px;overflow:hidden}
+  .grp{display:flex;align-items:center;gap:8px;padding:13px 9px 5px;font-size:12.5px;font-weight:600}
+  .grp small{margin-left:auto;font-weight:500;font-size:11px;color:var(--faint)}
+  .tile{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:8.5px;font-weight:700;flex:none;background:hsl(var(--h) 55% 62%/.17);color:hsl(var(--h) 55% 60%)}
+  .sess{padding:6px 9px 6px 37px;border-radius:8px;margin-bottom:1px}
+  .l1{display:flex;gap:8px;align-items:center}
+  .l1 b{flex:1;font-weight:500;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sess.work .l1 b,.sess.unr .l1 b,.sess.wait .l1 b{color:var(--text)}
+  .l1 time{font-size:11px;color:var(--faint)}
+  .l2{display:block;font-size:11.5px;color:var(--faint)}
+  .spin{width:11px;height:11px;border-radius:50%;border:1.6px solid color-mix(in srgb,var(--accent) 30%,transparent);border-top-color:var(--accent);animation:r 1s linear infinite}
+  @keyframes r{to{transform:rotate(360deg)}}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}.dot.w{background:var(--warn)}
+  .side-foot{display:flex;align-items:center;gap:2px;padding:6px 8px 8px;border-top:1px solid var(--line)}
+  .hist{flex:1;display:flex;align-items:center;gap:9px;height:30px;padding:0 9px;border-radius:8px;color:var(--dim);font-size:12.5px}
+  .hist small{color:var(--faint)}.hist kbd{font:inherit;font-size:11px;color:var(--faint);margin-left:auto}
+  .newb.on{background:var(--sel);color:var(--text)}
+
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .dash{flex:1;overflow:auto;padding:30px 0 10px}
+  .col{max-width:680px;margin:0 auto;padding:0 26px}
+  .composer{padding:0 26px 16px}
+  .box{max-width:680px;margin:0 auto;border-radius:14px;background:var(--surface);box-shadow:0 0 0 1px var(--line2);padding:12px 14px;color:var(--faint);height:70px}
+  .meter{max-width:680px;margin:7px auto 0;display:flex;gap:14px;font-size:11.5px;color:var(--faint);padding:0 4px}
+  h4{margin:0 0 9px;font-size:11px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);display:flex;gap:8px}
+  h4 small{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
+  .sec{margin-bottom:24px;animation:in .3s cubic-bezier(.2,.8,.2,1)}
+  @keyframes in{from{opacity:0;transform:translateY(4px)}}
+
+  /* left off cards */
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .card{background:var(--surface);border-radius:12px;padding:11px 12px;box-shadow:0 0 0 1px var(--line);display:flex;flex-direction:column;gap:6px;cursor:pointer;transition:box-shadow .15s}
+  .card:hover{box-shadow:0 0 0 1px var(--line2)}
+  .card .t{display:flex;align-items:center;gap:7px;font-weight:600;font-size:12.5px}
+  .card .t span:not(.tile){flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card p{margin:0;font-size:12px;color:var(--dim);line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .card .f{display:flex;gap:8px;font-size:11px;color:var(--faint);margin-top:auto}
+  .chip{font-size:10.5px;font-weight:650;padding:1px 7px;border-radius:20px;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+  .chip.w{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
+  .card.ask{box-shadow:0 0 0 1px color-mix(in srgb,var(--warn) 45%,transparent)}
+
+  /* rows: uncommitted */
+  .rows{background:var(--surface);border-radius:12px;box-shadow:0 0 0 1px var(--line);overflow:hidden}
+  .r{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12.5px}.r+.r{border-top:1px solid var(--line)}
+  .r b{font-weight:600}.r .br{color:var(--faint);font-size:11.5px;flex:1}
+  .r .n{font-variant-numeric:tabular-nums;font-size:11.5px;color:var(--dim)}
+  .r .n i{font-style:normal;color:var(--go)}.r .n u{text-decoration:none;color:var(--hot)}
+  .r .age{font-size:11px;color:var(--faint);width:34px;text-align:right}
+
+  /* made lately */
+  .shots{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+  .shot{aspect-ratio:4/3;border-radius:9px;box-shadow:0 0 0 1px var(--line);overflow:hidden;position:relative;background:var(--surface)}
+  .shot div{position:absolute;inset:0}
+  .shot span{position:absolute;left:0;right:0;bottom:0;padding:3px 7px;font-size:10.5px;color:var(--dim);background:var(--surface);border-top:1px solid var(--line)}
+
+  /* limits */
+  .lims{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .lim{background:var(--surface);border-radius:12px;padding:10px 12px;box-shadow:0 0 0 1px var(--line);font-size:12px}
+  .lim .t{display:flex;justify-content:space-between;font-weight:600}.lim .t small{font-weight:500;color:var(--faint)}
+  .lim .bars{display:flex;flex-direction:column;gap:5px;margin-top:7px}
+  .lim .bar{height:5px;border-radius:3px;background:var(--line2);position:relative}
+  .lim .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--go)}
+  .lim .bar.w i{background:var(--warn)}
+  .lim .bar s{position:absolute;top:-2px;bottom:-2px;width:2px;border-radius:1px;background:var(--faint)}
+
+  /* activity heatmap */
+  .heat{display:grid;grid-template-columns:58px repeat(28,1fr);gap:3px;align-items:center;font-size:11px;color:var(--faint)}
+  .heat .c{aspect-ratio:1;border-radius:3px;background:var(--line)}
+  .heat .c:hover{outline:1.5px solid var(--text)}
+
+  /* B · project board */
+  .board{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .pj{background:var(--surface);border-radius:14px;padding:14px;box-shadow:0 0 0 1px var(--line);display:flex;flex-direction:column;gap:9px}
+  .pj .t{display:flex;align-items:center;gap:9px;font-weight:650;font-size:14px}.pj .t small{margin-left:auto;font-weight:500;font-size:11.5px;color:var(--faint)}
+  .pj .last{font-size:12.5px}.pj .last em{font-style:normal;color:var(--faint)}
+  .pj p{margin:0;font-size:12px;color:var(--dim);line-height:1.45}
+  .pj .meta{display:flex;gap:12px;font-size:11.5px;color:var(--faint);align-items:end}
+  .spark{display:flex;gap:2px;align-items:end;height:22px;margin-left:auto}
+  .spark i{width:5px;border-radius:2px 2px 0 0;background:color-mix(in srgb,var(--accent) 70%,transparent)}
+
+  /* C · week lanes */
+  .lanes{background:var(--surface);border-radius:14px;box-shadow:0 0 0 1px var(--line);padding:14px 14px 10px}
+  .lane{display:grid;grid-template-columns:70px 1fr;align-items:center;height:30px;font-size:12px}
+  .lane .trk{position:relative;height:100%;border-top:1px solid var(--line)}
+  .lane .trk b{position:absolute;top:8px;height:14px;border-radius:4px;background:hsl(var(--h) 55% 62%/.55)}
+  .lane .trk b:hover{outline:1.5px solid var(--text)}
+  .days{display:grid;grid-template-columns:70px repeat(7,1fr);font-size:11px;color:var(--faint);margin-top:4px}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+  .stat{background:var(--surface);border-radius:12px;padding:10px 12px;box-shadow:0 0 0 1px var(--line)}
+  .stat b{display:block;font-size:22px;font-weight:700;letter-spacing:-.02em}.stat span{font-size:11.5px;color:var(--faint)}
+  .tip{position:fixed;pointer-events:none;background:var(--pop,#26282d);color:#f0f1f3;font-size:11.5px;padding:4px 8px;border-radius:7px;box-shadow:0 6px 20px rgba(0,0,0,.4);z-index:9;display:none}
+
+  .pick{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0}
+  .pick button{border:0;cursor:pointer;background:#1d1f23;color:#8f939b;padding:6px 11px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  .pick button.on{color:#fff;box-shadow:inset 0 0 0 1.5px var(--accent)}
+  [data-theme=light] .pick button{background:#fff;color:#888}[data-theme=light] .pick button.on{color:#123}
+  .pick button::before{content:"○ ";color:#8f939b}.pick button.on::before{content:"● ";color:var(--accent)}
+  .notes{color:#b9bcc3;max-width:760px;font-size:13.5px}.notes li{margin:6px 0}.notes b{color:#fff}
+  [data-theme=light] .notes{color:#444}[data-theme=light] .notes b{color:#000}
+  h3{font-size:15px;margin:36px 0 6px}
+  details{margin-top:30px;max-width:760px}summary{cursor:pointer;font-weight:650;font-size:14px}
+</style></head><body><div class="wrap">
+
+<div class="top"><h1>Round 35 · Where you left off</h1><button id="theme">Light</button></div>
+<p class="intro">A home page in place of the empty new-session view. The sidebar stays the inbox; home shows what the sidebar can't. Direction with <kbd>A</kbd> <kbd>B</kbd> <kbd>C</kbd>.</p>
+
+<div class="row" id="vars"><span>Direction</span></div>
+
+<div class="win">
+  <aside class="side">
+    <div class="side-head">Sessions</div>
+    <div class="newb on"><svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Home</div>
+    <div class="list">
+      <div class="grp"><span class="tile" style="--h:168">SH</span>shop<small>3</small></div>
+      <div class="sess wait"><span class="l1"><b>Checkout redesign</b><i class="dot w"></i></span></div>
+      <div class="sess work"><span class="l1"><b>Invoice PDF export</b><i class="spin"></i></span><span class="l2">Running the tests</span></div>
+      <div class="sess unr"><span class="l1"><b>Coupon codes at checkout</b><i class="dot"></i></span></div>
+      <div class="grp"><span class="tile" style="--h:215">AP</span>api<small>2</small></div>
+      <div class="sess"><span class="l1"><b>Rate limits for the public API</b><time>1h</time></span></div>
+      <div class="sess"><span class="l1"><b>Fix flaky login test</b><time>3h</time></span></div>
+      <div class="grp"><span class="tile" style="--h:290">SI</span>site<small>1</small></div>
+      <div class="sess"><span class="l1"><b>Pricing page hero</b><time>2d</time></span></div>
+    </div>
+    <div class="side-foot"><div class="hist"><svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg><span>Done</span><small>12</small><kbd>Ctrl K</kbd></div></div>
+  </aside>
+  <div class="main">
+    <div class="dash"><div class="col" id="dash"></div></div>
+    <div class="composer"><div class="box">Start something new…</div>
+      <div class="meter"><span>shop ▾</span><span>work ▾</span><span style="margin-left:auto">Opus 5.5 · high</span></div></div>
+  </div>
+</div>
+<div class="pick" id="pick"></div>
+<div class="tip" id="tip"></div>
+
+<h3>Where it shows</h3>
+<ul class="notes">
+  <li><b>On start</b>, instead of jumping into the first session. The message box stays under it, so starting new work is still one step.</li>
+  <li><b>"New session" becomes "Home"</b>: the same view, same place. Nothing new in the sidebar.</li>
+  <li><b>A waiting question</b> still wins: if one is waiting at start, open it, as today? (open question)</li>
+</ul>
+
+<h3>Open questions</h3>
+<ol class="notes">
+  <li>Which direction: <b>A</b>, <b>B</b> or <b>C</b>? Or none — keep jumping into the last session.</li>
+  <li>For A: which pieces (the chips under the window)?</li>
+  <li>On start: home always, or straight into a session that is waiting for you?</li>
+  <li>"Left off" cards: the agent's last words (as drawn), or a one-line summary written by Haiku (costs a little usage per session)?</li>
+</ol>
+
+<details><summary>Under the hood</summary><ul class="notes">
+  <li><b>Left off</b>: last assistant text of the 3 most recent sessions, read from the transcript tail (already read for titles).</li>
+  <li><b>Uncommitted</b>: <code>git status</code> per project root with an open session — the Changes view already does this per session.</li>
+  <li><b>Made lately</b>: the preview files of recent sessions (the work list each session already has), newest first, only files that still exist.</li>
+  <li><b>Limits</b>: what the profile menu already shows.</li>
+  <li><b>Activity / week lanes</b>: message timestamps from transcripts of the last 28 days. A first scan of many sessions may take a few seconds; cached by file mtime after that.</li>
+</ul></details>
+</div>
+
+<script>
+const V={A:'Pick up',B:'Projects',C:'Your week'};
+const P={left:'Left off',unc:'Uncommitted',made:'Made lately',lim:'Limits',act:'Activity'};
+let v='A';const on=new Set(['left','unc','made']);
+const tile=(h,t)=>`<span class="tile" style="--h:${h}">${t}</span>`;
+const sec={
+ left:`<div class="sec"><h4>Left off</h4><div class="cards">
+  <div class="card ask"><div class="t">${tile(168,'SH')}<span>Checkout redesign</span></div><p>Should the coupon field stay open after a code is applied, or fold back into the link?</p><div class="f"><span class="chip w">Asks you</span><span style="margin-left:auto">2m</span></div></div>
+  <div class="card"><div class="t">${tile(168,'SH')}<span>Coupon codes at checkout</span></div><p>Codes are checked on the server now, and an expired one says so under the field. All 41 tests pass.</p><div class="f"><span class="chip">New</span><span style="margin-left:auto">40m</span></div></div>
+  <div class="card"><div class="t">${tile(215,'AP')}<span>Rate limits for the public API</span></div><p>The limiter is in, keyed by API token. Next would be the 429 page and the docs.</p><div class="f"><span>main</span><span style="margin-left:auto">1h</span></div></div>
+ </div></div>`,
+ unc:`<div class="sec"><h4>Not committed</h4><div class="rows">
+  <div class="r">${tile(168,'SH')}<b>shop</b><span class="br">coupon-codes</span><span class="n">7 files · <i>+212</i> <u>−38</u></span><span class="age">40m</span></div>
+  <div class="r">${tile(290,'SI')}<b>site</b><span class="br">main</span><span class="n">2 files · <i>+18</i> <u>−4</u></span><span class="age">2d</span></div>
+ </div></div>`,
+ made:`<div class="sec"><h4>Made lately</h4><div class="shots">
+  ${[['checkout.png','linear-gradient(160deg,#2b6 0 18%,#eee 18% 100%)'],['invoice.pdf','repeating-linear-gradient(#fff 0 6px,#ddd 6px 7px)'],['hero-v2.html','radial-gradient(circle at 30% 40%,#a7f 0 25%,#213 26%)'],['coupon.png','linear-gradient(#f4f4f6 0 60%,#f6b955 60% 70%,#f4f4f6 70%)'],['chart.svg','linear-gradient(90deg,#4fd6a4 0 20%,transparent 20% 25%,#4fd6a4 25% 55%,transparent 55% 60%,#4fd6a4 60% 72%,#1a1b1e 72%)']]
+   .map(([n,bg])=>`<div class="shot"><div style="background:${bg}"></div><span>${n}</span></div>`).join('')}
+ </div></div>`,
+ lim:`<div class="sec"><h4>Room left <small>resets</small></h4><div class="lims">
+  ${[['work','2h 10m',38,55,61,40],['personal','4h 40m',8,7,22,85],['team','35m',86,88,74,60]].map(([n,r,a,at,b,bt])=>`<div class="lim"><div class="t">${n}<small>${r}</small></div><div class="bars"><div class="bar${a>80?' w':''}"><i style="width:${a}%"></i><s style="left:${at}%"></s></div><div class="bar${b>80?' w':''}"><i style="width:${b}%"></i><s style="left:${bt}%"></s></div></div></div>`).join('')}
+ </div></div>`,
+ act:`<div class="sec"><h4>Last 4 weeks <small>turns per day</small></h4><div class="heat">${heat()}</div></div>`
+};
+function heat(){const rows=[['shop',168,[0,1,3,4,2,0,0,1,3,5,4,2,0,0,2,4,6,5,3,0,1,3,5,7,6,4,2,5]],['api',215,[2,3,1,0,0,0,0,0,1,2,2,1,0,0,0,0,1,0,0,0,0,1,2,3,4,1,0,2]],['site',290,[0,0,0,1,0,0,0,3,4,1,0,0,0,0,0,0,0,2,1,0,0,0,0,0,1,2,0,0]]];
+ return rows.map(([n,h,d])=>`<span>${n}</span>`+d.map((x,i)=>`<i class="c" data-tip="${n} · ${28-i}d ago · ${x*6} turns" style="${x?`background:color-mix(in srgb,var(--accent) ${18+x*12}%,transparent)`:''}"></i>`).join('')).join('')}
+const spark=a=>`<span class="spark">${a.map(x=>`<i style="height:${3+x*3}px"></i>`).join('')}</span>`;
+function boardB(){return `<div class="board">
+ <div class="pj"><div class="t">${tile(168,'SH')}shop<small>3 open</small></div><div class="last">Checkout redesign <em>· 2m</em></div><p>Should the coupon field stay open after a code is applied?</p><div class="meta"><span>coupon-codes</span><span style="color:var(--warn)">7 uncommitted</span>${spark([1,3,5,4,2,0,0,2,4,6,5,3,5,7])}</div></div>
+ <div class="pj"><div class="t">${tile(215,'AP')}api<small>2 open</small></div><div class="last">Rate limits for the public API <em>· 1h</em></div><p>The limiter is in, keyed by API token. Next would be the 429 page.</p><div class="meta"><span>main</span><span>clean</span>${spark([0,1,2,2,1,0,0,0,1,0,0,1,2,4])}</div></div>
+ <div class="pj"><div class="t">${tile(290,'SI')}site<small>1 open</small></div><div class="last">Pricing page hero <em>· 2d</em></div><p>Three hero variants are in /design; the second is wired in.</p><div class="meta"><span>main</span><span style="color:var(--warn)">2 uncommitted</span>${spark([3,4,1,0,0,0,0,0,2,1,0,0,0,1])}</div></div>
+ <div class="pj" style="box-shadow:inset 0 0 0 1.5px var(--line2);background:none;justify-content:center;align-items:center;color:var(--faint)">+ Another project</div>
+</div>`}
+function weekC(){const L=[['shop',168,[[2,9],[15,11],[30,6],[44,14],[58,12],[73,18],[90,8]]],['api',215,[[5,5],[20,3],[60,6],[86,10]]],['site',290,[[18,9],[33,4],[80,5]]]];
+ return `<div class="stats"><div class="stat"><b>14</b><span>sessions</span></div><div class="stat"><b>312</b><span>turns</span></div><div class="stat"><b>41</b><span>files changed</span></div><div class="stat"><b>3</b><span>left uncommitted</span></div></div>
+ <div class="sec"><h4>This week</h4><div class="lanes">${L.map(([n,h,b])=>`<div class="lane"><span>${tile(h,n.slice(0,2).toUpperCase())}</span><div class="trk">${b.map(([l,w])=>`<b data-tip="${n} · a session" style="--h:${h};left:${l}%;width:${w}%"></b>`).join('')}</div></div>`).join('')}
+ <div class="days"><span></span>${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<span>${d}</span>`).join('')}</div></div></div>`+sec.left}
+function render(){
+ const d=document.getElementById('dash');
+ d.innerHTML=v==='A'?Object.keys(P).filter(k=>on.has(k)).map(k=>sec[k]).join(''):v==='B'?boardB():weekC();
+ pick.style.visibility=v==='A'?'visible':'hidden';
+ document.querySelectorAll('#vars button').forEach(b=>b.classList.toggle('on',b.dataset.k===v));
+ document.querySelectorAll('#pick button').forEach(b=>b.classList.toggle('on',on.has(b.dataset.k)));
+}
+for(const[k,n]of Object.entries(V)){const b=document.createElement('button');b.dataset.k=k;b.innerHTML=`<i>${k}</i>${n}${k==='A'?'<small>Recommended</small>':''}`;b.onclick=()=>{v=k;render()};vars.append(b)}
+for(const[k,n]of Object.entries(P)){const b=document.createElement('button');b.dataset.k=k;b.textContent=n;b.onclick=()=>{on.has(k)?on.delete(k):on.add(k);render()};pick.append(b)}
+addEventListener('keydown',e=>{const K=e.key.toUpperCase();if(V[K]){v=K;render()}});
+addEventListener('mousemove',e=>{const t=e.target.closest?.('[data-tip]');tip.style.display=t?'block':'none';if(t){tip.textContent=t.dataset.tip;tip.style.left=e.clientX+12+'px';tip.style.top=e.clientY+12+'px'}});
+theme.onclick=()=>{const d=document.documentElement,l=d.dataset.theme==='dark';d.dataset.theme=l?'light':'dark';theme.textContent=l?'Dark':'Light'};
+render();
+</script>
+</body></html>

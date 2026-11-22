@@ -847,6 +847,44 @@ test('changes: what differs from the last commit, file by file, and nothing outs
   assert.equal((await svc.call(`sessions/${sb.sessions.alphaLive}/changes`)).body.repo, false);
 });
 
+test('home: where each session was left, what is not committed, and each profile\'s limits over time', async () => {
+  const h = (await svc.call('home')).body, s = await state();
+  const newest = s.sessions.filter(x => x.root === sb.projects.beta).sort((a, b) => b.mts - a.mts)[0];
+  assert.ok(h.words[newest.id]?.text, JSON.stringify(h.words));                      // the agent's last words in each project's newest session
+  const beta = h.uncommitted.find(u => u.project === 'beta');
+  assert.ok(beta && beta.count >= 1 && beta.add >= 1, JSON.stringify(h.uncommitted));
+  assert.equal(beta.cwd, sb.projects.beta);
+  assert.equal(s.sessions.find(x => x.id === beta.sessionId)?.root, sb.projects.beta); // a click opens the newest session there
+  assert.ok(!h.uncommitted.some(u => u.project === 'alpha'));                       // not a repository
+  assert.deepEqual(h.trends.map(t => t.name).sort(), ['full', 'live', 'other']);
+  assert.ok(Array.isArray(h.made));
+});
+
+test('home: a profile\'s rate and when it would reach the limit, as Claudius reckons them', async () => {
+  const { trendOf, parseLog } = await import('../service/home.mjs');
+  const n = 2e9, log = r => parseLog(r.map(x => x.join(' ')).join('\n'));
+  // 10% to 20% in 20 minutes: 30% an hour, so the 5-hour limit is reached in 2h 40m, before the window resets
+  const t = trendOf(log([[n - 1800, 10, 5, n + 12000, n + 90000], [n - 600, 20, 6, n + 12000, n + 90000]]), n);
+  assert.equal(t.rate5, 30); assert.equal(t.eta5, n - 600 + 9600);
+  assert.equal(t.rate7, null);                                                        // too short a stretch to say for a week
+  assert.deepEqual(t.s5, [[n - 1800, 10], [n - 600, 20]]);
+  // the window resets before that: nothing to warn about
+  assert.equal(trendOf(log([[n - 1800, 10, 5, n + 3000, n + 90000], [n - 600, 20, 6, n + 3000, n + 90000]]), n).eta5, null);
+  // a reading from the window before does not count towards the rate
+  assert.equal(trendOf(log([[n - 7200, 90, 5, n - 3000, n + 90000], [n - 1800, 10, 5, n + 12000, n + 90000], [n - 600, 20, 6, n + 12001, n + 90000]]), n).rate5, 30);
+  assert.equal(trendOf(log([['x'], [n - 600, '-', '-', '-', '-']]), n).rate5, null);   // a torn or empty log is no rate, not an error
+});
+
+test('home: when you worked, per project, from the transcripts', async () => {
+  const a = (await svc.call('home/activity')).body;
+  const alpha = a.projects.find(p => p.root === sb.projects.alpha);
+  assert.ok(alpha && alpha.turns.length >= 2, JSON.stringify(a.projects));
+  assert.ok(alpha.turns.every(t => Date.now() / 1000 - t < 28 * 86400));
+  assert.ok(alpha.blocks.length >= 1 && alpha.blocks.every(([s, e, k]) => e > s && k >= 0));
+  assert.ok(a.sessions7 >= 2);
+  assert.equal((await svc.call('home/activity')).body.projects.find(p => p.root === sb.projects.alpha).turns.length, alpha.turns.length);   // read again: nothing counted twice
+});
+
 test('skills: the list Claude Code reports for a folder and profile, labelled by where each comes from', async () => {
   const get = (cwd, profile) => svc.call(`skills?cwd=${encodeURIComponent(cwd)}&profile=${profile}`);
   const before = readLog(sb).length, had = (await state()).sessions.length, a = (await get(sb.projects.alpha, 'live')).body.skills, by = Object.fromEntries(a.map(s => [s.name, s]));
@@ -1238,7 +1276,7 @@ ui('window: the profile menu is a table of 5h and 7d limits, most room first, an
   assert.deepEqual(await full.locator('.pc .v').allInnerTexts(), ['100%', '72%']);
   assert.equal(await full.locator('.pc.hot').count(), 1);
   assert.equal(await page.locator('#mProfile .prow[data-prof="live"] .pc .bar b').count(), 2);   // how far each window has run
-  assert.match(await page.locator('#mProfile .pft').innerText(), /Updated/);    // next to the refresh button
+  await page.waitForSelector('#mProfile .pft .upd:has-text("Updated")');        // next to the refresh button, once a reading an earlier turn started is in
   sb.usage.other = [44, 20]; const from = sb.usageReads.length;
   try {
     await page.click('#mProfile [data-refresh]');
@@ -1915,10 +1953,39 @@ ui('window: a long conversation has a rail of turns and an outline you can searc
   await page.waitForFunction(() => document.getElementById('scroll').scrollTop < 40);
   await page.click('#olClose'); await page.waitForSelector('#panel', { state: 'hidden' });
   const id = await page.locator('.sess.sel').getAttribute('data-id');              // a session not started shows no rail from the one before
-  await page.click('#newBtn'); await page.waitForSelector('#hello');
+  await page.click('#newBtn'); await page.waitForSelector('#dash .hs');
   assert.equal(await page.locator('#rail').isHidden(), true);
   await page.click(`.sess[data-id="${id}"]`);
   await page.waitForFunction(() => document.querySelectorAll('#rail button').length === 3);
+});
+
+ui('window: home shows where work was left and each profile\'s limits, with two other views a click away', async () => {
+  await page.click('#newBtn'); await page.waitForSelector('#dash .hcard');
+  assert.equal(await page.locator('#title').innerText(), 'Home');
+  assert.equal(await page.locator('#hello').isHidden(), true);
+  assert.equal(await page.locator('#dash .pcard').count(), 3);
+  await page.waitForSelector('#dash .pcard.full:has-text("5-hour limit reached")');
+  await page.waitForSelector('#dash .hrow:has-text("beta")');
+  await page.click('#dash .pcard[data-prof="other"]');                              // a profile card opens that profile's settings
+  await page.waitForSelector('#spage .pfr.on[data-psel="other"]');
+  await page.keyboard.press('Escape'); await page.waitForSelector('#sdim', { state: 'hidden' });
+  await page.waitForSelector('#hbg:not([hidden]) .blob');                           // the background, aurora unless you chose another
+  await page.click('#hset'); await page.waitForSelector('#spage .hbgt.on[data-hbg="aurora"]');   // the quiet button beside the views: Settings, Home
+  await page.click('#spage [data-hbg="constel"]'); await page.waitForSelector('#spage .hbgt.on[data-hbg="constel"]');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#hbg .constel .vx');                                  // a star for each recent session
+  await page.click('#hset'); await page.click('#spage [data-hbg="none"]'); await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#hbg').isHidden(), true);
+  await page.evaluate(() => localStorage.removeItem('ww.hbg'));
+  await page.click('#dseg [data-hv="projects"]'); await page.waitForSelector('#dash .pj:has-text("alpha")');
+  await page.click('#dseg [data-hv="week"]'); await page.waitForSelector('#dash .hstat');
+  await page.waitForSelector('#dash .lane .ltrk b');
+  await page.click('#dseg [data-hv="pick"]'); await page.waitForSelector('#dash .hcard');
+  const id = await page.locator('#dash .hcard').first().getAttribute('data-sid');
+  await page.click('#dash .hcard >> nth=0'); await page.waitForSelector(`.sess.sel[data-id="${id}"]`);
+  assert.equal(await page.locator('#dash').isHidden(), true);
+  assert.equal(await page.locator('#dseg').isHidden(), true);
+  assert.equal(await page.locator('#hbg').isHidden(), true);                        // a conversation keeps a plain background
 });
 
 ui('window: scrolled up, a mark counts the replies that arrive below, and a click lands on the first of them', async () => {

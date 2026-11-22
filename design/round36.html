@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 36: a living background</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<style>
+  :root{color-scheme:dark;--accent:hsl(168 62% 62%);--warn:#ffb955;--go:#4fd6a4;--hot:#f0706a}
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0c0e;color:#e8e9ec;font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;padding-bottom:80px}
+  [data-theme=light] body{background:#e9eaee;color:#1d1e22}
+  button{font:inherit;color:inherit}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:14px;padding:24px 0 2px}.top h1{font-size:17px;margin:0;flex:1}
+  .top button{border:0;cursor:pointer;background:#1d1f23;color:#c9ccd2;padding:6px 11px;border-radius:8px}
+  [data-theme=light] .top button{background:#fff;color:#333}
+  .intro{color:#b9bcc3;max-width:720px;margin:6px 0 18px;font-size:14px}[data-theme=light] .intro{color:#555}
+  .intro kbd{font:inherit;font-weight:700;padding:0 6px;border-radius:5px;background:rgba(128,128,128,.22)}
+
+  .row{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;align-items:center}
+  .row>span{font-size:11.5px;color:#8f939b;width:60px}
+  .row button{border:0;cursor:pointer;background:#1d1f23;color:#c9ccd2;padding:6px 11px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  [data-theme=light] .row button{background:#fff;color:#333;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+  .row button.on{background:hsl(168 40% 22%);color:#fff;box-shadow:inset 0 0 0 1.5px var(--accent)}
+  [data-theme=light] .row button.on{background:hsl(168 45% 88%);color:#123}
+  .row button i{font-style:normal;color:var(--accent);font-weight:700;margin-right:5px}
+  .row button small{color:#8f939b;margin-left:6px}
+
+  /* ===== the mock app ===== */
+  .win{--bg:#18191c;--side:#1a1b1e;--surface:#222428;--pop:#26282d;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.14);
+    --text:#f0f1f3;--dim:#a6aab2;--faint:#6d717a;--sel:rgba(255,255,255,.075);--hov:rgba(255,255,255,.05);
+    display:flex;height:600px;border-radius:14px;overflow:hidden;background:var(--bg);color:var(--text);margin-top:14px;
+    box-shadow:0 30px 90px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.12)}
+  [data-theme=light] .win{--bg:#fbfbfc;--side:#f2f3f5;--surface:#fff;--pop:#fff;--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.14);
+    --text:#1b1c1f;--dim:#5b5f68;--faint:#8d919a;--sel:rgba(0,0,0,.06);--hov:rgba(0,0,0,.04);box-shadow:0 30px 90px rgba(0,0,0,.18),0 0 0 1px rgba(0,0,0,.1)}
+  .win svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .side{position:relative;width:268px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column}
+  .side-head{display:flex;align-items:center;padding:14px 16px 8px;font-weight:600}
+  .newb{display:flex;align-items:center;gap:8px;height:32px;margin:0 8px 4px;padding:0 9px;border-radius:8px;color:var(--dim);font-weight:500;box-shadow:inset 0 0 0 1px var(--line)}
+  .list{flex:1;padding:0 8px;overflow:hidden}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative;overflow:hidden}
+  .head{height:52px;display:flex;align-items:center;padding:0 18px;border-bottom:1px solid var(--line);font-weight:600;font-size:14px;position:relative;z-index:2}
+  .head .gap{flex:1}
+  .dseg{display:flex;background:rgba(128,128,128,.16);border-radius:9px;padding:2px}
+  .dseg span{padding:3px 11px;border-radius:7px;font-size:12px;color:var(--dim);font-weight:500}.dseg span.on{background:var(--sel);color:var(--text)}
+  .dash{flex:1;padding:22px 26px;position:relative;z-index:2;overflow:hidden}
+  .col{max-width:760px;margin:0 auto}
+  h4{margin:0 0 9px;font-size:10.5px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:22px}
+  .card{background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(6px);border-radius:12px;padding:11px 12px;box-shadow:0 0 0 1px var(--line);display:flex;flex-direction:column;gap:6px}
+  .card b{font-weight:600;font-size:12.5px}.card p{margin:0;font-size:12px;color:var(--dim);line-height:1.45;height:52px;overflow:hidden}
+  .card .f{font-size:11px;color:var(--faint);display:flex;justify-content:space-between}
+  .card.ask{box-shadow:0 0 0 1px color-mix(in srgb,var(--warn) 45%,transparent)}
+  .pcards{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .pc{background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(6px);border-radius:13px;padding:12px 13px;box-shadow:0 0 0 1px var(--line)}
+  .pc .n{font-weight:650}.pc .e{font-size:11px;color:var(--faint);margin-bottom:8px}
+  .ws{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .w .v{font-size:24px;font-weight:700;letter-spacing:-.03em;color:var(--go);line-height:1.1}.w.mid .v{color:var(--warn)}
+  .w .v small{font-size:12px;color:var(--faint);font-weight:600;margin-right:4px}
+  .bar{height:5px;border-radius:3px;background:var(--line2);margin-top:6px;overflow:hidden}.bar i{display:block;height:100%;border-radius:3px;background:var(--go)}.w.mid .bar i{background:var(--warn)}
+  .composer{position:relative;z-index:2;padding:0 26px 14px}
+  .box{max-width:760px;margin:0 auto;border-radius:14px;background:var(--surface);box-shadow:0 0 0 1px var(--line2);padding:12px 14px;color:var(--faint);height:62px}
+
+  /* ===== background layers: everything below sits behind the page and never takes a click ===== */
+  .bg{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  .bg>*{position:absolute}
+  .grain{inset:0;opacity:.07;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");mix-blend-mode:overlay}
+  [data-theme=light] .grain{opacity:.05;mix-blend-mode:multiply}
+  /* A · aurora: three soft colour fields drifting */
+  .blob{width:60%;aspect-ratio:1;border-radius:50%;filter:blur(70px);opacity:var(--o,.22)}
+  [data-theme=light] .blob{opacity:calc(var(--o,.22) * 1.3)}
+  .b1{left:-12%;top:-30%;background:hsl(168 70% 50%);animation:wander 34s ease-in-out infinite alternate}
+  .b2{right:-18%;top:-10%;background:hsl(215 75% 58%);animation:wander 41s ease-in-out infinite alternate-reverse}
+  .b3{left:25%;bottom:-45%;background:hsl(290 60% 58%);--o:.14;animation:wander 47s ease-in-out infinite alternate}
+  @keyframes wander{0%{transform:translate(0,0) scale(1)}50%{transform:translate(8%,10%) scale(1.12)}100%{transform:translate(-6%,4%) scale(.94)}}
+  /* B · ribbon: a band of light across the top, slowly undulating */
+  .rib{left:-30%;right:-30%;top:-8%;height:46%;mix-blend-mode:screen;background:linear-gradient(100deg,transparent 10%,hsl(168 70% 55%/.55) 30%,hsl(215 80% 62%/.5) 50%,hsl(290 65% 62%/.45) 68%,transparent 88%);border-radius:50%}
+  [data-theme=light] .rib{mix-blend-mode:multiply;opacity:.5}
+  .rib.r1{filter:blur(28px);opacity:.42;animation:undulate 16s ease-in-out infinite}
+  .rib.r2{filter:blur(48px);opacity:.3;top:4%;animation:undulate 23s ease-in-out infinite reverse}
+  @keyframes undulate{0%,100%{transform:translateX(-4%) rotate(-4deg) scaleY(.8)}50%{transform:translateX(5%) rotate(3deg) scaleY(1.15)}}
+  /* C · it moves when the work does: still fields, a sweep while an agent works, amber warmth near a limit */
+  .calm .blob{animation-duration:90s,90s;--o:.12}
+  .sweep{top:0;bottom:0;width:45%;left:-50%;background:linear-gradient(90deg,transparent,hsl(168 80% 60%/.16),transparent);filter:blur(10px);opacity:0}
+  .working .sweep{animation:sweep 5.5s cubic-bezier(.45,0,.3,1) infinite}
+  @keyframes sweep{0%{left:-50%;opacity:0}15%{opacity:1}70%{opacity:1}100%{left:110%;opacity:0}}
+  .warm{left:20%;right:20%;top:30%;height:50%;border-radius:50%;background:hsl(36 100% 60%);filter:blur(90px);opacity:0;transition:opacity 2s}
+  .hot .warm{opacity:.16;animation:breathe 7s ease-in-out infinite}
+  @keyframes breathe{50%{transform:scale(1.15);opacity:.22}}
+  .spinny{display:inline-block;width:9px;height:9px;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--accent) 30%,transparent);border-top-color:var(--accent);animation:r 1s linear infinite;vertical-align:-1px;margin-right:4px}
+  @keyframes r{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.bg *{animation:none!important}}
+  .tog{display:flex;gap:6px;margin:10px 0 0}
+  .tog button{border:0;cursor:pointer;background:#1d1f23;color:#8f939b;padding:6px 11px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  .tog button.on{color:#fff;box-shadow:inset 0 0 0 1.5px var(--accent)}
+  [data-theme=light] .tog button{background:#fff;color:#888}[data-theme=light] .tog button.on{color:#123}
+  .notes{color:#b9bcc3;max-width:760px;font-size:13.5px}.notes li{margin:6px 0}.notes b{color:#fff}
+  [data-theme=light] .notes{color:#444}[data-theme=light] .notes b{color:#000}
+  h3{font-size:15px;margin:34px 0 6px}
+</style></head><body><div class="wrap">
+<div class="top"><h1>Round 36 · A living background</h1><button id="theme">Light</button></div>
+<p class="intro">Cards stay still; the space behind them moves. Pick with <kbd>A</kbd> <kbd>B</kbd> <kbd>C</kbd>.</p>
+<div class="row" id="vars"><span>Background</span></div>
+
+<div class="win">
+  <aside class="side">
+    <div class="side-head">Sessions</div>
+    <div class="newb" style="background:var(--sel);color:var(--text)"><svg viewBox="0 0 24 24"><path d="m3 10.5 9-7.5 9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</div>
+    <div class="list" style="padding:8px 16px;color:var(--faint);font-size:12px">shop · api · site …</div>
+  </aside>
+  <div class="main" id="main">
+    <div class="bg" id="bg"></div>
+    <div class="head">Home<span class="gap"></span><div class="dseg"><span class="on">Pick up</span><span>Projects</span><span>Week</span></div></div>
+    <div class="dash"><div class="col">
+      <h4>Left off</h4>
+      <div class="cards">
+        <div class="card ask"><b>Checkout redesign</b><p>Should the coupon field stay open after a code is applied?</p><div class="f"><span style="color:var(--warn)">1 question</span><span>2m</span></div></div>
+        <div class="card"><b>Invoice PDF export</b><p>Totals now keep their columns across pages. All 41 tests pass.</p><div class="f"><span id="wk"></span><span>40m</span></div></div>
+        <div class="card"><b>Rate limits for the API</b><p>The limiter is in, keyed by API token. Next would be the 429 page.</p><div class="f"><span>main</span><span>1h</span></div></div>
+      </div>
+      <h4>Limits</h4>
+      <div class="pcards">
+        <div class="pc"><div class="n">work</div><div class="e">me@work.example</div><div class="ws"><div class="w" id="w5"><div class="v"><small>5h</small><span id="v5">34</span>%</div><div class="bar"><i id="b5" style="width:34%"></i></div></div><div class="w"><div class="v"><small>7d</small>41%</div><div class="bar"><i style="width:41%"></i></div></div></div></div>
+        <div class="pc"><div class="n">personal</div><div class="e">me@home.example</div><div class="ws"><div class="w"><div class="v"><small>5h</small>12%</div><div class="bar"><i style="width:12%"></i></div></div><div class="w"><div class="v"><small>7d</small>20%</div><div class="bar"><i style="width:20%"></i></div></div></div></div>
+      </div>
+    </div></div>
+    <div class="composer"><div class="box">Describe the task…</div></div>
+  </div>
+</div>
+<div class="tog" id="tog"></div>
+
+<h3>Notes</h3>
+<ul class="notes">
+  <li><b>Only behind Home.</b> A conversation keeps a plain background.</li>
+  <li><b>Slow</b>: one drift takes half a minute or more, so it reads as light, not as motion.</li>
+  <li>Off when the system asks for reduced motion, and paused while the window is hidden.</li>
+</ul>
+<h3>Open questions</h3>
+<ol class="notes">
+  <li>Which background: A, B or C?</li>
+  <li>Its colours: the app's teal family as drawn, or the colours of your projects?</li>
+  <li>A setting to turn it off?</li>
+  <li>Still open from last round: clicking a profile card picks it for the next session. Keep that?</li>
+</ol>
+</div>
+<script>
+const V={A:'Aurora',B:'Ribbon',C:'Moves with the work'};
+let v='C',working=true,hot=false;
+const layers={A:'<div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="grain"></div>',
+  B:'<div class="rib r1"></div><div class="rib r2"></div><div class="grain"></div>',
+  C:'<div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="sweep"></div><div class="warm"></div><div class="grain"></div>'};
+function render(){
+  bg.innerHTML=layers[v];bg.className='bg'+(v==='C'?' calm':'')+(v==='C'&&working?' working':'')+(v==='C'&&hot?' hot':'');
+  wk.innerHTML=working?'<i class="spinny"></i>Working':'main';
+  v5.textContent=hot?'88':'34';b5.style.width=hot?'88%':'34%';w5.className='w'+(hot?' mid':'');
+  document.querySelectorAll('#vars button').forEach(b=>b.classList.toggle('on',b.dataset.k===v));
+  tog.style.visibility=v==='C'?'visible':'hidden';
+  tog.innerHTML=`<button class="${working?'on':''}" data-t="w">An agent is working</button><button class="${hot?'on':''}" data-t="h">A profile is near its limit</button>`;
+}
+tog.onclick=e=>{const t=e.target.dataset.t;if(t==='w')working=!working;if(t==='h')hot=!hot;render()};
+for(const[k,n]of Object.entries(V)){const b=document.createElement('button');b.dataset.k=k;b.innerHTML=`<i>${k}</i>${n}${k==='C'?'<small>Recommended</small>':''}`;b.onclick=()=>{v=k;render()};vars.append(b)}
+addEventListener('keydown',e=>{const K=e.key.toUpperCase();if(V[K]){v=K;render()}});
+theme.onclick=()=>{const d=document.documentElement,l=d.dataset.theme==='dark';d.dataset.theme=l?'light':'dark';theme.textContent=l?'Dark':'Light'};
+render();
+</script>
+</body></html>

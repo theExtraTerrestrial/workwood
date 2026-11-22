@@ -46,6 +46,7 @@ const P={
   monitor:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
   branch:'<path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
   moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  chevL:'<path d="m15 18-6-6 6-6"/>',chevR:'<path d="m9 18 6-6-6-6"/>',
   home:'<path d="m3 10.5 9-7.5 9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
   sliders:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
   flag:'<path d="M5 21V4M5 4h12l-2.5 4L17 12H5"/>',
@@ -1562,35 +1563,42 @@ async function sendText(text,asProfile,attachments){
 
 /* ---------- home: where you left off ---------- */
 // Shown in place of an empty new session: the message box stays under it, so starting new work is still one step.
-// Three views of the same things: what to pick up, each project, and your week.
-const H={seen:new Set(),d:null,act:null,view:localStorage.getItem('ww.home')||'pick',busy:false,again:false,sig:'',actAt:0,actBusy:false};
-const HVIEWS=[['pick','Pick up','Where each piece of work was left'],['projects','Projects','Each project at a glance'],['week','Week','When you worked, this week']];
+// Three views of the same things: what to pick up, each project, and when you worked.
+const H={seen:new Set(),d:null,act:null,fresh:false,view:(v=>v==='week'?'time':v)(localStorage.getItem('ww.home')||'pick'),busy:false,again:false,sig:'',actAt:0,actBusy:false};
+const HVIEWS=[['pick','Pick up','Where each piece of work was left'],['projects','Projects','Each project at a glance'],['time','Time','When you worked: a day, a week or 30 days']];
+// What Home showed last time, so it opens with that instead of empty boxes; fresh readings replace it in place.
+// Only the very first opening, with nothing remembered, draws skeletons.
+const HCACHE='ww.homeCache';
+try{const c=JSON.parse(localStorage.getItem(HCACHE)||'null');if(c){H.d=c.d||null;H.act=c.act||null}}catch{}
+function saveHome(){try{localStorage.setItem(HCACHE,JSON.stringify({d:H.d,act:H.act}))}catch{}}
+const skl=(w,c='')=>`<span class="sk ${c}" style="width:${w}"></span>`;
 const isHome=()=>V.isNew&&!V.pend&&A.ready&&A.sessions.length>0;
 async function loadHome(){
   if(H.busy){H.again=true;return}H.busy=true;
-  try{H.d=await api('home')}catch{}
+  try{H.d=await api('home');H.fresh=true;saveHome()}catch{}
   H.busy=false;if(H.again){H.again=false;return loadHome()}
   renderHome();
 }
 async function loadActivity(force){
   if(H.actBusy||(!force&&H.act&&Date.now()-H.actAt<300000))return;H.actBusy=true;
-  try{H.act=await api('home/activity');H.actAt=Date.now()}catch{}
+  try{H.act=await api('home/activity');H.actAt=Date.now();saveHome()}catch{}
   H.actBusy=false;renderHome();
 }
 // It follows what changes while you look at it: a session's state or time, a profile's reading.
 const homeSig=()=>A.sessions.map(s=>s.id+s.mts+s.status+(s.unread?1:0)).join()+A.profiles.map(p=>p.name+p.at+p.h5+p.d7+(p.reading?1:0)).join();
 let homeT=null;
-function homeSoon(){if(!isHome())return;const g=homeSig();if(g===H.sig&&H.d)return;H.sig=g;clearTimeout(homeT);homeT=setTimeout(()=>{loadHome();loadActivity()},H.d?2500:0)}
+function homeSoon(){if(!isHome())return;const g=homeSig();if(g===H.sig&&H.d)return;H.sig=g;clearTimeout(homeT);homeT=setTimeout(()=>{loadHome();loadActivity()},H.fresh?2500:0)}
 const homeUrl=f=>`${A.preview}/${f.sessionId}/${f.path.split(/[\\/]/).filter(Boolean).map(encodeURIComponent).join('/')}?v=${f.v}`;
 const dayStart=(back=0)=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-back);return d.getTime()/1000};
 const dayName=ts=>new Date(ts*1000).toLocaleDateString([],{weekday:'short',day:'numeric',month:'short'});
 const hsec=(k,title,right,body)=>[k,`<section class="hs hs-${k}"><h4><span>${title}</span><span class="gap"></span>${right||''}</h4>${body}</section>`];
 // Waiting for you first, then the newest.
 const pickups=n=>A.sessions.filter(s=>!s.done).sort((a,b)=>(b.status==='wait')-(a.status==='wait')||b.mts-a.mts).slice(0,n);
+// What you asked for says what the work is; a question it is waiting on comes first.
 function leftCard(s){
-  const w=H.d?.words?.[s.id],say=w?.ask||w?.text||(s.status==='work'?s.line:'');
+  const w=H.d?.words?.[s.id],say=w?.ask||w?.first||w?.text||(s.status==='work'?s.line:'');
   const chip=s.status==='wait'?`<span class="hchip w">${esc(askLabel(s.line))}</span>`:s.status==='work'?`<span class="hchip"><i class="spin"></i>Working</span>`:s.unread?'<span class="hchip">New</span>':'';
-  return `<button class="hcard ${s.status==='wait'?'ask':''}" data-sid="${s.id}"><span class="hct">${tile(s.project,'s')}</span><b>${esc(s.title)}</b></span><p>${say?esc(say):'<em>No reply yet</em>'}</p><span class="hcf">${chip}<span class="hpl">${esc(s.branch||s.project)}</span><time>${ago(s.mts)}</time></span></button>`;
+  return `<button class="hcard ${s.status==='wait'?'waits':''}" data-sid="${s.id}"><span class="hct">${tile(s.project,'s')}</span><b>${esc(s.title)}</b></span><p>${say?esc(say):H.d?'<em>No reply yet</em>':skl('94%','ln')+skl('86%','ln')+skl('52%','ln')}</p><span class="hcf">${chip}<span class="hpl">${esc(s.branch||s.project)}</span><time>${ago(s.mts)}</time></span></button>`;
 }
 const leftOff=()=>{const l=pickups(3);return l.length?hsec('left','Left off','',`<div class="hcards">${l.map(leftCard).join('')}</div>`):null};
 
@@ -1605,7 +1613,7 @@ function winBlock(p,k,tr){
   const when=eta?(h?clock(eta*1000):new Date(eta*1000).toLocaleDateString([],{weekday:'short'})+' '+clock(eta*1000)):'';
   return `<div class="pw ${lvl(v??0)}"><div class="pwt"><span class="pwl">${h?'5<small>h</small>':'7<small>d</small>'}</span><span class="pwv">${v??'–'}<small>%</small></span><span class="pwr">${r?`<small>resets in</small>${until(r)}`:''}</span></div>
     <div class="pwb" data-tip="${v??0}% used"><i style="width:${Math.min(100,v||0)}%"></i></div><div class="pwb t" data-tip="${run==null?'':Math.round(run)+'% of the window has run'}"><i style="width:${run??0}%"></i></div>
-    <div class="pwf"><span>${rate!=null?(rate>0?'+':'')+rate.toFixed(1)+'%/h':'no rate yet'}</span>${spark(pts,r?r-len:now-len,r||now)}<span class="gap"></span>${when?`<span class="eta" data-tip="At this rate the ${h?'5-hour':'7-day'} limit is reached then, before it resets">${svg('flag')}${esc(when)}</span>`:''}</div></div>`;
+    <div class="pwf"><span>${rate!=null?(rate>0?'+':'')+rate.toFixed(1)+'%/h':H.d?'no rate yet':skl('52px','ln')}</span>${spark(pts,r?r-len:now-len,r||now)}<span class="gap"></span>${when?`<span class="eta" data-tip="At this rate the ${h?'5-hour':'7-day'} limit is reached then, before it resets">${svg('flag')}${esc(when)}</span>`:''}</div></div>`;
 }
 function profCard(p,tr){
   const full=Math.max(p.h5||0,p.d7||0)>=100,which=(p.d7||0)>=100?'d7':'h5',rs=p[WIN[which][1]],why=p.failed&&WHY[p.failed];
@@ -1620,23 +1628,17 @@ const limits=()=>{if(!A.profiles.length)return null;const tr=new Map((H.d?.trend
   return hsec('lim','Limits',`<button class="ib hrf ${busy?'busy':''}" data-limrefresh data-tip="Read every profile's limits again. Nothing is sent to Claude.">${svg('refresh')}</button>`,`<div class="pcards n${Math.min(A.profiles.length,3)}">${A.profiles.map(p=>profCard(p,tr.get(p.name))).join('')}</div>`)};
 
 const where=u=>u.worktree?`${svg('tree')}${esc(u.worktree)}`:u.branch?`${svg('branch')}${esc(u.branch)}`:'';
-const notCommitted=()=>{const l=H.d?.uncommitted||[];if(!l.length)return null;
+const notCommitted=()=>{const l=H.d?.uncommitted||[];
+  if(!H.d)return hsec('unc','Not committed','',`<div class="hrows">${[0,1].map(()=>`<div class="hrow">${skl('18px','sq')}${skl('90px','ln')}<span class="gap"></span>${skl('120px','ln')}</div>`).join('')}</div>`);
+  if(!l.length)return null;
   return hsec('unc','Not committed','',`<div class="hrows">${l.map(u=>`<button class="hrow" data-ch="${u.sessionId}" data-tip="${esc(short(u.cwd))}">${tile(u.project,'s')}</span><b>${esc(u.project)}</b><span class="hbr">${where(u)}</span><span class="gap"></span><span class="hn">${plural(u.count,'file')} · <i>+${u.add}</i> <u>−${u.del}</u></span><time>${ago(u.mts)}</time></button>`).join('')}</div>`)};
-const madeLately=()=>{const l=H.d?.made||[];if(!l.length||!A.preview)return null;
+const madeLately=()=>{const l=H.d?.made||[];if(!A.preview)return null;
+  if(!H.d)return hsec('made','Made lately','',`<div class="hshots">${[0,1,2,3].map(()=>`<div class="hc hshot"><span class="ht">${skl('100%','fill')}</span><span class="cap">${skl('60%','ln')}</span></div>`).join('')}</div>`);
+  if(!l.length)return null;
   return hsec('made','Made lately','',`<div class="hshots">${l.slice(0,8).map(f=>{const s=A.sessions.find(x=>x.id===f.sessionId);
-    return `<button class="hc hshot" data-made="${esc(f.path)}" data-sid="${f.sessionId}" title="${esc(f.path)}"><span class="ht k-${f.kind}">${thumb(f,homeUrl(f))}</span><span class="cap"><b>${esc(f.name)}</b><span>${esc(s?.title||'')}</span></span></button>`}).join('')}</div>`)};
+    return `<button class="hc hshot" data-made="${esc(f.path)}" data-sid="${f.sessionId}" title="${esc(f.path)}"><span class="ht k-${f.kind}">${H.fresh?thumb(f,homeUrl(f)):''}</span><span class="cap"><b>${esc(f.name)}</b><span>${esc(s?.title||'')}</span></span></button>`}).join('')}</div>`)};
 
-// Messages you wrote per day, per project, over four weeks: one hue, darker for more.
-function perDay(turns,days){const base=dayStart(days-1),out=new Array(days).fill(0);for(const t of turns){const i=Math.floor((t-base)/86400);if(i>=0&&i<days)out[i]++}return out}
-const activity=()=>{const a=H.act;
-  if(!a)return hsec('act','Last 4 weeks','',`<div class="hwait">Reading your history…</div>`);
-  const rows=a.projects.map(p=>({...p,days:perDay(p.turns,28)})).filter(p=>p.days.some(Boolean)).sort((x,y)=>y.turns.length-x.turns.length).slice(0,6);
-  if(!rows.length)return null;
-  const max=Math.max(1,...rows.flatMap(r=>r.days)),lv=n=>n?Math.max(1,Math.ceil(n/max*4)):0;
-  return hsec('act','Last 4 weeks',`<span class="hleg">Less${[0,1,2,3,4].map(i=>`<i class="c l${i}"></i>`).join('')}More</span>`,
-    `<div class="heat">${rows.map(r=>`<span class="hpn">${tile(r.name,'s')}</span>${esc(r.name)}</span>`+r.days.map((n,i)=>`<i class="c l${lv(n)}" data-tip="${esc(r.name)} · ${dayName(dayStart(27-i))} · ${n?plural(n,'message'):'nothing'}"></i>`).join('')).join('')}
-    <span></span><span class="hax">4 weeks ago</span><span class="hax r">Today</span></div>`)};
-
+function perDay(turns,days,back=0){const base=dayStart(days-1+back),out=new Array(days).fill(0);for(const t of turns){const i=Math.floor((t-base)/86400);if(i>=0&&i<days)out[i]++}return out}
 // Projects: each one worked on this month, newest first, with where its latest session was left.
 function projectsView(){
   const now=Date.now()/1000,by=new Map();
@@ -1644,34 +1646,70 @@ function projectsView(){
   const act=new Map((H.act?.projects||[]).map(p=>[p.root,p]));
   const cards=[...by.values()].slice(0,12).map(g=>{const s=g.list[0],w=H.d?.words?.[s.id],open=g.list.filter(x=>!x.done).length,ask=g.list.some(x=>x.status==='wait');
     const unc=(H.d?.uncommitted||[]).filter(u=>u.root===g.root),files=unc.reduce((n,u)=>n+u.count,0),d=act.has(g.root)?perDay(act.get(g.root).turns,14):null,mx=Math.max(1,...(d||[0]));
-    return `<div class="pj ${ask?'ask':''}" data-sid="${s.id}"><div class="pjt">${tile(g.name)}</span><span class="pjn"><b>${esc(g.name)}</b><small>${open?plural(open,'open session'):'nothing open'}</small></span><span class="gap"></span><button class="ib" data-pnew="${esc(g.root)}" data-tip="New session in ${esc(g.name)}">${svg('plus')}</button></div>
+    return `<div class="pj ${ask?'waits':''}" data-sid="${s.id}"><div class="pjt">${tile(g.name)}</span><span class="pjn"><b>${esc(g.name)}</b><small>${open?plural(open,'open session'):'nothing open'}</small></span><span class="gap"></span><button class="ib" data-pnew="${esc(g.root)}" data-tip="New session in ${esc(g.name)}">${svg('plus')}</button></div>
       <div class="pjl"><b>${esc(s.title)}</b><time>${ago(s.mts)}</time></div><p>${esc(w?.ask||w?.text||'')}</p>
       <div class="pjm">${s.branch?`<span>${svg('branch')}${esc(s.branch)}</span>`:''}${files?`<span class="w">${plural(files,'file')} not committed</span>`:''}<span class="gap"></span>${d?`<span class="bars" data-tip="${plural(d.reduce((a,b)=>a+b,0),'message')} in the last 2 weeks">${d.map(n=>`<i style="height:${n?3+Math.round(n/mx*17):1}px" class="${n?'':'z'}"></i>`).join('')}</span>`:''}</div></div>`}).join('');
   return [['projects',`<section class="hs"><div class="pjs">${cards}<button class="pj add" data-pnew="">${svg('plus')}<span>New session somewhere else</span></button></div></section>`]];
 }
 
-// Your week: how much, then when, per project, a bar for each stretch of work.
-function weekView(){
-  const a=H.act,start=dayStart(6),end=dayStart(-1),span=end-start,now=Date.now()/1000;
-  const msgs=(a?.projects||[]).reduce((n,p)=>n+p.turns.filter(t=>t>=start).length,0);
-  const lanes=(a?.projects||[]).map(p=>({...p,b:p.blocks.filter(b=>b[1]>start)})).filter(p=>p.b.length).sort((x,y)=>y.b.reduce((n,b)=>n+b[1]-b[0],0)-x.b.reduce((n,b)=>n+b[1]-b[0],0)).slice(0,8);
-  const secs=lanes.reduce((n,p)=>n+p.b.reduce((m,b)=>m+Math.min(b[1],end)-Math.max(b[0],start),0),0);
-  const unc=(H.d?.uncommitted||[]).length;
-  const stat=(v,l)=>`<div class="hstat"><b>${a?v:'–'}</b><span>${l}</span></div>`;
-  const pos=t=>((t-start)/span*100).toFixed(2)+'%';
-  const days=[...Array(7)].map((_,i)=>new Date((start+i*86400+43200)*1000).toLocaleDateString([],{weekday:'short'}));
-  const body=!a?`<div class="hwait">Reading your history…</div>`:!lanes.length?`<div class="hwait">Nothing this week yet.</div>`:
-    `<div class="lanes">${lanes.map(p=>`<div class="lane"><span class="hpn">${tile(p.name,'s')}</span>${esc(p.name)}</span><span class="ltrk" style="--h:${hueOf(p.name)}">${days.map((_,i)=>`<u style="left:${(i/7*100).toFixed(2)}%"></u>`).join('')}${p.b.map(b=>`<b style="left:${pos(Math.max(b[0],start))};width:max(3px,${((Math.min(b[1],end)-Math.max(b[0],start))/span*100).toFixed(2)}%)" data-tip="${esc(p.name)} · ${esc(new Date(b[0]*1000).toLocaleDateString([],{weekday:'short'}))} ${clock(b[0]*1000)}–${clock(b[1]*1000)}${b[2]?' · '+plural(b[2],'message'):''}"></b>`).join('')}<s style="left:${pos(now)}"></s></span></div>`).join('')}
-      <div class="lane days"><span></span><span class="ltrk">${days.map((d,i)=>`<em style="left:${((i+.5)/7*100).toFixed(2)}%">${d}</em>`).join('')}</span></div></div>`;
-  return [['wstats',`<section class="hs"><div class="hstats">${stat(a?.sessions7??0,'sessions')}${stat(msgs,'messages')}${stat((secs/3600).toFixed(secs<36000?1:0),'hours of work')}${stat(unc,unc===1?'project not committed':'projects not committed')}</div></section>`],
-    hsec('lanes','This week','',body),leftOff()].filter(Boolean);
+// Time: when you worked, as a day, a week or the last 30 days, in rows per project or per profile. A day and a week
+// show each stretch of work; 30 days is a heatmap of the messages you wrote. A click on a day opens that day.
+const TV={scale:localStorage.getItem('ww.tscale')||'week',by:localStorage.getItem('ww.tby')||'projects',back:0};
+const TSCALES=[['day','Day'],['week','Week'],['30','30 days']],TMAX={day:29,week:3,30:0};
+function trange(){const b=TV.back;
+  if(TV.scale==='day')return {s:dayStart(b),e:dayStart(b-1),label:b===0?'Today':b===1?'Yesterday':dayName(dayStart(b))};
+  if(TV.scale==='week'){const s=dayStart(6+7*b),e=dayStart(7*b-1);return {s,e,label:b===0?'Last 7 days':`${dayName(s)} – ${dayName(e-1)}`}}
+  return {s:dayStart(29),e:dayStart(-1),label:'Last 30 days'};
+}
+const daysBack=t=>Math.round((dayStart(0)-new Date(t*1000).setHours(0,0,0,0)/1000)/86400);
+const tclip=(b,r)=>Math.max(0,Math.min(b[1],r.e)-Math.max(b[0],r.s));
+function timeView(){
+  const a=H.act,r=trange(),now=Date.now()/1000,span=r.e-r.s,profs=A.profiles.length>1;
+  const by=profs?TV.by:'projects';
+  const rows=(a?.[by]||[]).map(p=>({...p,b:p.blocks.filter(b=>tclip(b,r)>0),t:p.turns.filter(t=>t>=r.s&&t<r.e)}))
+    .map(p=>({...p,secs:p.b.reduce((n,b)=>n+tclip(b,r),0)})).filter(p=>p.b.length||p.t.length).sort((x,y)=>y.secs-x.secs||y.t.length-x.t.length).slice(0,8);
+  // the numbers
+  const secs=rows.reduce((n,p)=>n+p.secs,0),msgs=rows.reduce((n,p)=>n+p.t.length,0),all=rows.flatMap(p=>p.b);
+  const perDayS=new Map();for(const p of rows)for(const b of p.b){const k=new Date(Math.max(b[0],r.s)*1000);k.setHours(0,0,0,0);const ks=k.getTime()/1000;perDayS.set(ks,(perDayS.get(ks)||0)+tclip(b,r))}
+  const best=[...perDayS].sort((x,y)=>y[1]-x[1])[0];
+  const hrs=v=>(v/3600).toFixed(v<36000?1:0);
+  const stat=(v,l,c='')=>`<div class="hstat ${c}"><b>${a?esc(String(v)):skl('56px','num')}</b><span>${l}</span></div>`;
+  const stats=TV.scale==='day'
+    ?[stat(hrs(secs),'hours of work'),stat(msgs,msgs===1?'message':'messages'),stat(all.length,all.length===1?'stretch':'stretches'),stat(all.length?clock(Math.min(...all.map(b=>b[0]))*1000)+'–'+clock(Math.min(r.e,Math.max(...all.map(b=>b[1])))*1000):'–','first to last','rng')]
+    :[stat(hrs(secs),'hours of work'),stat(msgs,msgs===1?'message':'messages'),stat(perDayS.size,perDayS.size===1?'day worked':'days worked'),stat(best?dayName(best[0]):'–','busiest day')];
+  // the bar above: scale, back and forth, and what the rows are
+  const max=TMAX[TV.scale];
+  const bar=`<div class="ttb"><div class="dseg">${TSCALES.map(([k,n])=>`<button class="${TV.scale===k?'on':''}" data-tscale="${k}">${n}</button>`).join('')}</div>
+    ${max?`<span class="tnav"><button class="ib" data-tstep="1" ${TV.back>=max?'disabled':''} data-tip="Earlier">${svg('chevL')}</button><button class="ib" data-tstep="-1" ${TV.back<=0?'disabled':''} data-tip="Later">${svg('chevR')}</button></span>`:''}
+    <b class="tlbl">${esc(r.label)}</b><span class="gap"></span>
+    ${profs?`<div class="dseg">${[['projects','Projects'],['profiles','Profiles']].map(([k,n])=>`<button class="${by===k?'on':''}" data-tby="${k}">${n}</button>`).join('')}</div>`:''}</div>`;
+  const name=p=>`<span class="hpn">${tile(p.name,'s')}</span>${esc(p.name)}</span>`;
+  let body;
+  if(!a){   // the first time, before any history has been read: the rows' shape, shimmering
+    body=TV.scale==='30'?`<div class="heat">${[0,1,2].map(()=>`<span class="hpn">${skl('70%','ln')}</span>`+'<i class="c sk"></i>'.repeat(30)).join('')}</div>`
+      :`<div class="lanes">${[0,1,2].map(i=>`<div class="lane"><span class="hpn">${skl('70%','ln')}</span><span class="ltrk"><span class="sk bar" style="left:${8+i*21}%;width:${18+i*9}%"></span></span></div>`).join('')}</div>`;
+  }else if(!rows.length)body=`<div class="hwait">Nothing ${TV.scale==='day'?'on this day':TV.scale==='week'?'in these 7 days':'in the last 30 days'}.</div>`;
+  else if(TV.scale==='30'){
+    const ds=rows.map(p=>({...p,days:perDay(p.t,30)})),mx=Math.max(1,...ds.flatMap(p=>p.days)),lv=n=>n?Math.max(1,Math.ceil(n/mx*4)):0;
+    body=`<div class="heat">${ds.map(p=>name(p)+p.days.map((n,i)=>`<i class="c l${lv(n)}" data-tday="${29-i}" data-tip="${esc(p.name)} · ${dayName(dayStart(29-i))} · ${n?plural(n,'message'):'nothing'}"></i>`).join('')).join('')}
+      <span></span><span class="hax">30 days ago</span><span class="hax r">Today</span></div>`;
+  }else{
+    const pos=t=>((t-r.s)/span*100).toFixed(2)+'%';
+    const ticks=TV.scale==='day'?[0,3,6,9,12,15,18,21].map(h=>[r.s+h*3600,String(h).padStart(2,'0')+':00',null])
+      :[...Array(7)].map((_,i)=>{const d=dayStart(6+7*TV.back-i);return [d,new Date(d*1000).toLocaleDateString([],{weekday:'short'}),6+7*TV.back-i]});
+    body=`<div class="lanes">${rows.map(p=>`<div class="lane">${name(p)}<span class="ltrk" style="--h:${hueOf(p.name)}">${ticks.map(t=>`<u style="left:${pos(t[0])}"></u>`).join('')}${p.b.map(b=>{const s0=Math.max(b[0],r.s),s1=Math.min(b[1],r.e);
+        return `<b style="left:${pos(s0)};width:max(3px,${((s1-s0)/span*100).toFixed(2)}%)" ${TV.scale==='week'?`data-tday="${daysBack(s0)}"`:''} data-tip="${esc(p.name)} · ${esc(new Date(s0*1000).toLocaleDateString([],{weekday:'short'}))} ${clock(s0*1000)}–${clock(s1*1000)}${b[2]?' · '+plural(b[2],'message'):''}"></b>`}).join('')}${now>r.s&&now<r.e?`<s style="left:${pos(now)}"></s>`:''}</span></div>`).join('')}
+      <div class="lane days"><span></span><span class="ltrk">${ticks.map(t=>`<em style="left:${TV.scale==='day'?pos(t[0]):`calc(${pos(t[0])} + ${(50/7).toFixed(2)}%)`}" ${t[2]!=null?`data-tday="${t[2]}" class="z"`:''}>${t[1]}</em>`).join('')}</span></div></div>`;
+  }
+  const leg=TV.scale==='30'&&a&&rows.length?`<span class="hleg">Less${[0,1,2,3,4].map(i=>`<i class="c l${i}"></i>`).join('')}More</span>`:'';
+  return [['tbar',`<section class="hs">${bar}</section>`],['tstats',`<section class="hs"><div class="hstats">${stats.join('')}</div></section>`],hsec('tbody',TV.scale==='30'?'Messages per day':'Stretches of work',leg,body)];
 }
 function renderHome(){
   const on=isHome(),d=$('dash');
   d.hidden=!on;$('dseg').hidden=$('hset').hidden=!on;$('main').classList.toggle('home',on);renderHomeBg();
   if(!on)return;
   $('dseg').innerHTML=HVIEWS.map(([k,n,t])=>`<button class="${H.view===k?'on':''}" data-hv="${k}" data-tip="${t}">${n}</button>`).join('');
-  const parts=H.view==='projects'?projectsView():H.view==='week'?weekView():[leftOff(),limits(),notCommitted(),madeLately(),activity()].filter(Boolean);
+  const parts=H.view==='projects'?projectsView():H.view==='time'?timeView():[leftOff(),limits(),notCommitted(),madeLately()].filter(Boolean);
   patch(d,parts.map(([k,h])=>[H.view+':'+k,h]));fitThumbs();
   // A section fades in when it first appears, not each time a reading redraws it.
   for(const el of d.children){if(H.seen.has(el.dataset.k))el.style.animation='none';H.seen.add(el.dataset.k)}
@@ -1680,6 +1718,10 @@ $('dseg').onclick=e=>{const b=e.target.closest('[data-hv]');if(!b)return;H.view=
 $('dash').onclick=async e=>{
   const t=e.target;
   const pn=t.closest('[data-pnew]');if(pn){e.stopPropagation();hideTip();if(pn.dataset.pnew)newSession(pn.dataset.pnew);else{newSession();$('pProject').click()}return}
+  const tsc=t.closest('[data-tscale]');if(tsc){TV.scale=tsc.dataset.tscale;TV.back=0;localStorage.setItem('ww.tscale',TV.scale);hideTip();renderHome();return}
+  const tby=t.closest('[data-tby]');if(tby){TV.by=tby.dataset.tby;localStorage.setItem('ww.tby',TV.by);hideTip();renderHome();return}
+  const tst=t.closest('[data-tstep]');if(tst){TV.back=Math.max(0,Math.min(TMAX[TV.scale],TV.back+ +tst.dataset.tstep));renderHome();return}
+  const td=t.closest('[data-tday]');if(td){TV.scale='day';TV.back=+td.dataset.tday;hideTip();renderHome();return}
   if(t.closest('[data-limrefresh]')){api('limits/refresh',{}).catch(err=>oops(err.message));A.profiles.forEach(p=>p.reading=true);renderHome();return}
   const pr=t.closest('[data-prof]');if(pr){hideTip();openSettings(STABS.indexOf('Profiles'),pr.dataset.prof);return}
   const m=t.closest('[data-made]');if(m){hideTip();await openSession(m.dataset.sid);if(V.sel===m.dataset.sid&&V.work.some(f=>f.path===m.dataset.made))showWork(m.dataset.made,true);return}

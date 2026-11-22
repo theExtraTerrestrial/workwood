@@ -1056,6 +1056,15 @@
   .hs h4{display:flex;align-items:center;gap:8px;margin:0 0 10px;height:24px;font-size:11px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
   .hs .gap,.pjm .gap,.pch .gap,.pwf .gap,.hrow .gap,.pjt .gap{flex:1}
   .hwait{color:var(--faint);font-size:12.5px;padding:6px 2px}
+  /* skeletons, only the first time Home opens with nothing remembered: each the size of what replaces it, and one
+     shimmer across the whole page (the gradient is fixed to the window, so every block shows the same band) */
+  .sk{display:inline-block;vertical-align:middle;border-radius:5px;background:linear-gradient(100deg,rgba(128,128,128,.1) 30%,rgba(128,128,128,.2) 50%,rgba(128,128,128,.1) 70%) fixed;background-size:200vw 100%;animation:shim 1.6s linear infinite}
+  @keyframes shim{from{background-position:100vw 0}to{background-position:-100vw 0}}
+  .sk.ln{display:block;height:9px;margin:5px 0}.hrow .sk.ln,.hpn .sk.ln,.pwf .sk.ln{display:inline-block;margin:0}
+  .sk.sq{width:18px;height:18px;border-radius:5px;flex:none}.sk.fill{display:block;height:100%;border-radius:0}
+  .sk.num{height:26px;vertical-align:top}
+  .heat .c.sk{display:block}.ltrk .sk.bar{position:absolute;top:9px;height:14px;border-radius:4px}
+  @media (prefers-reduced-motion:reduce){.sk{animation:none}}
   .hchip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:650;padding:1px 8px;border-radius:20px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
   .hchip.w{background:var(--warn-soft);color:var(--warn);box-shadow:inset 0 0 0 1px var(--warn-line)}
   .hchip .spin{width:9px;height:9px;border-width:1.5px}
@@ -1064,7 +1073,7 @@
   .hcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
   .hcard{display:flex;flex-direction:column;gap:7px;min-width:0;text-align:left;padding:12px 13px 11px;border-radius:13px;background:var(--surface);box-shadow:0 0 0 1px var(--line);transition:box-shadow .15s,transform .15s}
   .hcard:hover{box-shadow:0 0 0 1px var(--line2),0 6px 16px rgba(0,0,0,.14);transform:translateY(-1px)}
-  .hcard.ask{box-shadow:0 0 0 1px var(--warn-line)}
+  .hcard.waits{box-shadow:0 0 0 1px var(--warn-line)}
   .hct{display:flex;align-items:center;gap:8px;min-width:0}
   .hct b{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .hcard p{margin:0;font-size:12.5px;line-height:1.5;color:var(--dim);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;min-height:56px}
@@ -1123,14 +1132,15 @@
   .hshot .cap{padding:6px 10px}.hshot .cap b{font-size:12px}
   .hshot .cap span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
 
-  /* last four weeks */
-  .heat{display:grid;grid-template-columns:minmax(80px,130px) repeat(28,minmax(0,1fr));gap:3px;align-items:center;font-size:12px;color:var(--dim)}
+  /* Time's 30 days */
+  .heat{display:grid;grid-template-columns:minmax(80px,130px) repeat(30,minmax(0,1fr));gap:3px;align-items:center;font-size:12px;color:var(--dim)}
   .hpn{display:flex;align-items:center;gap:7px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px}
   .heat .c{aspect-ratio:1;max-height:20px;border-radius:3px}
   .c.l0{background:rgba(128,128,128,.12)}
   .c.l1{background:hsl(var(--hue) 62% 55%/.28)}.c.l2{background:hsl(var(--hue) 62% 55%/.5)}.c.l3{background:hsl(var(--hue) 62% 55%/.75)}.c.l4{background:hsl(var(--hue) 62% 55%)}
   .heat .c:hover{outline:1.5px solid var(--text);outline-offset:0}
-  .hax{grid-column:2/16;font-size:10.5px;color:var(--faint);padding-top:3px}.hax.r{grid-column:16/30;text-align:right}
+  .hax{grid-column:2/17;font-size:10.5px;color:var(--faint);padding-top:3px}.hax.r{grid-column:17/32;text-align:right}
+  .heat .c[data-tday]{cursor:pointer}
   .hleg{display:inline-flex;align-items:center;gap:3px;text-transform:none;letter-spacing:0;font-weight:500}
   .hleg .c{width:10px;height:10px;border-radius:2px;display:inline-block}
   .hleg .c:first-child{margin-left:4px}.hleg .c:last-child{margin-right:4px}
@@ -1139,7 +1149,7 @@
   .pjs{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
   .pj{display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:14px;background:var(--surface);box-shadow:0 0 0 1px var(--line);cursor:pointer;min-width:0;transition:box-shadow .15s,transform .15s}
   .pj:hover{box-shadow:0 0 0 1px var(--line2),0 6px 16px rgba(0,0,0,.14);transform:translateY(-1px)}
-  .pj.ask{box-shadow:0 0 0 1px var(--warn-line)}
+  .pj.waits{box-shadow:0 0 0 1px var(--warn-line)}
   .pjt{display:flex;align-items:center;gap:10px}
   .pjn{display:flex;flex-direction:column;min-width:0}.pjn b{font-size:14px;font-weight:650}.pjn small{font-size:11.5px;color:var(--faint)}
   .pjl{display:flex;align-items:baseline;gap:8px;font-size:12.5px;min-width:0}.pjl b{font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1153,11 +1163,18 @@
   .pj.add{align-items:center;justify-content:center;flex-direction:row;gap:8px;min-height:150px;background:none;box-shadow:inset 0 0 0 1.5px var(--line2);color:var(--faint);font-weight:550}
   .pj.add:hover{color:var(--text)}
 
-  /* week */
+  /* time */
+  .ttb{display:flex;align-items:center;gap:10px;min-height:30px}
+  .tnav{display:flex;gap:2px}.tnav .ib:disabled{opacity:.3;pointer-events:none}
+  .tlbl{font-size:15px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lane.days em.z{cursor:pointer}.lane.days em.z:hover{color:var(--text)}
+  .ltrk b[data-tday]{cursor:pointer}
+  .hs:has(>.ttb){margin-bottom:14px}
   .hstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
   .hstat{padding:12px 14px;border-radius:13px;background:var(--surface);box-shadow:0 0 0 1px var(--line)}
   .hstat b{display:block;font-size:26px;font-weight:700;letter-spacing:-.03em;line-height:1.15;font-variant-numeric:tabular-nums}
   .hstat span{font-size:12px;color:var(--faint)}
+  .hstat b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hstat.rng b{font-size:19px;line-height:30px}
   .lanes{padding:12px 14px 8px;border-radius:13px;background:var(--surface);box-shadow:0 0 0 1px var(--line)}
   .lane{display:grid;grid-template-columns:minmax(80px,130px) 1fr;align-items:center;height:32px;font-size:12px;color:var(--dim)}
   .ltrk{position:relative;height:100%}

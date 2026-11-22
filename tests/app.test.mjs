@@ -851,6 +851,7 @@ test('home: where each session was left, what is not committed, and each profile
   const h = (await svc.call('home')).body, s = await state();
   const newest = s.sessions.filter(x => x.root === sb.projects.beta).sort((a, b) => b.mts - a.mts)[0];
   assert.ok(h.words[newest.id]?.text, JSON.stringify(h.words));                      // the agent's last words in each project's newest session
+  assert.ok(h.words[newest.id]?.first, JSON.stringify(h.words));                     // and what you opened it with, which a left-off card shows
   const beta = h.uncommitted.find(u => u.project === 'beta');
   assert.ok(beta && beta.count >= 1 && beta.add >= 1, JSON.stringify(h.uncommitted));
   assert.equal(beta.cwd, sb.projects.beta);
@@ -879,7 +880,9 @@ test('home: when you worked, per project, from the transcripts', async () => {
   const a = (await svc.call('home/activity')).body;
   const alpha = a.projects.find(p => p.root === sb.projects.alpha);
   assert.ok(alpha && alpha.turns.length >= 2, JSON.stringify(a.projects));
-  assert.ok(alpha.turns.every(t => Date.now() / 1000 - t < 28 * 86400));
+  assert.ok(alpha.turns.every(t => Date.now() / 1000 - t < 31 * 86400));
+  assert.ok(a.profiles.length >= 1 && a.profiles.every(p => p.name && Array.isArray(p.blocks)), JSON.stringify(a.profiles));   // the same, per profile
+  assert.equal(a.profiles.reduce((n, p) => n + p.turns.length, 0), a.projects.reduce((n, p) => n + p.turns.length, 0));       // every turn once either way
   assert.ok(alpha.blocks.length >= 1 && alpha.blocks.every(([s, e, k]) => e > s && k >= 0));
   assert.ok(a.sessions7 >= 2);
   assert.equal((await svc.call('home/activity')).body.projects.find(p => p.root === sb.projects.alpha).turns.length, alpha.turns.length);   // read again: nothing counted twice
@@ -2003,6 +2006,8 @@ ui('window: a long conversation has a rail of turns and an outline you can searc
 
 ui('window: home shows where work was left and each profile\'s limits, with two other views a click away', async () => {
   await page.click('#newBtn'); await page.waitForSelector('#dash .hcard');
+  const widths = sel => page.$$eval(sel, l => { l[0].classList.add('waits'); return [...new Set(l.map(e => Math.round(e.getBoundingClientRect().width)))].length; });
+  assert.equal(await widths('#dash .hcard'), 1);                                    // a card waiting on you is as wide as the rest
   assert.equal(await page.locator('#title').innerText(), 'Home');
   assert.equal(await page.locator('#hello').isHidden(), true);
   assert.equal(await page.locator('#dash .pcard').count(), 3);
@@ -2020,8 +2025,20 @@ ui('window: home shows where work was left and each profile\'s limits, with two 
   assert.equal(await page.locator('#hbg').isHidden(), true);
   await page.evaluate(() => localStorage.removeItem('ww.hbg'));
   await page.click('#dseg [data-hv="projects"]'); await page.waitForSelector('#dash .pj:has-text("alpha")');
-  await page.click('#dseg [data-hv="week"]'); await page.waitForSelector('#dash .hstat');
-  await page.waitForSelector('#dash .lane .ltrk b');
+  assert.equal(await widths('#dash .pj'), 1);
+  await page.click('#dseg [data-hv="time"]'); await page.waitForSelector('#dash .hstat');
+  await page.click('#dash [data-tscale="week"]'); await page.waitForSelector('#dash .lane .ltrk b');
+  await page.click('#dash [data-tscale="30"]'); await page.waitForSelector('#dash .heat .c.l1, #dash .heat .c.l2, #dash .heat .c.l3, #dash .heat .c.l4');
+  assert.equal(await page.locator('#dash .heat > i.c').count() % 30, 0);            // 30 days a row
+  await page.click('#dash [data-tby="profiles"]'); await page.waitForSelector('#dash [data-tby="profiles"].on');
+  await page.waitForSelector('#dash .heat .hpn');
+  await page.click('#dash [data-tby="projects"]');
+  await page.click('#dash .heat .c[data-tday="0"] >> nth=0'); await page.waitForSelector('#dash [data-tscale="day"].on');   // a day in the heatmap opens that day
+  assert.equal(await page.locator('#dash .tlbl').innerText(), 'Today');
+  await page.click('#dash [data-tstep="1"]'); assert.equal(await page.locator('#dash .tlbl').innerText(), 'Yesterday');
+  assert.equal(await page.locator('#dash .sk').count(), 0);                          // read once, nothing is a skeleton any more
+  assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('ww.homeCache')).act.projects.length));   // and it is remembered for next time
+  await page.click('#dash [data-tscale="week"]');
   await page.click('#dseg [data-hv="pick"]'); await page.waitForSelector('#dash .hcard');
   const id = await page.locator('#dash .hcard').first().getAttribute('data-sid');
   await page.click('#dash .hcard >> nth=0'); await page.waitForSelector(`.sess.sel[data-id="${id}"]`);

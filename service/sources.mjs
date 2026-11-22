@@ -177,6 +177,8 @@ function labelOf(head, tail) {   // Claude Code's title for it, else its slug, t
   if (c[1] === 'slug' && /^[a-z0-9-]+$/.test(t)) t = t.replace(/-/g, ' ');
   return !t ? null : t.length > 72 ? t.slice(0, 71) + '…' : t;
 }
+/** What a session opened with, as you wrote it: null for one not read yet, or one that opened with a command. */
+export const openingPrompt = file => headCache.get(file)?.prompt || null;
 async function headOf(file, mtimeMs, dirkey) {
   const had = headCache.get(file);
   if (had && had.at === mtimeMs) return had;
@@ -195,6 +197,7 @@ async function headOf(file, mtimeMs, dirkey) {
       out.cwd = cands.find(c => c.replace(/[^a-zA-Z0-9]/g, '-') === dirkey) || cands[0] || null;
       out.branch = pick([...tail, ...head], 'gitBranch');
       out.label = labelOf(head, tail);
+      out.prompt = firstPrompt(head)[0];
     }
   } catch {} finally { await fh?.close().catch(() => {}); }
   headCache.set(file, out);

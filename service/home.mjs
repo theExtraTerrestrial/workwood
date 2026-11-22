@@ -8,7 +8,7 @@ import readline from 'node:readline';
 import { PROFILE_ROOT, PLAIN } from './sources.mjs';
 import { readTranscript } from './transcript.mjs';
 
-const WORDS = 360;   // characters of the agent's last reply a card may show
+const WORDS = 360;   // characters of a prompt or reply a card may show
 
 // Markdown as plain words: a card shows a few lines of prose, not code or tables.
 function plain(t) {
@@ -20,6 +20,9 @@ function plain(t) {
     .replace(/\*\*([^*]+)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/\s+/g, ' ').trim();
 }
+
+/** A prompt as a card shows it: plain words, cut to a few lines. */
+export function brief(t) { const p = plain(t); return p.length > WORDS ? p.slice(0, WORDS - 1) + '…' : p; }
 
 /**
  * The last thing the agent said in a session: { text, ts } from the end of its transcript, or null. Read from the
@@ -66,9 +69,9 @@ export async function madeBy(file, cwd) {
 
 /**
  * When a session was worked on: the times you wrote to it (turns) and every minute something happened in it,
- * from the last four weeks. A transcript is read once; later reads continue where the last one stopped.
+ * from the last 30 days. A transcript is read once; later reads continue where the last one stopped.
  */
-const DAYS = 28, MARK_DAYS = 8;
+export const DAYS = 31;   // a day more than Time's 30, so its first day is whole
 const seen = new Map();   // file -> { pos, turns: [ts], marks: Set(minute) }
 // What you wrote, not what Claude Code put in your name: tool results, notes, commands, a resumed summary, an interruption.
 const NOT_A_TURN = /"tool_result"|"isMeta":true|"isCompactSummary":true|<command-name>|<local-command|<task-notification>|This session is being continued|\[Request interrupted/;
@@ -94,37 +97,39 @@ async function scan(file) {
   }
   const now = Date.now() / 1000;
   s.turns = s.turns.filter(t => now - t < DAYS * 86400);
-  for (const m of s.marks) if (now - m * 60 > MARK_DAYS * 86400) s.marks.delete(m);
+  for (const m of s.marks) if (now - m * 60 > DAYS * 86400) s.marks.delete(m);
   return s;
 }
 
 const GAP = 20 * 60;   // s: quieter than this between two moments, and they are two stretches of work
+// One row of Time: its turns, and its stretches of work [start, end, turns] from its minutes.
+function rowOf(turns, minutes) {
+  const ms = [...new Set(minutes)].sort((a, b) => a - b), blocks = [];
+  for (const t of ms) { const b = blocks[blocks.length - 1]; if (b && t - b[1] <= GAP) b[1] = t + 60; else blocks.push([t, t + 60, 0]); }
+  turns = turns.sort((a, b) => a - b);
+  for (const t of turns) { const b = blocks.find(x => t >= x[0] - 60 && t <= x[1]); if (b) b[2]++; }
+  return { turns, blocks };
+}
 /**
- * Per project, the last four weeks: { root, name, turns: [ts], blocks: [[start, end, turns]] for the last 7 days },
- * plus how many sessions were worked on in the last 7 days.
+ * The last 30 days, two ways: per project { root, name, turns: [ts], blocks: [[start, end, turns]] } and per profile
+ * { name, turns, blocks } (the profile that last ran each session), plus how many sessions were worked on in the
+ * last 7 days.
  */
 export async function activity(sessions) {
   const now = Date.now() / 1000, recent = sessions.filter(s => s.file && now - s.mts < DAYS * 86400);
-  const by = new Map();
+  const byRoot = new Map(), byProf = new Map();
+  const add = (map, key, extra, a) => { if (!map.has(key)) map.set(key, { ...extra, turns: [], minutes: [] }); const g = map.get(key); g.turns.push(...a.turns); for (const m of a.marks) g.minutes.push(m * 60); };
   let sessions7 = 0;
   for (const s of recent) {   // one at a time: a first read of a large history should not take the disk for itself
     const a = await scan(s.file).catch(() => null);
     if (!a) continue;
     const root = s.root || s.cwd;
-    if (!by.has(root)) by.set(root, { root, name: s.project, turns: [], minutes: [] });
-    const p = by.get(root);
-    p.turns.push(...a.turns);
-    let any = false;
-    for (const m of a.marks) if (now - m * 60 < 7 * 86400) { p.minutes.push(m * 60); any = true; }
-    if (any) sessions7++;
+    add(byRoot, root, { root, name: s.project }, a);
+    if (s.profile) add(byProf, s.profile, { name: s.profile }, a);
+    for (const m of a.marks) if (now - m * 60 < 7 * 86400) { sessions7++; break; }
   }
-  const projects = [...by.values()].map(p => {
-    const ms = [...new Set(p.minutes)].sort((a, b) => a - b), blocks = [];
-    for (const t of ms) { const b = blocks[blocks.length - 1]; if (b && t - b[1] <= GAP) b[1] = t + 60; else blocks.push([t, t + 60, 0]); }
-    for (const t of p.turns) { const b = blocks.find(x => t >= x[0] - 60 && t <= x[1]); if (b) b[2]++; }
-    return { root: p.root, name: p.name, turns: p.turns.sort((a, b) => a - b), blocks };
-  }).filter(p => p.turns.length || p.blocks.length);
-  return { projects, sessions7, at: Math.floor(now) };
+  const rows = map => [...map.values()].map(({ turns, minutes, ...g }) => ({ ...g, ...rowOf(turns, minutes) })).filter(g => g.turns.length || g.blocks.length);
+  return { projects: rows(byRoot), profiles: rows(byProf), sessions7, at: Math.floor(now) };
 }
 
 // ---- how each profile's limits are moving: the usage log Claudius keeps beside `.usage`, which Workwood appends to too ----

@@ -259,7 +259,7 @@ async function homeNow() {
   if (Date.now() - uncommitted.at > 15000) uncommitted.busy ||= readUncommitted().then(l => { uncommitted = { at: Date.now(), list: l, busy: null }; }, () => { uncommitted.busy = null; });
   if (!uncommitted.list) await uncommitted.busy;   // the first time, wait for it; afterwards a reading a few seconds old will do
   const now = nowS(), all = [...state.sessions].sort((a, b) => b.mts - a.mts);
-  // The last words of the newest sessions, and of the newest session in each project worked on this month.
+  // What the newest sessions opened with and the last words of them, and of the newest session in each project worked on this month.
   const want = new Map(all.slice(0, 12).map(s => [s.id, s]));
   const roots = new Set();
   for (const s of all) { const r = s.root || s.cwd; if (now - s.mts > 30 * 86400 || roots.size >= 16) break; if (!roots.has(r)) { roots.add(r); want.set(s.id, s); } }
@@ -267,7 +267,8 @@ async function homeNow() {
   await Promise.all([...want.values()].map(async s => {
     const w = await home.lastWords(s.file);
     const q = runs.get(s.id)?.pending, ask = q?.kind === 'question' ? q.input?.questions?.[0]?.question : null;
-    if (w || ask) words[s.id] = { ...(w || {}), ...(ask ? { ask: String(ask) } : {}) };
+    const first = home.brief(src.openingPrompt(s.file));
+    if (w || ask || first) words[s.id] = { ...(w || {}), ...(ask ? { ask: String(ask) } : {}), ...(first ? { first } : {}) };
   }));
   // What the agents made lately: the newest files of the newest sessions, ones that are still there.
   const made = [];

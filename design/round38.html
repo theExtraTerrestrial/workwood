@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 38: Home that holds still, and time at any scale</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<style>
+  :root{color-scheme:dark;--accent:hsl(168 62% 62%);--warn:#ffb955;--go:#4fd6a4;--hot:#f0706a}
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0c0e;color:#e8e9ec;font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;padding-bottom:80px}
+  [data-theme=light] body{background:#e9eaee;color:#1d1e22}
+  button{font:inherit;color:inherit}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:14px;padding:24px 0 2px}.top h1{font-size:17px;margin:0;flex:1}
+  .top button,.ctl button{border:0;cursor:pointer;background:#1d1f23;color:#c9ccd2;padding:6px 11px;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  [data-theme=light] .top button,[data-theme=light] .ctl button{background:#fff;color:#333;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+  .intro{color:#b9bcc3;max-width:720px;margin:6px 0 16px;font-size:14px}[data-theme=light] .intro{color:#555}
+  .ctl{display:flex;gap:8px;align-items:center;color:#8f939b;font-size:12px}
+  .ctl button.on{background:hsl(168 40% 22%);color:#fff;box-shadow:inset 0 0 0 1.5px var(--accent)}
+  [data-theme=light] .ctl button.on{background:hsl(168 45% 88%);color:#123}
+
+  /* ===== the mock app ===== */
+  .win{--bg:#18191c;--side:#1a1b1e;--surface:#222428;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.14);
+    --text:#f0f1f3;--dim:#a6aab2;--faint:#6d717a;--sel:rgba(255,255,255,.075);--sk:rgba(255,255,255,.055);--sk2:rgba(255,255,255,.11);
+    display:flex;height:720px;border-radius:14px;overflow:hidden;background:var(--bg);color:var(--text);margin-top:12px;
+    box-shadow:0 30px 90px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.12)}
+  [data-theme=light] .win{--bg:#fbfbfc;--side:#f2f3f5;--surface:#fff;--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.14);
+    --text:#1b1c1f;--dim:#5b5f68;--faint:#8d919a;--sel:rgba(0,0,0,.06);--sk:rgba(0,0,0,.05);--sk2:rgba(0,0,0,.09);box-shadow:0 30px 90px rgba(0,0,0,.18),0 0 0 1px rgba(0,0,0,.1)}
+  .side{width:220px;flex:none;background:var(--side);border-right:1px solid var(--line);padding:14px 16px;color:var(--faint);font-size:12px}
+  .side b{display:block;color:var(--text);margin-bottom:10px;font-size:13px}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .head{height:52px;flex:none;display:flex;align-items:center;gap:10px;padding:0 18px;border-bottom:1px solid var(--line);font-weight:600;font-size:14px}
+  .gap{flex:1}
+  .seg{display:flex;background:rgba(128,128,128,.16);border-radius:9px;padding:2px}
+  .seg button{border:0;background:none;cursor:pointer;padding:3px 11px;border-radius:7px;font-size:12px;color:var(--dim);font-weight:500}
+  .seg button.on{background:var(--sel);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.2)}
+  .dash{flex:1;overflow:auto;padding:22px 26px}
+  .col{max-width:800px;margin:0 auto}
+  h4{display:flex;align-items:center;margin:0 0 9px;font-size:10.5px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  section{margin-bottom:24px}
+  .tile{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:5px;font-size:10px;font-weight:700;color:#fff;background:hsl(var(--h) 45% 42%);flex:none}
+
+  /* ---- skeleton: the shape of what is coming, in place, all shimmering as one sheet ---- */
+  .sk,.mb i.sk,.trk b.sk,.yr i.sk,.heat .c.sk{display:block;border-radius:5px;background:linear-gradient(100deg,var(--sk) 30%,var(--sk2) 50%,var(--sk) 70%) fixed;background-size:200vw 100%;animation:shim 1.6s linear infinite;color:transparent!important}
+  @keyframes shim{from{background-position:100vw 0}to{background-position:-100vw 0}}
+  .ln{height:9px;margin:5px 0}
+  .in{animation:in .35s ease both}
+  @keyframes in{from{opacity:0}to{opacity:1}}
+  @media (prefers-reduced-motion:reduce){.sk,.in{animation:none}}
+
+  /* Pick up */
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .card{background:var(--surface);border-radius:12px;padding:11px 12px;box-shadow:0 0 0 1px var(--line);display:flex;flex-direction:column;gap:6px;height:118px}
+  .card .t{display:flex;gap:7px;align-items:center;font-weight:600;font-size:12.5px}
+  .card p{margin:0;font-size:12px;color:var(--dim);line-height:1.45;flex:1;overflow:hidden}
+  .card .f{font-size:11px;color:var(--faint);display:flex;justify-content:space-between}
+  .card.ask{box-shadow:0 0 0 1px color-mix(in srgb,var(--warn) 45%,transparent)}
+  .pcards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .pc{background:var(--surface);border-radius:13px;padding:12px 13px;box-shadow:0 0 0 1px var(--line);height:112px}
+  .pc .n{font-weight:650}.pc .e{font-size:11px;color:var(--faint);margin-bottom:8px;height:16px}
+  .ws{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .w .v{font-size:24px;font-weight:700;letter-spacing:-.03em;color:var(--go);line-height:30px;height:30px}.w.mid .v{color:var(--warn)}
+  .w .v small{font-size:12px;color:var(--faint);font-weight:600;margin-right:4px}
+  .bar{height:5px;border-radius:3px;background:var(--line2);margin-top:8px;overflow:hidden}.bar i{display:block;height:100%;border-radius:3px;background:var(--go);transition:width .6s cubic-bezier(.2,.8,.2,1)}.w.mid .bar i{background:var(--warn)}
+  .rows{border-radius:12px;box-shadow:0 0 0 1px var(--line);background:var(--surface);overflow:hidden}
+  .row{display:flex;align-items:center;gap:9px;height:38px;padding:0 12px;font-size:12.5px;border-top:1px solid var(--line)}.row:first-child{border:0}
+  .row .n{color:var(--faint);font-size:11.5px}.row .n i{font-style:normal;color:var(--go)}.row .n u{text-decoration:none;color:var(--hot)}
+  .row.quiet{color:var(--faint);justify-content:center}
+  .shots{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .shot{height:96px;border-radius:10px;box-shadow:0 0 0 1px var(--line);background:var(--surface);overflow:hidden;display:flex;flex-direction:column}
+  .shot .im{flex:1;background:linear-gradient(135deg,hsl(var(--h) 40% 30%),hsl(calc(var(--h) + 40) 40% 18%))}
+  [data-theme=light] .shot .im{background:linear-gradient(135deg,hsl(var(--h) 50% 85%),hsl(calc(var(--h) + 40) 40% 92%))}
+  .shot .cap{font-size:11px;padding:5px 8px;height:26px;color:var(--dim)}
+  .heat{display:grid;grid-template-columns:90px repeat(28,1fr);gap:3px;align-items:center;font-size:11.5px}
+  .heat .c{aspect-ratio:1;border-radius:3px;background:var(--sk)}
+  .heat .pn{display:flex;gap:6px;align-items:center;color:var(--dim)}
+
+  /* Time */
+  .tbar{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+  .tbar .nav{display:flex;align-items:center;gap:2px}
+  .tbar .nav button{border:0;background:none;cursor:pointer;color:var(--dim);width:26px;height:26px;border-radius:7px;font-size:15px}
+  .tbar .nav button:hover{background:var(--sel)}
+  .tbar .lbl{font-size:16px;font-weight:700;letter-spacing:-.01em;min-width:220px}
+  .tbar .today{border:0;cursor:pointer;background:none;color:var(--accent);font-size:12px;font-weight:600}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px}
+  .stat{background:var(--surface);border-radius:12px;box-shadow:0 0 0 1px var(--line);padding:10px 12px;height:64px}
+  .stat b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:26px;height:26px}
+  .stat>span{font-size:11px;color:var(--faint)}
+  .lanes{display:grid;grid-template-columns:110px 1fr;row-gap:8px;align-items:center;font-size:12px}
+  .lanes .pn{display:flex;gap:7px;align-items:center;color:var(--dim)}
+  .trk{position:relative;height:22px;border-radius:6px;background:rgba(128,128,128,.07)}
+  .trk u{position:absolute;top:0;bottom:0;border-left:1px dashed var(--line)}
+  .trk b{position:absolute;top:3px;bottom:3px;border-radius:4px;background:hsl(var(--h) 55% 55%);min-width:3px;cursor:pointer}
+  .trk b:hover{filter:brightness(1.2)}
+  .trk s{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--hot);border-radius:1px}
+  .axis{position:relative;height:16px;color:var(--faint);font-size:10.5px}.axis em{position:absolute;font-style:normal;transform:translateX(-50%);white-space:nowrap}
+  .axis em.z{cursor:pointer}.axis em.z:hover{color:var(--text)}
+  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .cal .dn{font-size:10.5px;color:var(--faint);text-align:center}
+  .day{height:74px;border-radius:9px;background:var(--surface);box-shadow:0 0 0 1px var(--line);padding:6px 8px;display:flex;flex-direction:column;cursor:pointer;position:relative;overflow:hidden}
+  .day:hover{box-shadow:0 0 0 1.5px var(--line2)}
+  .day.out{opacity:.35}.day.now{box-shadow:0 0 0 1.5px var(--accent)}
+  .day .d{font-size:11px;color:var(--faint);font-weight:600}.day .h{font-size:15px;font-weight:700;margin-top:auto}
+  .day .h small{font-size:10px;color:var(--faint);font-weight:600}
+  .stack{display:flex;height:4px;border-radius:2px;overflow:hidden;margin-top:4px;gap:1px}.stack i{background:hsl(var(--h) 55% 55%)}
+  .yr{display:grid;grid-template-rows:repeat(7,1fr);grid-auto-flow:column;grid-auto-columns:1fr;gap:3px}
+  .yr i{aspect-ratio:1;border-radius:3px;background:rgba(128,128,128,.12);cursor:pointer}
+  .yr i:hover{outline:1.5px solid var(--text)}
+  .yr i.f{background:transparent;cursor:default}.yr i.f:hover{outline:0}
+  .mon{position:relative;height:18px;margin-bottom:4px}
+  .plist{display:grid;grid-template-columns:110px 1fr 64px;gap:8px 12px;align-items:center;font-size:12px;margin-top:22px}
+  .plist .pn{display:flex;gap:7px;align-items:center;color:var(--dim)}
+  .mb{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;align-items:end;height:22px}
+  .mb i{background:hsl(var(--h) 55% 55%);border-radius:2px;min-height:1px;opacity:.85}
+  .plist .hrs{text-align:right;color:var(--faint);font-variant-numeric:tabular-nums}
+  .hint{font-size:11px;color:var(--faint);margin-top:12px}
+  .tip{position:fixed;pointer-events:none;background:#000;color:#fff;font-size:11.5px;padding:5px 8px;border-radius:7px;z-index:9;white-space:nowrap;display:none}
+
+  h3{font-size:15px;margin:34px 0 6px}
+  .notes{color:#b9bcc3;max-width:760px;font-size:13.5px}.notes li{margin:6px 0}.notes b{color:#fff}
+  [data-theme=light] .notes{color:#444}[data-theme=light] .notes b{color:#000}
+  details{margin-top:26px;color:#b9bcc3;max-width:760px}[data-theme=light] details{color:#444}
+  summary{cursor:pointer;font-weight:650}
+</style></head><body><div class="wrap">
+<div class="top"><h1>Round 38 · Home that holds still, and time at any scale</h1><button id="theme">Light</button></div>
+<p class="intro">Every section is drawn at its final size from the first frame; the data fills in where it will stay. <b>Week</b> becomes <b>Time</b>: day, week, month or year, and a click zooms in.</p>
+<div class="ctl"><button id="replay">↻ Replay loading</button><button id="slow">Slow disk</button><span id="phase"></span></div>
+
+<div class="win">
+  <aside class="side"><b>Sessions</b>shop · api · site · workwood · notes</aside>
+  <div class="main">
+    <div class="head">Home<span class="gap"></span><div class="seg" id="views"></div></div>
+    <div class="dash"><div class="col" id="col"></div></div>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+
+<h3>How it loads</h3>
+<ul class="notes">
+  <li><b>Known now, drawn now.</b> Session titles, project tiles and profile names come with the window; only what needs a read waits.</li>
+  <li><b>Same box, before and after.</b> A skeleton is the size of what replaces it, so nothing below it moves. One shimmer runs across the whole page, not one per block.</li>
+  <li><b>Last time’s shape.</b> How many rows, cards and pictures each section had is remembered, so the skeleton guesses right. A section that turns out empty keeps one quiet line (“All committed”) instead of vanishing.</li>
+  <li><b>Never a skeleton twice.</b> After the first load, readings update in place.</li>
+</ul>
+
+<h3>Open questions</h3>
+<ol class="notes">
+  <li>Show last time’s numbers at once (dimmed until fresh) instead of skeletons, when there are any?</li>
+  <li>Year needs history Claude Code deletes after 30 days. Keep a small daily record in Workwood so it fills up from now on?</li>
+  <li>Time’s rows: projects, as drawn, or profiles too (a switch)?</li>
+  <li>Keep the 4-week heatmap on Pick up, or let Time replace it?</li>
+</ol>
+
+<details><summary>Under the hood</summary>
+<ul class="notes">
+  <li><code>/home</code> and <code>/home/activity</code> already arrive separately; each section waits only for its own.</li>
+  <li><code>activity()</code> reads 28 days of turns and 8 days of minutes. Time needs a range: <code>/home/activity?from=&to=</code>, minutes kept as hour buckets per project per day so a year stays small.</li>
+  <li>Transcripts go after <code>cleanupPeriodDays</code> (30 by default). A year needs <code>~/.workwood/time.jsonl</code>: one line per project per day, written as scan() reads.</li>
+</ul>
+</details>
+</div>
+
+<script>
+// ---------- fake history ----------
+const P=[['shop',168],['api',215],['site',290],['workwood',36],['notes',340]];
+let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+const NOW=new Date();NOW.setHours(15,40,0,0);const now=NOW.getTime()/1000;
+const D0=d=>{const x=new Date(d);x.setHours(0,0,0,0);return x};
+const blocks=[];   // {p, s, e} seconds
+for(let back=400;back>=0;back--){const d=D0(NOW);d.setDate(d.getDate()-back);const wk=d.getDay()%6===0,ds=d.getTime()/1000;
+  P.forEach(([n],pi)=>{const busy=[.55,.45,.3,.5,.15][pi]*(wk?.35:1)*(back>300&&pi===3?0:1)*(0.6+0.6*Math.sin(back/40+pi));
+    if(rnd()<busy){let k=1+Math.floor(rnd()*3);while(k--){const s=ds+(8+rnd()*13)*3600,e=s+(15+rnd()*150)*60;if(s<now)blocks.push({p:pi,s,e:Math.min(e,now)})}}})}
+{const t=D0(NOW).getTime()/1000;[[1,9.2,10.6],[3,10.8,11.9],[1,13.1,13.5],[2,14.2,15.4]].forEach(([p,a,b])=>blocks.push({p,s:t+a*3600,e:t+b*3600}))}
+const hue=i=>P[i][1];
+const tile=i=>`<span class="tile" style="--h:${hue(i)}">${P[i][0][0].toUpperCase()}</span>`;
+const fmtH=s=>{const h=s/3600;return h>=10?Math.round(h)+'':h.toFixed(1)};
+const clock=t=>new Date(t*1000).toLocaleTimeString([],{hour:'numeric',minute:'2-digit',hourCycle:'h23'});
+
+// ---------- state ----------
+let view='pick',scale='week',anchor=new Date(NOW),isSlow=false,timers=[];
+const loaded={home:false,act:false};
+function load(){timers.forEach(clearTimeout);loaded.home=loaded.act=false;render();
+  const k=isSlow?3:1;timers=[setTimeout(()=>{loaded.home=true;render()},650*k),setTimeout(()=>{loaded.act=true;render()},1700*k)]}
+
+// ---------- Pick up ----------
+const L=[{p:0,t:'Checkout redesign',ask:1,w:'Should the coupon field stay open after a code is applied, or close back to a link?',f:'1 question',ago:'2m'},
+  {p:1,t:'Rate limits for the API',w:'The limiter is in, keyed by API token. Next would be the 429 page and a Retry-After header.',f:'main',ago:'40m'},
+  {p:3,t:'Home skeletons',w:'Sections now keep their size while they load. All 212 tests pass.',f:'main',ago:'1h'}];
+const ln=(w)=>`<span class="sk ln" style="width:${w}%"></span>`;
+const fade=s=>s?' in':'';
+function pick(){
+  const h=loaded.home,a=loaded.act;
+  const cards=L.map(c=>`<div class="card ${h&&c.ask?'ask':''}"><div class="t">${tile(c.p)}${c.t}</div>
+    <p>${h?`<span class="in">${c.w}</span>`:ln(96)+ln(88)+ln(54)}</p><div class="f">${h?`<span class="in" style="${c.ask?'color:var(--warn)':''}">${c.f}</span>`:ln(22).replace('ln','ln" style="width:60px')}<span>${c.ago}</span></div></div>`).join('');
+  const prof=(n,e,a5,a7)=>`<div class="pc"><div class="n">${n}</div><div class="e">${h?`<span class="in">${e}</span>`:'<span class="sk ln" style="width:44%"></span>'}</div>
+    <div class="ws">${[[a5,'5h'],[a7,'7d']].map(([v,l])=>`<div class="w ${v>70?'mid':''}"><div class="v">${h?`<span class="in"><small>${l}</small>${v}%</span>`:`<span class="sk" style="width:70px;height:24px;margin-top:3px"></span>`}</div><div class="bar"><i style="width:${h?v:0}%"></i></div></div>`).join('')}</div></div>`;
+  const unc=[[0,'checkout-coupon',4,'+86','−12','2m'],[3,'main',7,'+210','−44','1h']];
+  const rows=unc.map(u=>h?`<div class="row in">${tile(u[0])}<b>${P[u[0]][0]}</b><span style="color:var(--faint)">${u[1]}</span><span class="gap"></span><span class="n">${u[2]} files · <i>${u[3]}</i> <u>${u[4]}</u></span><span class="n" style="width:28px;text-align:right">${u[5]}</span></div>`
+    :`<div class="row">${tile(u[0])}<b>${P[u[0]][0]}</b><span class="sk ln" style="width:80px"></span><span class="gap"></span><span class="sk ln" style="width:110px"></span></div>`).join('');
+  const shots=['receipt.pdf','hero.png','report.html','limits.svg'].map((f,i)=>`<div class="shot">${h?`<div class="im in" style="--h:${hue(i)}"></div>`:'<div class="im sk" style="border-radius:0"></div>'}<div class="cap">${h?`<span class="in">${f}</span>`:'<span class="sk ln" style="width:60%"></span>'}</div></div>`).join('');
+  const heat=[0,1,3,2].map(pi=>`<span class="pn">${tile(pi)}${P[pi][0]}</span>`+[...Array(28)].map((_,i)=>{
+    if(!a)return `<i class="c sk" style="border-radius:3px"></i>`;
+    const d=D0(NOW);d.setDate(d.getDate()-27+i);const s=d.getTime()/1000,hrs=blocks.filter(b=>b.p===pi&&b.s>=s&&b.s<s+86400).reduce((n,b)=>n+b.e-b.s,0)/3600;
+    const lv=Math.min(4,Math.ceil(hrs/1.2));return `<i class="c in" style="animation-delay:${i*12}ms;${lv?`background:hsl(${hue(pi)} 55% ${70-lv*8}% / ${.25+lv*.18})`:''}" data-tip="${P[pi][0]} · ${d.toLocaleDateString([],{weekday:'short',day:'numeric',month:'short'})} · ${hrs?fmtH(hrs*3600)+'h':'nothing'}"></i>`}).join('')).join('');
+  return `<section><h4>Left off</h4><div class="cards">${cards}</div></section>
+    <section><h4>Limits</h4><div class="pcards">${prof('work','me@work.example',34,41)}${prof('personal','me@home.example',12,78)}</div></section>
+    <section><h4>Not committed</h4><div class="rows">${rows}</div></section>
+    <section><h4>Made lately</h4><div class="shots">${shots}</div></section>
+    <section><h4>Last 4 weeks</h4><div class="heat">${heat}</div></section>`;
+}
+
+// ---------- Time ----------
+function range(){const a=new Date(anchor);let s,e,label;
+  if(scale==='day'){s=D0(a);e=new Date(s);e.setDate(e.getDate()+1);label=s.toLocaleDateString([],{weekday:'long',day:'numeric',month:'long'})}
+  if(scale==='week'){s=D0(a);s.setDate(s.getDate()-((s.getDay()+6)%7));e=new Date(s);e.setDate(e.getDate()+7);const l=new Date(e-1);label=`${s.toLocaleDateString([],{day:'numeric',month:'short'})} – ${l.toLocaleDateString([],{day:'numeric',month:'short'})}`}
+  if(scale==='month'){s=new Date(a.getFullYear(),a.getMonth(),1);e=new Date(a.getFullYear(),a.getMonth()+1,1);label=s.toLocaleDateString([],{month:'long',year:'numeric'})}
+  if(scale==='year'){s=new Date(a.getFullYear(),0,1);e=new Date(a.getFullYear()+1,0,1);label=String(a.getFullYear())}
+  return {s:s.getTime()/1000,e:e.getTime()/1000,label,sd:s}}
+function step(n){const a=anchor;if(scale==='day')a.setDate(a.getDate()+n);if(scale==='week')a.setDate(a.getDate()+7*n);if(scale==='month')a.setMonth(a.getMonth()+n);if(scale==='year')a.setFullYear(a.getFullYear()+n);render()}
+const inR=(r)=>blocks.filter(b=>b.e>r.s&&b.s<r.e).map(b=>({...b,s:Math.max(b.s,r.s),e:Math.min(b.e,r.e)}));
+const dayHrs=(ds,bl)=>{const r=bl.filter(b=>b.s>=ds&&b.s<ds+86400);const per=P.map((_,i)=>r.filter(b=>b.p===i).reduce((n,b)=>n+b.e-b.s,0));return {tot:per.reduce((a,b)=>a+b,0),per}};
+
+function lanesView(r,bl){const span=r.e-r.s,pos=t=>((t-r.s)/span*100).toFixed(2)+'%';
+  const ticks=scale==='day'?[0,3,6,9,12,15,18,21].map(h=>[r.s+h*3600,String(h).padStart(2,'0')+':00',null])
+    :[...Array(7)].map((_,i)=>{const d=new Date(r.sd);d.setDate(d.getDate()+i);return [d.getTime()/1000,d.toLocaleDateString([],{weekday:'short',day:'numeric'}),d.getTime()]});
+  const ps=P.map((_,i)=>i).filter(i=>bl.some(b=>b.p===i)).sort((x,y)=>bl.filter(b=>b.p===y).reduce((n,b)=>n+b.e-b.s,0)-bl.filter(b=>b.p===x).reduce((n,b)=>n+b.e-b.s,0));
+  if(!ps.length)return `<div class="hint">Nothing in this ${scale}.</div>`;
+  const trk=i=>`<span class="trk">${ticks.map(t=>`<u style="left:${pos(t[0])}"></u>`).join('')}${loaded.act?bl.filter(b=>b.p===i).map(b=>`<b class="in" style="--h:${hue(i)};left:${pos(b.s)};width:${((b.e-b.s)/span*100).toFixed(2)}%" data-tip="${P[i][0]} · ${new Date(b.s*1000).toLocaleDateString([],{weekday:'short'})} ${clock(b.s)}–${clock(b.e)}"${scale==='week'?` data-zoom="day" data-at="${b.s*1000}"`:''}></b>`).join(''):`<b class="sk" style="left:${(10+i*13)%60}%;width:${18+i*5}%"></b>`}${now>r.s&&now<r.e?`<s style="left:${pos(now)}"></s>`:''}</span>`;
+  return `<div class="lanes">${ps.map(i=>`<span class="pn">${tile(i)}${P[i][0]}</span>${trk(i)}`).join('')}
+    <span></span><div class="axis">${ticks.map(t=>`<em class="${t[2]?'z':''}" style="left:${scale==='day'?pos(t[0]):`calc(${pos(t[0])} + ${50/7}%)`}"${t[2]?` data-zoom="day" data-at="${t[2]}"`:''}>${t[1]}</em>`).join('')}</div></div>`}
+
+function monthView(r,bl){const first=new Date(r.sd);first.setDate(1-((first.getDay()+6)%7));const cells=[];
+  for(let i=0;i<42;i++){const d=new Date(first);d.setDate(first.getDate()+i);if(i>=35&&d.getMonth()!==r.sd.getMonth())break;cells.push(d)}
+  const max=Math.max(1,...cells.map(d=>dayHrs(d.getTime()/1000,blocks).tot));
+  return `<div class="cal">${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(n=>`<div class="dn">${n}</div>`).join('')}${cells.map(d=>{const ds=d.getTime()/1000,{tot,per}=dayHrs(ds,blocks),out=d.getMonth()!==r.sd.getMonth(),fut=ds>now;
+    const bg=tot&&loaded.act?`background:color-mix(in srgb,var(--accent) ${Math.round(tot/max*22)}%,var(--surface))`:'';
+    return `<div class="day ${out?'out':''} ${D0(NOW).getTime()===d.getTime()?'now':''}" style="${bg}" data-zoom="day" data-at="${d.getTime()}"><span class="d">${d.getDate()}</span>${fut?'':!loaded.act?'<span class="sk" style="height:16px;width:46%;margin-top:auto"></span><span class="sk" style="height:4px;margin-top:4px"></span>':tot?`<span class="h in">${fmtH(tot)}<small>h</small></span><span class="stack in">${per.map((v,i)=>v?`<i style="--h:${hue(i)};flex:${v}"></i>`:'').join('')}</span>`:''}</div>`}).join('')}</div>`}
+
+function yearView(r,bl){const first=new Date(r.sd);first.setDate(1-((first.getDay()+6)%7));const cells=[],mons=[];let wk=0;
+  for(let d=new Date(first);d.getTime()/1000<r.e;d.setDate(d.getDate()+1)){const i=cells.length;if(i%7===0)wk++;const inY=d.getFullYear()===r.sd.getFullYear();
+    if(inY&&d.getDate()===1)mons.push([Math.floor(i/7),new Date(d)]);cells.push([new Date(d),inY])}
+  const W=Math.ceil(cells.length/7),hrs=cells.map(([d])=>dayHrs(d.getTime()/1000,blocks).tot),max=Math.max(1,...hrs);
+  const grid=cells.map(([d,inY],i)=>{const ds=d.getTime()/1000;if(!inY||ds>now)return `<i class="f"></i>`;if(!loaded.act)return `<i class="sk" style="border-radius:3px"></i>`;
+    const lv=hrs[i]?Math.ceil(hrs[i]/max*4):0;return `<i class="in" style="${lv?`background:color-mix(in srgb,var(--accent) ${15+lv*21}%,transparent)`:''}" data-zoom="day" data-at="${d.getTime()}" data-tip="${d.toLocaleDateString([],{weekday:'short',day:'numeric',month:'short'})} · ${hrs[i]?fmtH(hrs[i]*3600)+'h':'nothing'}"></i>`}).join('');
+  const mon=mons.map(([w,d])=>`<em class="z" style="left:${(w/W*100).toFixed(2)}%;transform:none" data-zoom="month" data-at="${d.getTime()}">${d.toLocaleDateString([],{month:'short'})}</em>`).join('');
+  const per=P.map((_,pi)=>[...Array(12)].map((_,m)=>{const s=new Date(r.sd.getFullYear(),m,1).getTime()/1000,e=new Date(r.sd.getFullYear(),m+1,1).getTime()/1000;return blocks.filter(b=>b.p===pi&&b.s>=s&&b.s<e).reduce((n,b)=>n+b.e-b.s,0)}));
+  const pmax=Math.max(1,...per.flat()),order=P.map((_,i)=>i).sort((a,b)=>per[b].reduce((x,y)=>x+y)-per[a].reduce((x,y)=>x+y)).filter(i=>per[i].some(Boolean));
+  return `<div class="mon axis">${mon}</div><div class="yr">${grid}</div>
+    <div class="plist">${order.map(i=>`<span class="pn">${tile(i)}${P[i][0]}</span><span class="mb">${per[i].map((v,m)=>loaded.act?`<i class="in" style="--h:${hue(i)};height:${v?Math.max(2,v/pmax*22):1}px" data-zoom="month" data-at="${new Date(r.sd.getFullYear(),m,1).getTime()}" data-tip="${P[i][0]} · ${new Date(2000,m,1).toLocaleDateString([],{month:'long'})} · ${fmtH(v)}h"></i>`:`<i class="sk" style="height:${6+((i*5+m*7)%14)}px"></i>`).join('')}</span><span class="hrs">${loaded.act?fmtH(per[i].reduce((a,b)=>a+b))+' h':'<span class="sk ln" style="width:40px;margin-left:auto"></span>'}</span>`).join('')}</div>`}
+
+function time(){const r=range(),bl=inR(r),a=loaded.act;
+  const secs=bl.reduce((n,b)=>n+b.e-b.s,0),days=new Set(bl.map(b=>D0(b.s*1000).getTime())).size,proj=new Set(bl.map(b=>b.p)).size;
+  const best=[...new Set(bl.map(b=>D0(b.s*1000).getTime()))].map(d=>[d,dayHrs(d/1000,bl).tot]).sort((x,y)=>y[1]-x[1])[0];
+  const stat=(v,l)=>`<div class="stat"><b>${a?`<span class="in">${v}</span>`:'<span class="sk" style="width:52px;height:20px;margin-top:3px"></span>'}</b><span>${l}</span></div>`;
+  const body=scale==='month'?monthView(r,bl):scale==='year'?yearView(r,bl):lanesView(r,bl);
+  const zoomHint={year:'Click a day or a month to zoom in.',month:'Click a day to see its hours.',week:'Click a day or a stretch to see its hours.',day:''}[scale];
+  return `<div class="tbar"><div class="seg" id="scales">${['day','week','month','year'].map(s=>`<button class="${scale===s?'on':''}" data-scale="${s}">${s[0].toUpperCase()+s.slice(1)}</button>`).join('')}</div>
+    <div class="nav"><button data-step="-1">‹</button><button data-step="1">›</button></div><span class="lbl">${r.label}</span><span class="gap"></span>${now>=r.s&&now<r.e?'':'<button class="today" data-today>Today</button>'}</div>
+    <div class="stats">${stat(fmtH(secs)+' h','of work')}${stat(scale==='day'?bl.length:days,scale==='day'?'stretches':'days worked')}${stat(proj,proj===1?'project':'projects')}${stat(scale==='day'?(bl.length?clock(Math.min(...bl.map(b=>b.s)))+'–'+clock(Math.max(...bl.map(b=>b.e))):'–'):best?new Date(best[0]).toLocaleDateString([],{weekday:'short',day:'numeric',month:'short'}):'–',scale==='day'?'first to last':'busiest day')}</div>
+    <section>${body}</section>${zoomHint?`<div class="hint">${zoomHint} ← → move through time.</div>`:''}`}
+
+// ---------- shell ----------
+function render(){
+  views.innerHTML=[['pick','Pick up'],['projects','Projects'],['time','Time']].map(([k,n])=>`<button class="${view===k?'on':''}" data-v="${k}">${n}</button>`).join('');
+  col.innerHTML=view==='time'?time():view==='pick'?pick():'<div class="hint" style="text-align:center;margin-top:80px">Projects, as in round 35.</div>';
+  phase.textContent=!loaded.home?'Reading transcripts…':!loaded.act?'Reading history…':'Loaded';
+}
+views.onclick=e=>{const b=e.target.closest('[data-v]');if(b){view=b.dataset.v;render()}};
+col.onclick=e=>{const t=e.target;
+  const sc=t.closest('[data-scale]');if(sc){scale=sc.dataset.scale;render();return}
+  const st=t.closest('[data-step]');if(st){step(+st.dataset.step);return}
+  if(t.closest('[data-today]')){anchor=new Date(NOW);render();return}
+  const z=t.closest('[data-zoom]');if(z){scale=z.dataset.zoom;anchor=new Date(+z.dataset.at);tip.style.display='none';render()}};
+addEventListener('keydown',e=>{if(view!=='time')return;if(e.key==='ArrowLeft')step(-1);if(e.key==='ArrowRight')step(1)});
+document.addEventListener('mousemove',e=>{const t=e.target.closest?.('[data-tip]');if(!t){tip.style.display='none';return}tip.textContent=t.dataset.tip;tip.style.display='block';tip.style.left=e.clientX+12+'px';tip.style.top=e.clientY+14+'px'});
+replay.onclick=load;
+slow.onclick=()=>{isSlow=!isSlow;slow.classList.toggle('on',isSlow);load()};
+theme.onclick=()=>{const d=document.documentElement,l=d.dataset.theme==='dark';d.dataset.theme=l?'light':'dark';theme.textContent=l?'Dark':'Light'};
+load();
+</script>
+</body></html>

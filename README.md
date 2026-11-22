@@ -96,9 +96,11 @@ On a fresh WSL install the Electron window needs GTK once:
   stays under it, so a new session starts there. "Pick up" shows the last words of the newest sessions (one
   waiting for you first), a card per profile with its 5-hour and 7-day limits (how fast each is being used, from
   the usage log Claudius and Workwood keep, and when that pace would reach the limit), the projects with changes
-  not committed, the pages and pictures the agents made lately, and four weeks of your messages per project.
-  "Projects" has a card per project worked on this month; "Week" shows when you worked, per project. A profile
-  card opens that profile's settings. Behind Home runs a slow background (Aurora, Caustics, Orbits or
+  not committed, and the pages and pictures the agents made lately. "Projects" has a card per project worked on
+  this month. "Time" shows when you worked, per project or per profile: a day or a week as stretches of work you
+  can step back through, or the last 30 days as a heatmap of your messages, where a day opens that day. Home opens
+  with what it showed last time and updates it in place; only the very first time does it draw placeholders. A
+  profile card opens that profile's settings. Behind Home runs a slow background (Aurora, Caustics, Orbits or
   Constellation, or none) in the colours of your projects, livelier while an agent works and warm when the
   profile for the next session is near a limit; the button beside the view switch picks it (Settings, Home).
 - Under the message box: the profile the conversation runs on with its 5-hour and

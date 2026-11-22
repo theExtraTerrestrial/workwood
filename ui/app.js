@@ -174,10 +174,10 @@ function drawList(){
   for(const s of A.sessions.filter(shown).sort((a,b)=>b.mts-a.mts)){const k=s.root||s.cwd;if(!groups.has(k))groups.set(k,{name:s.project,list:[]});groups.get(k).list.push(s)}
   $('list').innerHTML=[...groups].map(([k,g])=>{
     const shut=!!V.shut[k],n=g.list.filter(needsYou).length;
-    return `<div class="grp ${shut?'shut':''}" data-grp="${esc(k)}" title="${esc(k)}">${tile(g.name,'s')}</span><b>${esc(g.name)}</b>${shut?`<small>${n?`<i class="dot"></i>`:''}${g.list.length}</small>`:''}<span class="gnew" data-gnew data-tip="New session in ${esc(g.name)}">${svg('plus')}</span></div>`+(shut?'':
+    return `<div class="grp ${shut?'shut':''}" data-grp="${esc(k)}" data-tip-path="${esc(short(k))}">${tile(g.name,'s')}</span><b>${esc(g.name)}</b>${shut?`<small>${n?`<i class="dot"></i>`:''}${g.list.length}</small>`:''}<span class="gnew" data-gnew data-tip="New session in ${esc(g.name)}">${svg('plus')}</span></div>`+(shut?'':
       g.list.map(s=>{const sel=!V.isNew&&s.id===V.sel,tip=V.compact||s.line?` data-tip="${esc(s.title+' — '+s.project+(s.line?' · '+s.line:''))}"`:'';
         return s.id===V.renaming?`<div class="sess ren ${sel?'sel':''}" data-id="${s.id}">${tile(s.project)}</span><input id="renIn" maxlength="120" autocomplete="off" spellcheck="false" aria-label="Session name"></div>`
-        :`<button class="sess ${s.status} ${sel?'sel':''} ${s.unread?'unread':''} ${s.done?'isdone':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}"${tip}>${tile(s.project)}${s.status==='work'?'<u class="go"></u>':needsYou(s)?`<u class="${s.status==='wait'?'warn':'new'}"></u>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b>${s.outside||s.term?`<em class="xb">${svg('term')}</em>`:''}<span class="st">${stateOf(s)}</span><span class="sact"><span data-done data-tip="${s.done?'Back to the inbox':'Mark done (Ctrl+D)'}">${svg(s.done?'refresh':'check')}</span><span data-dots>${svg('dots')}</span></span></span>${s.status==='work'&&!s.outside&&!s.term&&s.line?`<span class="l2">${esc(s.line)}</span>`:''}</span></button>`}).join(''));
+        :`<button class="sess ${s.status} ${sel?'sel':''} ${s.unread?'unread':''} ${s.done?'isdone':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}"${tip}>${tile(s.project)}${s.status==='work'?'<u class="go"></u>':needsYou(s)?`<u class="${s.status==='wait'?'warn':'new'}"></u>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b>${s.outside||s.term?`<em class="xb">${svg('term')}</em>`:''}<span class="st">${stateOf(s)}</span><span class="sact"><span data-done data-tip="${s.done?'Back to the inbox':'Mark done'}"${s.done?'':' data-tip-k="Ctrl D"'}>${svg(s.done?'refresh':'check')}</span><span data-dots>${svg('dots')}</span></span></span>${s.status==='work'&&!s.outside&&!s.term&&s.line?`<span class="l2">${esc(s.line)}</span>`:''}</span></button>`}).join(''));
   }).join('')||`<div class="none inbox0">Nothing needs you.<br>Older sessions are under Done.</div>`;
 }
 $('list').onclick=e=>{
@@ -294,12 +294,12 @@ function stepHtml(x,live,inner){
   const time=x.end&&x.start?`<span class="el ${x.end-x.start>30000?'slow':''}">${sdur(x.end-x.start)}</span>`
     :(run&&!x.wait||bgRun)&&x.start?clockEl(x.start,'go'):'';
   const limit=run&&x.limit?`<span class="stl">stops after ${x.limit%60000?sdur(x.limit):x.limit/60000+'m'}</span>`:'';
-  let h=`<div class="step s-${cls} ${can&&!body?'shut':''}" data-step="${esc(x.id||'')}"><div class="sth"${can?` data-code="${esc(x.id)}" data-on="${body?1:''}" title="${body?'Hide':'Show'} the command"`:''}><b>${esc(verb)}</b>${file?`<span class="stf">${esc(file)}</span>`:x.what?`<span class="std">${esc(x.what)}</span>`:'<span class="std"></span>'}`
+  let h=`<div class="step s-${cls} ${can&&!body?'shut':''}" data-step="${esc(x.id||'')}"><div class="sth"${can?` data-code="${esc(x.id)}" data-on="${body?1:''}" data-tip="${body?'Hide':'Show'} the command"`:''}><b>${esc(verb)}</b>${file?`<span class="stf">${esc(file)}</span>`:x.what?`<span class="std">${esc(x.what)}</span>`:'<span class="std"></span>'}`
     +tags.map(([c,t])=>`<span class="stt ${c}">${t}</span>`).join('')+limit
-    +(run&&x.task?`<button class="stx" data-stopstep="${esc(x.id)}" title="Stop this command; the agent carries on">${svg('stop')}Stop</button>`:'')+time+'</div>';
+    +(run&&x.task?`<button class="stx" data-stopstep="${esc(x.id)}" data-tip="Stop this command" data-tip-d="The agent carries on.">${svg('stop')}Stop</button>`:'')+time+'</div>';
   if(inner)return h+'</div>';                     // an agent's own steps: one line each
   if(x.cmd&&body){const n=x.cmd.split('\n').length,clip=n>4&&!V.cmdAll.has(x.id);
-    h+=`<div class="cbk ${clip?'clip':''}"><pre><span class="p">$ </span>${shellHtml(x.cmd)}</pre><button class="cpy" data-copy="${esc(x.id)}" title="Copy">${svg('copy')}</button>${clip?`<button class="more" data-cmdall="${esc(x.id)}">Show all ${n} lines</button>`:''}</div>`}
+    h+=`<div class="cbk ${clip?'clip':''}"><pre><span class="p">$ </span>${shellHtml(x.cmd)}</pre><button class="cpy" data-copy="${esc(x.id)}" data-tip="Copy">${svg('copy')}</button>${clip?`<button class="more" data-cmdall="${esc(x.id)}">Show all ${n} lines</button>`:''}</div>`}
   if(x.out&&body){const open=V.outOpen.has(x.id),failed=x.state==='bad'||x.state==='stop';
     const full=open?(x.cut?V.outFull.get(x.id):x.out):failed?x.out.split('\n').slice(-3).join('\n'):null;
     if(open||failed)h+=`<div class="cbo ${failed?'bad':''} ${open?'open':''}"><pre>${full==null?'Loading…':esc(full)}</pre></div>`;
@@ -352,6 +352,16 @@ function patch(root,parts){
 }
 const KIND={page:'Page',image:'Image',video:'Video',pdf:'PDF'};
 const RANK={video:0,page:1,pdf:2,image:3};
+// Pictures you sent show as small cards in your message, from the copy the service keeps; one opens large.
+const picUrl=id=>`/api/picture/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
+const picCards=list=>list.length?`<div class="mpics ${list.length===1?'one':''}">${list.map(p=>`<button class="mpic" data-tip="${esc(p.name||'Pasted picture')}"><img src="${esc(p.url)}" loading="lazy" alt=""></button>`).join('')}</div>`:'';
+let lbx=null;   // the pictures of the message open in the large view, and which one shows
+function showPic(){const {list,i}=lbx;$('lbxImg').src=list[i];$('lbxN').textContent=list.length>1?`${i+1} of ${list.length}`:'';$('lbxN').hidden=list.length<2;$('lbx').hidden=false}
+function closePic(){lbx=null;$('lbx').hidden=true;$('lbxImg').removeAttribute('src')}
+$('lbx').onclick=closePic;
+document.addEventListener('keydown',e=>{if(!lbx)return;e.stopPropagation();
+  if(e.key==='Escape'){e.preventDefault();closePic()}
+  else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&lbx.list.length>1){e.preventDefault();lbx.i=(lbx.i+(e.key==='ArrowRight'?1:-1)+lbx.list.length)%lbx.list.length;showPic()}},true);
 const fileUrl=f=>`${A.preview}/${V.sel}/${f.path.split(/[\\/]/).filter(Boolean).map(encodeURIComponent).join('/')}?v=${f.v}`;
 const folderOf=f=>{const cwd=selSession()?.cwd||'',d=f.path.slice(0,f.path.lastIndexOf('/'));return d===cwd?'':d.startsWith(cwd+'/')?d.slice(cwd.length+1):d.replace(/^\/home\/[^/]+/,'~')};
 const SANDBOX='allow-scripts allow-forms allow-same-origin allow-popups allow-modals';
@@ -367,7 +377,7 @@ function workCards(it,latest){
   // the ones that get a picture: a video or page before the stills that went into it
   const cards=it.files.filter(f=>latest.get(f.path)===it.n).sort((a,b)=>(RANK[a.kind]??9)-(RANK[b.kind]??9)),old=it.files.filter(f=>latest.get(f.path)!==it.n);
   const show=cards.slice(0,3),rest=cards.length-show.length;
-  return `<div>${show.length?`<div class="hero n${show.length}">${show.map(f=>`<button class="hc" data-open="${esc(f.path)}" title="${esc(f.path)}"><span class="ht k-${f.kind}">${thumb(f)}</span><span class="cap"><b>${esc(f.name)}</b><span>${KIND[f.kind]}${folderOf(f)?' · '+esc(folderOf(f)):''}</span></span></button>`).join('')}</div>`:''}${rest>0?`<button class="morework" data-open="${esc(cards[3].path)}">and ${rest} more</button>`:''}${old.length?`<div class="sknote wk">${svg('file')}<span>Worked on ${old.map(f=>`<button data-open="${esc(f.path)}" title="${esc(f.path)}">${esc(f.name)}</button>`).join(', ')}</span></div>`:''}</div>`;
+  return `<div>${show.length?`<div class="hero n${show.length}">${show.map(f=>`<button class="hc" data-open="${esc(f.path)}" data-tip-path="${esc(f.path)}"><span class="ht k-${f.kind}">${thumb(f)}</span><span class="cap"><b>${esc(f.name)}</b><span>${KIND[f.kind]}${folderOf(f)?' · '+esc(folderOf(f)):''}</span></span></button>`).join('')}</div>`:''}${rest>0?`<button class="morework" data-open="${esc(cards[3].path)}">and ${rest} more</button>`:''}${old.length?`<div class="sknote wk">${svg('file')}<span>Worked on ${old.map(f=>`<button data-open="${esc(f.path)}" data-tip-path="${esc(f.path)}">${esc(f.name)}</button>`).join(', ')}</span></div>`:''}</div>`;
 }
 function fitThumbs(){document.querySelectorAll('.ht iframe').forEach(f=>{const w=f.parentNode.clientWidth,h=f.parentNode.clientHeight;if(!w)return;const k=w/1280;f.style.transform=`scale(${k})`;f.style.height=Math.ceil(h/k)+'px'})}
 new ResizeObserver(fitThumbs).observe($('thread'));
@@ -375,7 +385,7 @@ function renderThread(){
   const nw=V.isNew,t=$('thread');
   // What you just sent is shown straight away, and gives way to the real message when the service reports it.
   if(V.pend&&V.items.filter(it=>it.kind==='user').length>=V.pend.need)V.pend=null;
-  const pd=V.pend,pend=pd?[['pend',`<div class="me">${esc(pd.text)}${pd.files.length?`<div class="matt">${pd.files.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`]].concat(V.run?.status==='working'&&!nw&&!V.loading?[]:[['pendw','<div class="w1"><i class="spin"></i><span class="shim">Starting</span></div>']]):[];
+  const pd=V.pend,pend=pd?[['pend',`<div class="me">${picCards(pd.pics||[])}${esc(pd.text)}${pd.files.length?`<div class="matt">${pd.files.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`]].concat(V.run?.status==='working'&&!nw&&!V.loading?[]:[['pendw','<div class="w1"><i class="spin"></i><span class="shim">Starting</span></div>']]):[];
   t.hidden=nw&&!pd;$('hello').hidden=!nw||!!pd||isHome();
   if(nw&&!pd){renderRail();return}   // a session not started has no turns: clear the rail left by the one you were reading
   if(nw||V.loading){patch(t,pd?pend:[['loading','<div class="loading">Opening…</div>']]);renderRail();return}
@@ -388,7 +398,7 @@ function renderThread(){
   const going=busy(),since=going?V.items.findLastIndex(x=>x.kind==='done'||x.kind==='note'||x.kind==='user'):Infinity;
   for(const [ix,it] of V.items.entries()){
     let h='';
-    if(it.kind==='user'){const at=(it.images?[`${it.images} image${it.images>1?'s':''}`]:[]).concat(it.files||[]);h=`<div class="me">${it.skill?`<span class="chip">${svg('zap')}${esc(it.skill)}</span>`:''}${esc(it.text)}${at.length?`<div class="matt">${at.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`}
+    if(it.kind==='user'){const at=it.files||[];h=`<div class="me">${picCards((it.pics||[]).map(p=>({url:picUrl(p.id),name:p.name})))}${it.skill?`<span class="chip">${svg('zap')}${esc(it.skill)}</span>`:''}${esc(it.text)}${at.length?`<div class="matt">${at.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`}
     else if(it.kind==='assistant')h=`<div class="ai">${md(it.text)}</div>`;
     else if(it.kind==='tools'){const live=ix>since,open=V.openTools.has(it.n)||live&&!V.shutTools.has(it.n);
       h=`<div class="acts ${open?'open':''}"><button class="act" data-tools="${it.n}" data-on="${open?1:''}">${svg('chev-r')}${esc(toolSummary(it.tools))}${stepsTime(it.tools,live)}</button>${open?`<div class="steps">${it.tools.map(x=>stepHtml(x,live)).join('')}</div>`:''}</div>`}
@@ -419,8 +429,8 @@ function renderPanel(){
   if(!open){if(staged){staged=null;$('stage').innerHTML=''}$('menu').hidden=true;return}
   $('pName').textContent=f.name;$('pCnt').textContent=V.work.length>1?`${i+1} of ${V.work.length}`:'';
   $('pPrev').disabled=$('pNext').disabled=V.work.length<2;
-  $('menu').innerHTML=V.work.map(w=>`<button data-pick="${esc(w.path)}" class="${w.path===V.pv?'cur':''}" title="${esc(w.path)}"><b>${esc(w.name)}</b><span>${w.ts?ago(Date.parse(w.ts)/1000)==='now'?'just now':ago(Date.parse(w.ts)/1000)+' ago':''}</span></button>`).join('');
-  $('bFull').dataset.i=V.full?'min':'max';$('bFull').title=V.full?'Show conversation':'Full width';$('bFull').classList.toggle('on',V.full);hydrate($('bFull').parentNode);
+  $('menu').innerHTML=V.work.map(w=>`<button data-pick="${esc(w.path)}" class="${w.path===V.pv?'cur':''}" data-tip-path="${esc(w.path)}"><b>${esc(w.name)}</b><span>${w.ts?ago(Date.parse(w.ts)/1000)==='now'?'just now':ago(Date.parse(w.ts)/1000)+' ago':''}</span></button>`).join('');
+  $('bFull').dataset.i=V.full?'min':'max';$('bFull').dataset.tip=V.full?'Show conversation':'Full width';$('bFull').classList.toggle('on',V.full);hydrate($('bFull').parentNode);
   const key=f.path+'|'+f.v;
   if(key!==staged){staged=key;$('stage').innerHTML=stageOf(f)}
   fitThumbs();
@@ -434,7 +444,7 @@ const stageOf=f=>{const u=esc(fileUrl(f));
 /* ---------- long conversations: a rail of turns beside the thread, and an outline in the side panel ---------- */
 function turnsOf(){const out=[];let cur=null;
   for(const it of V.items){
-    if(it.kind==='user'){cur={n:it.n,ts:it.ts,text:((it.skill?'/'+it.skill+' ':'')+(it.text||'')).trim()||(it.files?.length||it.images?'Attachment':'…'),body:'',files:0,cmds:0,ms:0,asked:it.asked||0};out.push(cur)}
+    if(it.kind==='user'){cur={n:it.n,ts:it.ts,text:((it.skill?'/'+it.skill+' ':'')+(it.text||'')).trim()||(it.files?.length||it.pics?.length?'Attachment':'…'),body:'',files:0,cmds:0,ms:0,asked:it.asked||0};out.push(cur)}
     else if(cur){if(it.kind==='tools')for(const t of it.tools){if(t.group==='edit')cur.files++;else if(t.group==='run')cur.cmds++}
       else if(it.kind==='done')cur.ms+=it.ms||0;else if(it.kind==='assistant')cur.body+=' '+it.text}}
   return out}
@@ -568,7 +578,8 @@ $('bPreview').onclick=()=>{if(V.pv){V.pv=null;V.full=false;renderPanel();return}
 $('bExt').onclick=()=>{const f=V.work.find(w=>w.path===V.pv);if(f)window.open(fileUrl(f),'_blank','noopener')};
 // A turn's new files go to the top of the list; a file written again replaces its older entry.
 function addWork(files){const has=new Set(files.map(f=>f.path));V.work=files.concat(V.work.filter(f=>!has.has(f.path)))}
-$('thread').onclick=e=>{const o=e.target.closest('[data-open]');if(o){showWork(o.dataset.open,!V.run?.pending);return}
+$('thread').onclick=e=>{const pc=e.target.closest('.mpic');if(pc){const all=[...pc.parentNode.querySelectorAll('.mpic')];lbx={list:all.map(b=>b.querySelector('img').src),i:all.indexOf(pc)};hideTip();showPic();return}
+  const o=e.target.closest('[data-open]');if(o){showWork(o.dataset.open,!V.run?.pending);return}
   const t=e.target.closest('[data-copy],[data-cmdall],[data-out],[data-stopstep],[data-suball],[data-repall],[data-code]');
   if(t){const d=t.dataset;
     if(d.code){if(getSelection().toString())return;if(d.on){V.codeOpen.delete(d.code);V.codeShut.add(d.code)}else{V.codeOpen.add(d.code);V.codeShut.delete(d.code)}renderThread();return}
@@ -611,7 +622,7 @@ function paintJump(){
   if(!away){J.unseen.clear();J.below=false}
   else{const edge=s.scrollTop+s.clientHeight-24;for(const n of [...J.unseen]){const el=$('thread').querySelector(`[data-k="i${n}"]`);if(!el||el.offsetTop<edge)J.unseen.delete(n)}}
   const n=J.unseen.size,h=!away?'':n+(J.below?'b':'');if(b._h===h)return;b._h=h;
-  b.hidden=!away;b.className='jump'+(n?' new':'');b.title=n?'Go to the first new message':'Go to the latest';
+  b.hidden=!away;b.className='jump'+(n?' new':'');b.dataset.tip=n?'Go to the first new message':'Go to the latest';
   b.innerHTML=svg('arrow-down')+(n?`<span>${plural(n,'new message')}</span>`:J.below?'<i class="dot"></i>':'')}
 // Where a click on the mark is heading: the first new reply at the top of the view, or the end. For a few seconds it
 // keeps heading there while the thread changes under it (a reply growing, steps closing, a card taking room), so the
@@ -636,7 +647,7 @@ function renderChanges(){
   $('chT').textContent=c.count===1?'1 changed file':`${c.count} changed files`;
   $('chS').innerHTML=c.count?`<span class="plus">+${c.add}</span> <span class="minus">−${c.del}</span>`:'';
   $('files').hidden=!c.count;
-  $('files').innerHTML=c.files.map(f=>`<button class="file ${f.path===V.chFile?'on':''}" data-file="${esc(f.path)}" title="${esc(f.path)}"><b>${esc(f.path)}</b>${f.kind==='changed'?'':`<i>${f.kind}</i>`}${f.binary?'':`<span class="plus">+${f.add}</span><span class="minus">−${f.del}</span>`}</button>`).join('')
+  $('files').innerHTML=c.files.map(f=>`<button class="file ${f.path===V.chFile?'on':''}" data-file="${esc(f.path)}" data-tip-path="${esc(f.path)}"><b>${esc(f.path)}</b>${f.kind==='changed'?'':`<i>${f.kind}</i>`}${f.binary?'':`<span class="plus">+${f.add}</span><span class="minus">−${f.del}</span>`}</button>`).join('')
     +(c.count>c.files.length?`<div class="note">and ${c.count-c.files.length} more</div>`:'');
   const d=V.chDiff;
   $('diff').innerHTML=!c.count?'<div class="note">Nothing has changed since the last commit.</div>'
@@ -730,8 +741,8 @@ function renderAtt(){
   // Pictures and files share one strip above the text, so a long file name never crowds the buttons below it.
   const im=V.att.filter(a=>a.pic),fl=V.att.filter(a=>!a.pic);
   $('atts').hidden=!V.att.length;
-  $('atts').innerHTML=im.map(a=>`<span class="ath" data-tip="${esc(a.path||a.name)}" style="background-image:url(${a.url})"><button data-rm="${a.id}" title="Remove">${svg('x')}</button></span>`).join('')
-    +fl.map(a=>`<span class="fch"${a.path?` data-tip="${esc(a.path)}"`:''}>${svg('file')}<span class="fn">${esc(a.name)}</span><button data-rm="${a.id}" title="Remove">${svg('x')}</button></span>`).join('');
+  $('atts').innerHTML=im.map(a=>`<span class="ath" data-tip="${esc(a.path||a.name)}" style="background-image:url(${a.url})"><button data-rm="${a.id}" data-tip="Remove">${svg('x')}</button></span>`).join('')
+    +fl.map(a=>`<span class="fch"${a.path?` data-tip="${esc(a.path)}"`:''}>${svg('file')}<span class="fn">${esc(a.name)}</span><button data-rm="${a.id}" data-tip="Remove">${svg('x')}</button></span>`).join('');
 }
 function clearAtt(){for(const a of V.att)if(a.url)URL.revokeObjectURL(a.url);V.att=[];renderAtt()}
 $('bAttach').onclick=()=>$('filePick').click();
@@ -752,7 +763,7 @@ async function hear(audio,preview){
   const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Dictation did not work.');return j;
 }
 // The waveform and timer sit beside whichever mic is recording: the message box's, or the one in a card's answer field.
-const MICTIP='Dictate: click to start and stop, or hold while you speak';
+const MICTIP='Dictate',MICD='Click to start and stop, or hold while you speak.';
 function voiceLook(){
   const on=!!R&&!R.done,inCard=R?.target==='qText',qm=$('qcard').querySelector('[data-mic]'),v=$('voice');
   if(inCard&&qm){if(v.nextSibling!==qm)qm.before(v)}else if(v.nextSibling!==$('mic'))$('mic').before(v);
@@ -760,7 +771,7 @@ function voiceLook(){
   $('box').classList.toggle('rec',on&&!inCard);qm?.parentNode.classList.toggle('rec',on&&inCard);
   for(const [b,mine] of [[$('mic'),!inCard],[qm,inCard]]){if(!b)continue;const live=!!R&&mine;
     b.classList.toggle('live',live&&on);b.classList.toggle('wait',live&&R.done);const i=live&&on?'stop':'mic';
-    if(b.dataset.i!==i){b.dataset.i=i;hydrate(b.parentNode)}b.dataset.tip=live&&on?'Stop and keep the text':MICTIP}
+    if(b.dataset.i!==i){b.dataset.i=i;hydrate(b.parentNode)}b.dataset.tip=live&&on?'Stop and keep the text':MICTIP;b.dataset.tipD=live&&on?'':MICD;b.dataset.tipK='Ctrl Shift Space'}
 }
 // Recording never waits for the speech model: what you say meanwhile is kept and written down once it is in memory.
 async function watchModel(r){
@@ -820,6 +831,9 @@ addEventListener('pointerup',()=>{if(!micHeld)return;micHeld=false;if(Date.now()
 $('mic').onclick=e=>{if(e.detail===0)R?stopVoice():startVoice()};   // from the keyboard
 $('vCancel').onclick=()=>stopVoice(false);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&R&&!R.done){e.stopPropagation();stopVoice(false)}},true);
+// Ctrl+Shift+Space starts and stops dictation from anywhere, into the answer field when that is where you are typing.
+document.addEventListener('keydown',e=>{if(!(e.ctrlKey&&e.shiftKey&&!e.altKey&&!e.metaKey&&e.code==='Space')||e.repeat||e.target.closest?.('#xt,#lgx'))return;
+  e.preventDefault();if(R){if(!R.done)stopVoice();return}startVoice(document.activeElement?.id==='qText'?'qText':'input')});
 
 /* ---------- settings dialog ---------- */
 const STABS=['General','Profiles','Skills','About','Home'],SORDER=[0,4,1,2,3],LANGS=['english','latvian','russian','german','french','spanish','italian','polish','lithuanian','estonian','finnish','swedish','ukrainian'];
@@ -1099,29 +1113,54 @@ const autoCompact=()=>{if(innerWidth<1000)return true;
   return (innerWidth-268)*(innerWidth<=1100?.46:.54)<480};     // a side panel must leave the conversation room to read
 function fitSide(){const c=sidePref==='compact'||(sidePref==='auto'&&autoCompact());if(c===V.compact)return;
   V.compact=c;document.querySelector('.app').classList.toggle('compact',c);hideTip();
-  $('bSide').dataset.tip=c?'Show the full sidebar (Ctrl+B)':'Compact sidebar (Ctrl+B)';$('newBtn').dataset.tip=c?'Home':'';renderList()}
+  $('bSide').dataset.tip=c?'Show the full sidebar':'Compact sidebar';$('newBtn').dataset.tip=c?'Home':'';renderList()}
 function setSide(p){sidePref=p;localStorage.setItem('ww.side',p);fitSide()}
 const toggleSide=()=>{const a=autoCompact();setSide(V.compact?(a?'full':'auto'):(a?'auto':'compact'))};
 $('bSide').onclick=toggleSide;
 addEventListener('resize',fitSide);
-document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&!e.altKey&&e.key.toLowerCase()==='b'&&!e.target.closest?.('#xt,#lgx')){e.preventDefault();toggleSide()}});
-
-/* ---------- hover notes: a fixed-width box that always stays inside the window ---------- */
-let tipFor=null,tipTimer;
-function hideTip(){clearTimeout(tipTimer);tipFor=null;$('tip').hidden=true}
-function showTip(el){
-  const t=$('tip');if(!el.isConnected||!el.dataset.tip){hideTip();return}
-  t.textContent=el.dataset.tip;t.hidden=false;
-  const r=el.getBoundingClientRect(),w=t.offsetWidth,h=t.offsetHeight,pad=8;
-  if(el.closest('.app.compact .side')){t.style.left=(r.right+8)+'px';t.style.top=Math.max(pad,Math.min(r.top+(r.height-h)/2,innerHeight-h-pad))+'px';return}   // beside the strip, not over it
-  const top=r.bottom+6+h<=innerHeight-pad?r.bottom+6:Math.max(pad,r.top-6-h);
-  t.style.left=Math.max(pad,Math.min(r.left,innerWidth-w-pad))+'px';t.style.top=top+'px';
+/* ---------- hover notes: one box for every element with something to say, always inside the window ----------
+   data-tip      what it is, on one line where it fits
+   data-tip-d    a dim line under it, for what the name alone does not say
+   data-tip-k    its keys, shown as keys ("Ctrl K")
+   data-tip-path a file's path, its folder dimmed
+   data-tip-full the element's own text, only while it is cut off */
+const TIPSEL='[data-tip],[data-tip-path],[data-tip-full]';
+let tipFor=null,tipTimer,tipShown=false,tipWarm=0;
+function hideTip(){clearTimeout(tipTimer);if(tipShown)tipWarm=Date.now()+500;tipShown=false;tipFor=null;const t=$('tip');t.hidden=true;t.classList.remove('on')}
+function tipHtml(el){
+  const d=el.dataset;
+  if(d.tipPath){const i=d.tipPath.lastIndexOf('/')+1;return['path',`<span class="dir">${esc(d.tipPath.slice(0,i))}</span>${esc(d.tipPath.slice(i))}`]}
+  if(d.tipFull!=null)return el.scrollWidth>el.clientWidth+1&&el.textContent.trim()?['',esc(el.textContent)]:null;
+  if(!d.tip)return null;
+  const k=d.tipK?`<span class="tipk">${d.tipK.split(' ').map(x=>`<kbd>${esc(x)}</kbd>`).join('')}</span>`:'';
+  return[d.tipD?'note':'',`<span class="tipn">${esc(d.tip)}${k}</span>${d.tipD?`<span class="tipd">${esc(d.tipD)}</span>`:''}`];
 }
+function showTip(el){
+  const t=$('tip'),c=el.isConnected&&tipHtml(el);if(!c){hideTip();return}
+  t.className='tip2 '+c[0];t.innerHTML=c[1];t.hidden=false;tipShown=true;
+  const r=el.getBoundingClientRect(),w=t.offsetWidth,h=t.offsetHeight,pad=8;
+  if(el.closest('.app.compact .side')){t.style.left=(r.right+8)+'px';t.style.top=Math.max(pad,Math.min(r.top+(r.height-h)/2,innerHeight-h-pad))+'px'}   // beside the strip, not over it
+  else{const below=r.bottom+6+h<=innerHeight-pad;t.classList.toggle('up',!below);
+    t.style.left=Math.max(pad,Math.min(r.left+r.width/2-w/2,innerWidth-w-pad))+'px';t.style.top=(below?r.bottom+6:Math.max(pad,r.top-6-h))+'px'}
+  requestAnimationFrame(()=>{if(tipShown&&tipFor===el)t.classList.add('on')});
+}
+// The first note waits a moment; moving straight on to the next one shows it at once.
 document.addEventListener('mouseover',e=>{
-  const el=e.target.closest?.('[data-tip]');if(el===tipFor)return;
-  hideTip();if(!el)return;tipFor=el;tipTimer=setTimeout(()=>{if(tipFor===el)showTip(el)},450);
+  const el=e.target.closest?.(TIPSEL);if(el===tipFor)return;
+  hideTip();if(!el)return;tipFor=el;tipTimer=setTimeout(()=>{if(tipFor===el)showTip(el)},Date.now()<tipWarm?0:450);
 });
-for(const ev of ['pointerdown','keydown','wheel','blur'])addEventListener(ev,hideTip,true);
+for(const ev of ['pointerdown','keydown','wheel','blur'])addEventListener(ev,()=>{hideTip();tipWarm=0},true);
+
+/* ---------- single keys: B the sidebar, N the preview, M its full width, ← → through what the session made; never while you type ---------- */
+const typing=t=>!!t?.closest?.('input,textarea,select,[contenteditable=""],[contenteditable="true"],#xt,#lgx');
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||e.repeat||typing(e.target)||!$('sdim').hidden||!$('fdim').hidden)return;
+  const k=e.key.toLowerCase();
+  if(k==='b'){e.preventDefault();toggleSide()}
+  else if(k==='n'&&(V.pv||!$('bPreview').hidden)){e.preventDefault();$('bPreview').click()}
+  else if(k==='m'&&V.pv){e.preventDefault();$('bFull').click()}
+  else if((k==='arrowleft'||k==='arrowright')&&V.pv&&V.work.length>1&&!e.target.closest?.('video,audio')){e.preventDefault();$(k==='arrowleft'?'pPrev':'pNext').click()}   // a playing video keeps its own arrows
+});
 
 /* ---------- terminal view: the session's real Claude Code terminal ---------- */
 const view=()=>V.isNew||!V.sel?'chat':V.views[V.sel]||'chat';
@@ -1168,7 +1207,7 @@ $('tnote').onclick=e=>{
 
 /* ---------- cards: questions, permissions, plans, stops ---------- */
 const KEY={enter:'<kbd>↵</kbd>',esc:'<kbd>Esc</kbd>'};
-const typeBox=ph=>`<div class="qtype"><input id="qText" placeholder="${esc(ph)}" autocomplete="off"><button class="ib qmic" data-mic data-tip="${MICTIP}" data-i="mic"></button></div>`;
+const typeBox=ph=>`<div class="qtype"><input id="qText" placeholder="${esc(ph)}" autocomplete="off"><button class="ib qmic" data-mic data-tip="${MICTIP}" data-tip-d="${MICD}" data-tip-k="Ctrl Shift Space" data-i="mic"></button></div>`;
 function renderCard(){
   // A card you have just answered, or a stop you have just continued from, goes at once; the service catches up.
   const c=$('qcard'),p=answered()?null:V.run?.pending,st=!V.pend&&V.dismissed!==stopKey()?heldStop():null;
@@ -1188,7 +1227,7 @@ function renderCard(){
       <div class="qbody"><div class="qq">${esc(q.question)}${q.multiSelect?'<small>Pick any</small>':''}</div>
       ${optionsHtml(q,set)}</div>
       ${typeBox('Or type your own answer…')}
-      <div class="qfoot"><button class="qbtn" data-act="stop" data-tip="Stop the turn without answering (Esc)">Stop</button><span class="gap"></span>${i>0?'<button class="qbtn" data-act="back">Back</button>':''}${i<qs.length-1?'<button class="qbtn" data-act="skip">Skip</button>':''}<button class="qbtn pri" data-act="${i<qs.length-1?'next':'send'}">${i<qs.length-1?'Next':qs.length>1?'Send answers':'Send answer'} ${KEY.enter}</button></div>`);
+      <div class="qfoot"><button class="qbtn" data-act="stop" data-tip="Stop the turn without answering" data-tip-k="Esc">Stop</button><span class="gap"></span>${i>0?'<button class="qbtn" data-act="back">Back</button>':''}${i<qs.length-1?'<button class="qbtn" data-act="skip">Skip</button>':''}<button class="qbtn pri" data-act="${i<qs.length-1?'next':'send'}">${i<qs.length-1?'Next':qs.length>1?'Send answers':'Send answer'} ${KEY.enter}</button></div>`);
     if($('qText').value!==(V.q.typed[i]||''))$('qText').value=V.q.typed[i]||'';qState(set);
   }else if(p.kind==='plan'){
     put(`<div class="steps2"><span class="qhd">Plan</span></div><div class="qq">Start on this plan?</div>
@@ -1197,7 +1236,7 @@ function renderCard(){
   }else if(p.kind==='unknown'){
     put(`<div class="steps2"><span class="qhd">Needs you</span></div><div class="qq">The agent is asking something this app can't show properly yet</div>
       <div class="qbody"><div class="why">Here is what could be read from it:</div><div class="raw">${esc(JSON.stringify(p.input,null,1).slice(0,900))}</div></div>${typeBox('Answer in your own words…')}
-      <div class="qfoot"><button class="qbtn" data-act="term" title="Stops this turn. Ask the agent to put the question again there.">Continue in the terminal</button><span class="gap"></span><button class="qbtn pri" data-act="deny">Send</button></div>`);
+      <div class="qfoot"><button class="qbtn" data-act="term" data-tip="Stops this turn" data-tip-d="Ask the agent to put the question again there.">Continue in the terminal</button><span class="gap"></span><button class="qbtn pri" data-act="deny">Send</button></div>`);
   }else{
     const inp=p.input||{},edit=/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(p.toolName);
     let detail;
@@ -1308,7 +1347,7 @@ $('qcard').onclick=async e=>{
 // While the agent works the button stops it, unless you have written something: then it sends that to the agent.
 const isWorking=()=>!V.isNew&&!!V.run&&(V.run.status==='working'||V.run.status==='waiting');
 const hasDraft=()=>!!$('input').value.trim()||V.att.length>0;
-function fitSend(){const stop=isWorking()&&!hasDraft(),b=$('send');if(b.dataset.i===(stop?'stop':'up'))return;b.dataset.i=stop?'stop':'up';b.title=stop?'Stop':'Send';hydrate(b.parentNode)}
+function fitSend(){const stop=isWorking()&&!hasDraft(),b=$('send');if(b.dataset.i===(stop?'stop':'up'))return;b.dataset.i=stop?'stop':'up';b.dataset.tip=stop?'Stop':'Send';b.dataset.tipK=stop?'':'Enter';hydrate(b.parentNode)}
 const curProfile=()=>V.isNew?V.profile:V.pick[V.sel]?.profile||V.run?.profile||selSession()?.profile;
 const lvl=v=>v>=100?'hot':v>=80?'mid':'';
 let limT;
@@ -1334,7 +1373,6 @@ function renderComposer(){
   $('limNote').className='limnote '+lvl(top);
   // One row, always: the meter beside it already shows which limit is full, so the note only says when it clears, and it is the part that gives way when the row is tight.
   $('limNote').textContent=top>=100?(rs?`${full7?'7d':'5h'} limit clears in ${until(rs)}`:`${full7?'7d':'5h'} limit reached`):top>=80&&rs?`resets in ${until(rs)}`:'';
-  $('limNote').title=$('limNote').textContent;
   const eff=EFFORTS.find(m=>m[0]===shownEffort())?.[1]||shownEffort();
   $('pModel').innerHTML=`<span>${shownModel()?esc(modelName(shownModel())):'Default model'}${eff&&eff!=='Default'?`<span class="eff"> <i>·</i> ${esc(eff)}</span>`:''}</span>${svg('chev-d','cv')}`;
   const md=shownMode();
@@ -1424,8 +1462,8 @@ $('send').onclick=async()=>{
   const b=$('send');
   if(R?.target==='input'){                                                 // still dictating: the message goes once it is written down
     if(b.classList.contains('queued'))return;
-    const r=R,fin=stopVoice();b.classList.add('queued');b.title='Sends once it is written down';$('vtime').textContent='Writing it down, then sending…';
-    await fin;b.classList.remove('queued');b.title=b.dataset.i==='stop'?'Stop':'Send';fitSend();
+    const r=R,fin=stopVoice();b.classList.add('queued');b.dataset.tip='Sends once it is written down';b.dataset.tipK='';$('vtime').textContent='Writing it down, then sending…';
+    await fin;b.classList.remove('queued');b.dataset.tip=b.dataset.i==='stop'?'Stop':'Send';b.dataset.tipK=b.dataset.i==='stop'?'':'Enter';fitSend();
     if(r.err)return;                                                       // part of it was not written down: look it over first
   }else if(isWorking()&&!hasDraft()){try{await api(`sessions/${V.sel}/stop`,{})}catch(e){oops(e.message)}return}
   const text=input.value.trim();if(!text&&!V.att.length)return;
@@ -1453,7 +1491,7 @@ function bgRow(t,sel){
     :t.last||(t.kind==='monitor'?'No events yet':t.cmd||'');
   return `<div class="tk ${sel?'on':''}" data-task="${esc(t.id)}"><span class="tki ${t.kind}">${svg(BGI[t.kind]||'term')}</span>
     <div class="tk1"><b>${esc(t.name)}</b>${t.sub?`<span class="stt n">${esc(t.sub)}</span>`:''}${fresh?'<span class="stt mo">new event</span>':''}</div>
-    <div class="tka">${clockEl(t.start,'go')}<button class="mini" data-bg${a}="${esc(t.id)}">${l}</button><button class="mini stop" data-bgstop="${esc(t.tool||t.id)}" title="Stop it">${svg('stop')}Stop</button></div>
+    <div class="tka">${clockEl(t.start,'go')}<button class="mini" data-bg${a}="${esc(t.id)}">${l}</button><button class="mini stop" data-bgstop="${esc(t.tool||t.id)}" data-tip="Stop it">${svg('stop')}Stop</button></div>
     <div class="tk2 ${t.kind==='agent'?'':'mono'}">${esc(sub)}</div></div>`;
 }
 function renderTray(){
@@ -1539,7 +1577,7 @@ async function sendText(text,asProfile,attachments){
   const later=isWorking()&&V.run?.status==='working';   // the agent is busy: it waits in the queue, where it can still be changed
   const tmp=later?{id:'tmp'+(++qSeq),text,files:(attachments||[]).map(a=>a.name),tmp:true}:null;
   if(later){V.qLocal.push(tmp);renderQueue()}
-  else V.pend={text,files:(attachments||[]).map(a=>a.name),need:(V.isNew?0:V.items.filter(it=>it.kind==='user').length)+1+(V.pend&&!V.isNew?1:0)};resetJump();render();toBottom(true);
+  else V.pend={text,files:(attachments||[]).filter(a=>!(PICS.includes(a.type)&&a.data)).map(a=>a.name),pics:(attachments||[]).filter(a=>PICS.includes(a.type)&&a.data).map(a=>({url:`data:${a.type};base64,${a.data}`,name:a.path?a.name:null})),need:(V.isNew?0:V.items.filter(it=>it.kind==='user').length)+1+(V.pend&&!V.isNew?1:0)};resetJump();render();toBottom(true);
   try{
     if(V.isNew){
       if(!V.project){oops('Pick a project first.');return false}
@@ -1636,7 +1674,7 @@ const madeLately=()=>{const l=H.d?.made||[];if(!A.preview)return null;
   if(!H.d)return hsec('made','Made lately','',`<div class="hshots">${[0,1,2,3].map(()=>`<div class="hc hshot"><span class="ht">${skl('100%','fill')}</span><span class="cap">${skl('60%','ln')}</span></div>`).join('')}</div>`);
   if(!l.length)return null;
   return hsec('made','Made lately','',`<div class="hshots">${l.slice(0,8).map(f=>{const s=A.sessions.find(x=>x.id===f.sessionId);
-    return `<button class="hc hshot" data-made="${esc(f.path)}" data-sid="${f.sessionId}" title="${esc(f.path)}"><span class="ht k-${f.kind}">${H.fresh?thumb(f,homeUrl(f)):''}</span><span class="cap"><b>${esc(f.name)}</b><span>${esc(s?.title||'')}</span></span></button>`}).join('')}</div>`)};
+    return `<button class="hc hshot" data-made="${esc(f.path)}" data-sid="${f.sessionId}" data-tip-path="${esc(f.path)}"><span class="ht k-${f.kind}">${H.fresh?thumb(f,homeUrl(f)):''}</span><span class="cap"><b>${esc(f.name)}</b><span>${esc(s?.title||'')}</span></span></button>`}).join('')}</div>`)};
 
 function perDay(turns,days,back=0){const base=dayStart(days-1+back),out=new Array(days).fill(0);for(const t of turns){const i=Math.floor((t-base)/86400);if(i>=0&&i<days)out[i]++}return out}
 // Projects: each one worked on this month, newest first, with where its latest session was left.
@@ -1783,7 +1821,7 @@ function renderHead(){
   w.dataset.tip=pl.cwd||s.cwd;
   w.innerHTML=(pl.worktree?`<span class="pl1">${svg('tree')}<b>${esc(pl.worktree)}</b><small>worktree</small></span>${pl.branch&&pl.branch!==pl.worktree?`<span>${svg('branch')}${esc(pl.branch)}</span>`:''}`
     :pl.branch?`<span class="pl1">${svg('branch')}<b>${esc(pl.branch)}</b></span>`:'')+`<span class="${pl.worktree||pl.branch?'plp':'pl1'}">${pl.worktree||pl.branch?'':svg('folder')}${pl.worktree||pl.branch?esc(pl.project||s.project):`<b>${esc(pl.project||s.project)}</b>`}</span>`;
-  const d=$('bDone');d.innerHTML=`${svg(s.done?'refresh':'check')}<span>${s.done?'Back to inbox':'Done'}</span>`;d.dataset.tip=s.done?'Bring this session back into the sidebar':'Mark done: it leaves the sidebar, and search still finds it (Ctrl+D)';
+  const d=$('bDone');d.innerHTML=`${svg(s.done?'refresh':'check')}<span>${s.done?'Back to inbox':'Done'}</span>`;d.dataset.tip=s.done?'Bring this session back into the sidebar':'Mark done';d.dataset.tipD=s.done?'':'It leaves the sidebar, and search still finds it.';d.dataset.tipK=s.done?'':'Ctrl D';
 }
 function render(){
   const nw=V.isNew,s=selSession();

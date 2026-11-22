@@ -12,12 +12,12 @@
 <body data-token="__TOKEN__">
 <div class="app">
   <aside class="side">
-    <div class="side-head"><span class="st">Sessions</span><button class="envl" id="envl" hidden></button><span class="gap"></span><button class="ib" id="bFind" data-tip="Find a session, in the inbox or done (Ctrl+K)" data-i="search"></button><button class="ib" id="bSide" data-tip="Compact sidebar (Ctrl+B)" data-i="panel"></button></div>
+    <div class="side-head"><span class="st">Sessions</span><button class="envl" id="envl" hidden></button><span class="gap"></span><button class="ib" id="bFind" data-tip="Find a session" data-tip-d="In the inbox or done." data-tip-k="Ctrl K" data-i="search"></button><button class="ib" id="bSide" data-tip="Compact sidebar" data-tip-k="B" data-i="panel"></button></div>
     <button class="newb" id="newBtn"><i data-i="home"></i><span>Home</span></button>
     <div class="prog" id="prog"></div>
     <div class="list" id="list"></div>
     <div class="upd" id="upd" hidden></div>
-    <div class="side-foot"><button class="hist" id="bHist"></button><button class="ib" id="bGear" title="Settings" data-i="cog"></button></div>
+    <div class="side-foot"><button class="hist" id="bHist"></button><button class="ib" id="bGear" data-tip="Settings" data-i="cog"></button></div>
   </aside>
 
   <section class="main" id="main">
@@ -28,14 +28,14 @@
       <div class="dseg" id="dseg" hidden></div>
       <div id="tools" style="display:flex;align-items:center;gap:4px">
         <div class="seg" id="seg">
-          <button class="ib on" id="vChat" title="Chat" data-i="chat"></button>
-          <button class="ib" id="vTerm" title="Terminal" data-i="term"></button>
+          <button class="ib on" id="vChat" data-tip="Chat" data-i="chat"></button>
+          <button class="ib" id="vTerm" data-tip="Terminal" data-i="term"></button>
         </div>
         <button class="ib" id="bOutline" data-tip="Conversation outline" data-i="list"></button>
-        <button class="ib wide" id="bPreview" data-tip="Preview what the agent made" hidden><i data-i="monitor"></i><span id="pvN"></span></button>
+        <button class="ib wide" id="bPreview" data-tip="Preview what the agent made" data-tip-k="N" hidden><i data-i="monitor"></i><span id="pvN"></span></button>
         <button class="ib wide" id="bTasks" data-tip="Running in the background" hidden><i data-i="pulse"></i><span id="tkN"></span></button>
-        <button class="ib wide" id="bChanges" title="Changes" hidden><i data-i="diff"></i><span id="chN"></span></button>
-        <button class="ib" id="bCode" title="Open in VS Code" data-i="code"></button>
+        <button class="ib wide" id="bChanges" data-tip="Changes" hidden><i data-i="diff"></i><span id="chN"></span></button>
+        <button class="ib" id="bCode" data-tip="Open in VS Code" data-i="code"></button>
         <button class="doneb" id="bDone"></button>
       </div>
     </header>
@@ -58,18 +58,18 @@
             <div class="atts" id="atts" hidden></div>
             <textarea id="input" rows="1" placeholder="Message the agent…"></textarea>
             <div class="row">
-              <button class="ib" id="bAttach" title="Attach files" data-i="clip"></button><button class="ib" id="bSkills" data-tip="Skills: what the agent can be asked to do here. Typing / opens the same list." data-i="slash"></button><input type="file" id="filePick" multiple hidden>
+              <button class="ib" id="bAttach" data-tip="Attach files" data-i="clip"></button><button class="ib" id="bSkills" data-tip="Skills" data-tip-d="What the agent can be asked to do here. Typing / opens the same list." data-tip-k="/" data-i="slash"></button><input type="file" id="filePick" multiple hidden>
               <span class="slot" id="sProject" hidden>
-                <button class="pick" id="pProject" title="Project"></button>
+                <button class="pick" id="pProject" data-tip="Project"></button>
                 <div class="pop" id="mProject" hidden></div>
               </span>
               <span class="gap"></span>
-              <span class="voice" id="voice" hidden><button class="ib" id="vCancel" data-tip="Discard this dictation (Esc)" data-i="x"></button><span class="wave" id="wave"></span><span id="vtime">0:00</span></span>
-              <button class="ib" id="mic" data-tip="Dictate: click to start and stop, or hold while you speak" data-i="mic"></button>
-              <button class="send" id="send" title="Send" data-i="up"></button>
+              <span class="voice" id="voice" hidden><button class="ib" id="vCancel" data-tip="Discard this dictation" data-tip-k="Esc" data-i="x"></button><span class="wave" id="wave"></span><span id="vtime">0:00</span></span>
+              <button class="ib" id="mic" data-tip="Dictate" data-tip-d="Click to start and stop, or hold while you speak." data-tip-k="Ctrl Shift Space" data-i="mic"></button>
+              <button class="send" id="send" data-tip="Send" data-tip-k="Enter" data-i="up"></button>
             </div>
           </div>
-          <div class="support"><span class="slot" id="sProfile"><button class="pick" id="pProfile"></button><div class="pop" id="mProfile" hidden></div></span><span class="lim" id="lim"></span><span class="gap"></span><span class="limnote" id="limNote"></span><span class="slot"><button class="pick mode" id="pMode"></button><div class="pop sm r" id="mMode" hidden></div></span><span class="slot"><button class="pick" id="pModel" data-tip="Model and effort for your next message"></button><div class="pop sm r" id="mModel" hidden></div></span><span class="slot" id="sCtx"><button class="ctx" id="pCtx"></button><div class="pop sm r" id="mCtx" hidden></div></span></div>
+          <div class="support"><span class="slot" id="sProfile"><button class="pick" id="pProfile"></button><div class="pop" id="mProfile" hidden></div></span><span class="lim" id="lim"></span><span class="gap"></span><span class="limnote" id="limNote" data-tip-full></span><span class="slot"><button class="pick mode" id="pMode"></button><div class="pop sm r" id="mMode" hidden></div></span><span class="slot"><button class="pick" id="pModel" data-tip="Model and effort for your next message"></button><div class="pop sm r" id="mModel" hidden></div></span><span class="slot" id="sCtx"><button class="ctx" id="pCtx"></button><div class="pop sm r" id="mCtx" hidden></div></span></div>
           <div class="oops" id="oops" hidden></div>
         </div>
       </section>
@@ -77,13 +77,13 @@
       <aside class="panel" id="panel" hidden>
         <div class="pwrap" id="pvw">
         <div class="phead">
-          <button class="ib" id="pPrev" title="Previous" data-i="chev-l"></button><button class="ib" id="pNext" title="Next" data-i="chev-r"></button>
-          <button class="ptitle" id="moreBtn" title="All work from this session"><span id="pName"></span><i data-i="chev-d"></i></button><span class="pcnt" id="pCnt"></span>
+          <button class="ib" id="pPrev" data-tip="Previous" data-tip-k="←" data-i="chev-l"></button><button class="ib" id="pNext" data-tip="Next" data-tip-k="→" data-i="chev-r"></button>
+          <button class="ptitle" id="moreBtn" data-tip="All work from this session"><span id="pName"></span><i data-i="chev-d"></i></button><span class="pcnt" id="pCnt"></span>
           <span class="gap"></span>
-          <button class="ib" id="bRefresh" title="Refresh" data-i="refresh"></button>
-          <button class="ib" id="bFull" title="Full width" data-i="max"></button>
-          <button class="ib" id="bExt" title="Open in browser" data-i="ext"></button>
-          <button class="ib" id="bClose" title="Close" data-i="x"></button>
+          <button class="ib" id="bRefresh" data-tip="Refresh" data-i="refresh"></button>
+          <button class="ib" id="bFull" data-tip="Full width" data-tip-k="M" data-i="max"></button>
+          <button class="ib" id="bExt" data-tip="Open in browser" data-i="ext"></button>
+          <button class="ib" id="bClose" data-tip="Close" data-tip-k="N" data-i="x"></button>
           <div class="menu" id="menu" hidden></div>
         </div>
         <div class="stage" id="stage"></div>
@@ -104,7 +104,7 @@
           <pre class="tkout mono" id="tkOut"></pre>
         </div>
         <div class="pwrap" id="chw" hidden>
-          <div class="phead"><span class="ctitle" id="chT"></span><span class="cstat mono" id="chS"></span><span class="gap"></span><button class="ib" id="chRefresh" title="Refresh" data-i="refresh"></button><button class="ib" id="chClose" title="Close" data-i="x"></button></div>
+          <div class="phead"><span class="ctitle" id="chT"></span><span class="cstat mono" id="chS"></span><span class="gap"></span><button class="ib" id="chRefresh" data-tip="Refresh" data-i="refresh"></button><button class="ib" id="chClose" data-tip="Close" data-i="x"></button></div>
           <div class="files mono" id="files"></div>
           <div class="diff mono" id="diff"></div>
         </div>
@@ -115,9 +115,10 @@
 <div class="fmenu emenu" id="emenu" hidden></div>
 <div class="fmenu" id="gmenu" hidden style="width:220px"><button id="gUpd" hidden></button><button id="gTheme">Theme<span id="gThemeV"></span></button><button id="gProf">Default profile<span id="gProfV"></span></button><button id="gLogin" hidden>Open at login<span id="gLoginV"></span></button><hr><button id="gAll">All settings…</button></div>
 <div class="fmenu" id="smenu" hidden></div>
-<div class="dim" id="sdim" hidden><div class="dlg" id="dlg"><div class="dtabs"><h3>Settings</h3><div id="stabs"></div></div><div class="pg"><button class="ib cls" id="dClose" title="Close" data-i="x"></button><div id="spage"></div></div></div></div>
+<div class="dim" id="sdim" hidden><div class="dlg" id="dlg"><div class="dtabs"><h3>Settings</h3><div id="stabs"></div></div><div class="pg"><button class="ib cls" id="dClose" data-tip="Close" data-tip-k="Esc" data-i="x"></button><div id="spage"></div></div></div></div>
 <div class="dim" id="fdim" hidden><div class="finder"><label class="find"><i data-i="search"></i><input id="fQ" placeholder="Find a session" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></label><div class="flist" id="fList"></div></div></div>
 <div class="tip2" id="tip" hidden></div>
+<div class="dim lbx" id="lbx" hidden><img id="lbxImg" alt=""><span class="lbxn" id="lbxN" hidden></span></div>
 <div class="dim" id="dim" hidden><div class="ask" id="ask"></div></div>
 <script src="vendor/xterm.js"></script>
 <script src="vendor/addon-fit.js"></script>

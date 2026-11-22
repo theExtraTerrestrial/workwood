@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 39: one tooltip everywhere, one Settings size</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root{color-scheme:dark;--accent:hsl(168 62% 62%);--warn:#ffb955;--go:#4fd6a4;--hot:#f0706a}
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0c0e;color:#e8e9ec;font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;padding-bottom:80px}
+  [data-theme=light] body{background:#e9eaee;color:#1d1e22}
+  button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:14px;padding:24px 0 2px}.top h1{font-size:17px;margin:0;flex:1}
+  .top button,.ctl button{background:#1d1f23;color:#c9ccd2;padding:6px 11px;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  [data-theme=light] .top button,[data-theme=light] .ctl button{background:#fff;color:#333;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+  .ctl button.on{background:hsl(168 40% 22%);color:#fff;box-shadow:inset 0 0 0 1.5px var(--accent)}
+  [data-theme=light] .ctl button.on{background:hsl(168 45% 88%);color:#123}
+  .intro{color:#b9bcc3;max-width:720px;margin:6px 0 16px;font-size:14px}[data-theme=light] .intro{color:#555}
+  .ctl{display:flex;gap:8px;align-items:center;color:#8f939b;font-size:12px;margin:8px 0}
+  h3{font-size:15px;margin:38px 0 6px}
+  .notes{color:#b9bcc3;max-width:760px;font-size:13.5px}.notes li{margin:6px 0}.notes b{color:#fff}
+  [data-theme=light] .notes{color:#444}[data-theme=light] .notes b{color:#000}
+  details{margin-top:26px;color:#b9bcc3;max-width:900px}[data-theme=light] details{color:#444}
+  summary{cursor:pointer;font-weight:650}
+  code{font-family:"JetBrains Mono",monospace;font-size:11.5px}
+
+  /* the app's palette */
+  .app{--bg:#18191c;--side:#1a1b1e;--surface:#222428;--pop:#232529;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.14);
+    --text:#f0f1f3;--dim:#a6aab2;--faint:#6d717a;--shadow:0 12px 34px rgba(0,0,0,.45);color:var(--text)}
+  [data-theme=light] .app{--bg:#fbfbfc;--side:#f2f3f5;--surface:#fff;--pop:#fff;--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.14);
+    --text:#1b1c1f;--dim:#5b5f68;--faint:#8d919a;--shadow:0 12px 34px rgba(0,0,0,.16)}
+
+  /* ===== audit ===== */
+  .audit{display:flex;gap:40px;align-items:center;margin:14px 0 4px}
+  .big{font-size:46px;font-weight:750;line-height:1;letter-spacing:-.02em}.big small{display:block;font-size:12px;font-weight:600;color:#8f939b;letter-spacing:0;margin-top:6px}
+  .big.bad{color:var(--hot)}
+  .bars{flex:1;max-width:520px;display:grid;grid-template-columns:150px 1fr 24px;gap:5px 10px;align-items:center;font-size:12px;color:#a6aab2}
+  [data-theme=light] .bars{color:#555}
+  .bars i{display:block;height:6px;border-radius:3px;background:var(--hot);opacity:.8}.bars span:nth-child(3n){text-align:right;font-variant-numeric:tabular-nums}
+
+  /* ===== the stage ===== */
+  .stage{border-radius:14px;background:var(--bg);box-shadow:0 30px 90px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.1);padding:0;overflow:hidden;position:relative}
+  [data-theme=light] .stage{box-shadow:0 30px 90px rgba(0,0,0,.16),0 0 0 1px rgba(0,0,0,.1)}
+  .bar{height:52px;display:flex;align-items:center;gap:4px;padding:0 16px;border-bottom:1px solid var(--line);font-weight:600;font-size:14px}
+  .gap{flex:1}
+  .ib{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--dim)}
+  .ib:hover{background:rgba(128,128,128,.14);color:var(--text)}
+  .ib svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .seg2{display:flex;background:rgba(128,128,128,.14);border-radius:9px;padding:2px;margin-right:8px}.seg2 .ib{width:28px;height:26px;border-radius:7px}.seg2 .ib.on{background:var(--surface);color:var(--text)}
+  .body{display:grid;grid-template-columns:1fr 300px;min-height:300px}
+  .chat{padding:22px 26px;display:flex;flex-direction:column;gap:14px}
+  .step{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dim);padding:7px 10px;border-radius:9px;background:rgba(128,128,128,.07);width:max-content}
+  .step b{color:var(--text);font-weight:600}
+  .step .mini{font-size:11.5px;padding:2px 8px;border-radius:6px;background:rgba(128,128,128,.14)}
+  .cmp{margin-top:auto;border:1px solid var(--line2);border-radius:14px;padding:10px 12px;background:var(--surface)}
+  .cmp .ph{color:var(--faint);font-size:13px;padding:2px 2px 12px}
+  .cmp .row{display:flex;align-items:center;gap:2px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 6px;border-radius:7px;color:var(--dim)}.chip:hover{background:rgba(128,128,128,.12);color:var(--text)}
+  .send{width:30px;height:30px;border-radius:50%;background:var(--text);color:var(--bg);display:grid;place-items:center}.send svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2}
+  .files{border-left:1px solid var(--line);padding:14px 12px}
+  .files .h{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--faint);margin:2px 6px 8px}
+  .file{display:block;width:100%;text-align:left;padding:6px 8px;border-radius:8px;font:12px "JetBrains Mono",monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
+  .file:hover{background:rgba(128,128,128,.1);color:var(--text)}
+  .lnote{font-size:11.5px;color:var(--warn);max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;margin-top:10px;padding:0 2px}
+
+  /* ===== the proposed tooltip ===== */
+  .tt{position:fixed;z-index:50;pointer-events:none;background:var(--pop);color:var(--text);border:1px solid var(--line2);border-radius:8px;box-shadow:var(--shadow);
+    font-size:12px;line-height:1.45;padding:5px 9px;opacity:0;transform:translateY(-2px);transition:opacity .08s,transform .08s;max-width:min(280px,calc(100vw - 16px))}
+  .tt.on{opacity:1;transform:none}
+  .tt.up{transform:translateY(2px)}.tt.up.on{transform:none}
+  .tt .l{display:flex;align-items:center;gap:10px;white-space:nowrap}
+  .tt .k{display:inline-flex;gap:3px;margin-left:auto}
+  .tt kbd{font:600 10.5px "Manrope",sans-serif;color:var(--dim);border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:0 5px;line-height:16px;min-width:18px;text-align:center}
+  .tt.note{padding:8px 11px 9px}
+  .tt.note .l{font-weight:650}
+  .tt.note .d{color:var(--dim);margin-top:2px;white-space:normal}
+  .tt.path{font:11.5px/1.5 "JetBrains Mono",monospace;max-width:min(460px,calc(100vw - 16px));overflow-wrap:anywhere}
+  .tt.path .dir{color:var(--faint)}
+  .tt.full{white-space:normal}
+  /* what it looks like today, for the Now toggle */
+  .tt.old{width:300px;max-width:300px;border-radius:10px;padding:9px 12px;font-size:12px;transform:none;transition:none}
+  .tt.native{background:#2b2b2b;color:#ddd;border:1px solid #767676;border-radius:0;box-shadow:1px 1px 3px rgba(0,0,0,.4);font:12px "Segoe UI",system-ui,sans-serif;padding:2px 6px;transform:none;transition:none;max-width:none;white-space:nowrap}
+  [data-theme=light] .tt.native{background:#f7f7f7;color:#111}
+
+  .kinds{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px}
+  .kind{border-radius:12px;background:var(--bg);box-shadow:0 0 0 1px var(--line2);padding:18px 18px 16px;min-height:150px;display:flex;flex-direction:column}
+  .kind .demo{flex:1;display:flex;align-items:flex-start;justify-content:center;padding-top:6px}
+  .kind .demo .tt{position:static;opacity:1;transform:none}
+  .kind .cap{font-size:12px;color:var(--dim);margin-top:14px}.kind .cap b{color:var(--text);display:block;font-size:13px}
+
+  /* ===== settings ===== */
+  .sstage{height:620px;border-radius:14px;background:radial-gradient(1200px 500px at 30% 0%,rgba(140,110,60,.25),transparent),var(--bg);display:grid;place-items:center;
+    box-shadow:0 30px 90px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.1)}
+  [data-theme=light] .sstage{box-shadow:0 30px 90px rgba(0,0,0,.16),0 0 0 1px rgba(0,0,0,.1)}
+  .dlg{background:var(--pop);border:1px solid var(--line2);border-radius:16px;box-shadow:var(--shadow);display:flex;overflow:hidden;transition:width .18s,height .18s;position:relative}
+  .dtabs{width:160px;flex:none;border-right:1px solid var(--line);padding:12px 8px}
+  .dtabs h4{font-size:13px;font-weight:650;margin:2px 8px 10px}
+  .dtabs button{display:block;width:100%;text-align:left;padding:6px 9px;border-radius:8px;color:var(--dim);font-size:12.5px}
+  .dtabs button:hover{background:rgba(128,128,128,.1)}.dtabs button.on{background:rgba(128,128,128,.16);color:var(--text)}
+  .pg{flex:1;min-width:0;padding:10px 12px;overflow:auto;display:flex;flex-direction:column;scrollbar-width:thin}
+  .pgh{font-size:13px;font-weight:650;padding:4px 8px 6px}
+  .cls{position:absolute;right:10px;top:10px}
+  .srow{display:flex;align-items:center;gap:10px;padding:10px 8px;font-size:12.5px;border-bottom:1px solid var(--line)}.srow:last-child{border:0}
+  .srow>span:first-child{flex:1}.srow small{display:block;color:var(--faint);font-size:11.5px}
+  .sval{height:26px;padding:0 9px;border-radius:8px;background:rgba(128,128,128,.15);font-size:12px;display:inline-flex;align-items:center;white-space:nowrap}
+  .stog{width:30px;height:17px;border-radius:9px;background:rgba(128,128,128,.35);position:relative;flex:none}.stog::after{content:"";position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#fff}
+  .pfx{display:flex;gap:14px;flex:1;min-height:0;padding:0 2px 2px 8px}
+  .pfl{width:178px;flex:none;display:flex;flex-direction:column;gap:1px}
+  .pfr{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:9px}.pfr.on{background:rgba(128,128,128,.16)}
+  .pav{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff;flex:none}.pav.big{width:38px;height:38px;font-size:15px}
+  .pfn{line-height:1.3;min-width:0}.pfn b{display:block;font-size:12.5px}.pfn small{font-size:11px;color:var(--faint)}
+  .pfadd{margin-top:6px;padding:5px;border-radius:9px;border:1px dashed var(--line2);color:var(--dim);font-size:12px;text-align:center}
+  .pfd{flex:1;min-width:0;border-left:1px solid var(--line);padding-left:14px;display:flex;flex-direction:column;gap:12px}
+  .pfh{display:flex;align-items:center;gap:11px}.pfh b{font-size:14px}.pfh small{display:block;font-size:11.5px;color:var(--faint)}
+  .pkv{display:grid;grid-template-columns:96px 1fr;gap:9px 12px;align-items:center;font-size:12.5px}.pkv>span:nth-child(odd){color:var(--faint);font-size:12px}
+  .meter{display:inline-flex;align-items:center;gap:6px;font-size:12px}.meter .t{width:56px;height:4px;border-radius:2px;background:rgba(128,128,128,.2);overflow:hidden}.meter .t i{display:block;height:100%;background:var(--dim)}
+  .pacts{display:flex;gap:6px;margin-top:auto;padding-top:10px;border-top:1px solid var(--line)}
+  .dim2{color:var(--faint);font-size:11.5px}
+  .size{font:11px "JetBrains Mono",monospace;color:#8f939b;text-align:center;margin-top:8px}
+</style></head><body><div class="wrap app">
+<div class="top"><h1>Round 39 · One tooltip everywhere, one Settings size</h1><button id="theme">Light</button></div>
+<p class="intro">Every hover note goes through Workwood's own tooltip, never the browser's. The tooltip changes too: it fits its text, sits centred on what you're pointing at, and shows keyboard shortcuts as keys.</p>
+
+<div class="audit">
+  <div class="big bad">33<small>still use the browser's tooltip</small></div>
+  <div class="big">49<small>already use the designed one</small></div>
+  <div class="bars" id="bars"></div>
+</div>
+
+<h3>Hover anything</h3>
+<div class="ctl"><button class="on" data-mode="new">Proposed</button><button data-mode="now">Now</button><span>Now: grey boxes are the browser's own tooltip, the wide ones are today's designed tooltip.</span></div>
+<div class="stage" id="stage">
+  <div class="bar">Refactor the alpha parser<span class="gap"></span>
+    <div class="seg2"><button class="ib on" data-t="Chat" data-old="native" data-i="chat"></button><button class="ib" data-t="Terminal" data-old="native" data-i="term"></button></div>
+    <button class="ib" data-t="Conversation outline" data-i="list"></button>
+    <button class="ib" data-t="Changes" data-old="native" data-i="diff"></button>
+    <button class="ib" data-t="Open in VS Code" data-old="native" data-i="code"></button>
+    <button class="ib" data-t="Settings" data-old="native" data-i="cog"></button>
+  </div>
+  <div class="body">
+    <div class="chat">
+      <div class="step" data-t="Show the command" data-old="native"><b>Ran</b> npm test <span class="mini" data-t="Stop this command; the agent carries on" data-old="native">Stop</span><button class="ib" style="width:24px;height:24px" data-t="Copy" data-old="native" data-i="copy"></button></div>
+      <div class="cmp">
+        <div class="ph">Describe the task…</div>
+        <div class="row">
+          <button class="ib" data-t="Attach files" data-old="native" data-i="clip"></button>
+          <button class="ib" data-t="Skills" data-d="What the agent can be asked to do here. Typing / opens the same list." data-k="/" data-i="slash"></button>
+          <span class="chip" data-t="Project" data-old="native">alpha</span>
+          <span class="gap"></span>
+          <button class="ib" data-t="Dictate" data-d="Click to start and stop, or hold while you speak." data-i="mic"></button>
+          <button class="send" data-t="Send" data-k="Enter" data-old="native"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+        </div>
+      </div>
+      <span class="lnote" data-full data-old="native">5-hour limit at 92% · resets in 28 minutes, then this profile goes on where it stopped</span>
+    </div>
+    <div class="files">
+      <div class="h">CHANGED</div>
+      <button class="file" data-path="service/home.mjs" data-old="native">service/home.mjs</button>
+      <button class="file" data-path="ui/components/sidebar/session-list-renderer.js" data-old="native">ui/components/sidebar/session-list-renderer.js</button>
+      <button class="file" data-path="tests/fixtures/transcripts/long-running-session-with-many-turns.jsonl" data-old="native">tests/fixtures/transcripts/long-running-session-with-many-turns.jsonl</button>
+      <div class="h" style="margin-top:16px">SIDEBAR</div>
+      <button class="ib" data-t="Find a session" data-d="In the inbox or done." data-k="Ctrl K" data-i="search"></button>
+    </div>
+  </div>
+</div>
+
+<div class="kinds">
+  <div class="kind"><div class="demo"><div class="tt"><div class="l">Find a session<span class="k"><kbd>Ctrl</kbd><kbd>K</kbd></span></div></div></div>
+    <div class="cap"><b>Label</b>Icons and buttons. Hugs its text, one line. A shortcut shows as keys.</div></div>
+  <div class="kind"><div class="demo"><div class="tt note"><div class="l">Skills<span class="k"><kbd>/</kbd></span></div><div class="d">What the agent can be asked to do here. Typing / opens the same list.</div></div></div>
+    <div class="cap"><b>Note</b>When there's more to say. A bold name, then a dim line; at most 280 px wide.</div></div>
+  <div class="kind"><div class="demo"><div class="tt path"><span class="dir">ui/components/sidebar/</span>session-list-renderer.js</div></div>
+    <div class="cap"><b>Full text</b>Paths and clipped text. Shows only when the text is cut off. Paths are in mono, with the folder dimmed.</div></div>
+</div>
+
+<ul class="notes" style="margin-top:22px">
+  <li><b>Where.</b> Centred under the element, 6 px away. Above it when there's no room below (the composer), beside the compact sidebar as today.</li>
+  <li><b>When.</b> 450 ms the first time. Then, while you move along a toolbar, the next one shows at once. Clicking, typing or scrolling hides it.</li>
+  <li><b>One at a time.</b> Today a Remove × inside an attachment shows both tooltips at once; the innermost one wins.</li>
+</ul>
+
+<h3>Settings: one size for every tab</h3>
+<div class="ctl"><button class="on" data-smode="new">Proposed</button><button data-smode="now">Now</button><span>Switch tabs. Now: Profiles grows to 760 × 540, while General is too short and scrolls at 640 × 420.</span></div>
+<div class="sstage"><div><div class="dlg" id="dlg"><div class="dtabs" id="dtabs"></div><div class="pg" id="spg"></div><button class="ib cls" data-t="Close" data-k="Esc" data-i="x"></button></div><div class="size" id="size"></div></div></div>
+<ul class="notes" style="margin-top:18px">
+  <li><b>760 × 540 for every tab</b>, capped at 92% of the window. Profiles fits as it is; General stops scrolling.</li>
+  <li>The tab list, title and close button stay where they are when you switch tabs.</li>
+</ul>
+
+<h3>Open questions</h3>
+<ol class="notes">
+  <li>Shortcuts as keys: only where a shortcut exists today (Find, sidebar, Mark done, Send, Esc to close), or should I add a few, such as for Terminal and Changes?</li>
+  <li>Full-text tips for paths: show them on every file row, or only when the name is actually cut off?</li>
+  <li>Settings at 760 × 540: or keep 640 × 420 and fit Profiles into it, with a narrower list and General scrolling?</li>
+</ol>
+
+<details><summary>All 33, and how they change</summary>
+<ul class="notes" id="list"></ul>
+</details>
+<details><summary>Under the hood</summary>
+<ul class="notes">
+  <li>One attribute set: <code>data-tip</code> is the name, <code>data-tip-d</code> is the dim line, <code>data-tip-k</code> holds the keys. Today's “(Ctrl+K)” suffixes move into <code>data-tip-k</code>. <code>data-tip-full</code> means: show the element's own text when it's clipped (<code>scrollWidth &gt; clientWidth</code>); for paths, the folder is dimmed.</li>
+  <li><code>showTip()</code> in <code>ui/app.js</code> builds the box from those, measures it, centres it, then clamps it to the window. The fixed <code>width:300px</code> on <code>.tip2</code> becomes a <code>max-width</code>.</li>
+  <li>The 4 places that set <code>.title</code> in code (Full width, Jump, Send/Stop, limit note) set <code>dataset.tip</code> instead. The 3 <code>&lt;iframe title&gt;</code> stay: they name the frame for screen readers and show no tooltip.</li>
+  <li>A test fails on any <code>title=</code> or <code>.title=</code> left in <code>ui/</code> outside an iframe, so this doesn't creep back.</li>
+  <li>Settings: drop the <code>.dlg:has(.pfx)</code> resize and the dead 680 × 460 rule; <code>.dlg</code> becomes <code>760×540</code> with <code>max-height:92vh</code>.</li>
+</ul>
+</details>
+<div class="tt" id="tt"></div>
+</div>
+
+<script>
+const I={chat:'<path d="M5 5h14v10H9l-4 4z"/>',term:'<path d="M4 6l5 5-5 5M11 17h9"/>',list:'<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',diff:'<path d="M12 4v8M8 8h8M8 18h8"/>',
+  code:'<path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/>',cog:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/>',copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3"/>',
+  clip:'<path d="M20 11l-8 8a5 5 0 01-7-7l8-8a3.5 3.5 0 015 5l-8 8a2 2 0 01-3-3l7-7"/>',slash:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M14 8l-4 8"/>',mic:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/>',
+  search:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>'};
+const hyd=r=>r.querySelectorAll('[data-i]').forEach(b=>b.innerHTML=`<svg viewBox="0 0 24 24">${I[b.dataset.i]}</svg>`);
+hyd(document);
+
+// ---------- audit ----------
+const AUD=[['Preview pane',7],['Chat steps & cards',6],['Header',5],['File paths',4],['Composer',4],['Changes pane',3],['Attachments',2],['Sidebar',1],['Settings',1]];
+bars.innerHTML=AUD.map(([n,c])=>`<span>${n}</span><span><i style="width:${c/7*100}%"></i></span><span>${c}</span>`).join('');
+const LIST=[
+ ['Header','Settings · Chat · Terminal · Changes · Open in VS Code','Labels'],
+ ['Composer','Attach files · Project · Send / Stop · “Sends once it is written down”','Labels; Send gets Enter'],
+ ['Composer','The limit note under the box','Full text, only when cut off'],
+ ['Preview pane','Previous · Next · All work from this session · Refresh · Full width / Show conversation · Open in browser · Close','Labels; Close gets Esc'],
+ ['Changes pane','Refresh · Close','Labels'],['Changes pane','Each file row','Full text (path)'],
+ ['Settings','Close','Label + Esc'],
+ ['Sidebar','Project group header (its folder)','Full text (path); no longer doubles with “New session in …”'],
+ ['Chat','Show / Hide the command · Stop this command · Copy · Jump to latest / first new · Continue in the terminal · Stop a background task','Labels; Continue in the terminal becomes a note'],
+ ['Attachments','Remove × on images and files','Label; replaces the chip\'s path tip while hovered'],
+ ['File paths','Made-file cards · “Worked on” links · Preview’s file list · Home’s made cards','Full text (path)']];
+list.innerHTML=LIST.map(([a,w,h])=>`<li><b>${a}:</b> ${w} → <i>${h}</i></li>`).join('');
+
+// ---------- tooltip ----------
+let mode='new',tFor=null,tTimer,warmUntil=0,shown=false;
+const tt=document.getElementById('tt');
+function content(el){
+  const k=el.dataset.k?`<span class="k">${el.dataset.k.split(' ').map(x=>`<kbd>${x}</kbd>`).join('')}</span>`:'';
+  if(el.dataset.path!=null){const p=el.dataset.path,i=p.lastIndexOf('/')+1;return['path',`<span class="dir">${p.slice(0,i)}</span>${p.slice(i)}`]}
+  if(el.dataset.full!=null)return['full',el.textContent];
+  if(el.dataset.d)return['note',`<div class="l">${el.dataset.t}${k}</div><div class="d">${el.dataset.d}</div>`];
+  return['',`<div class="l">${el.dataset.t}${k}</div>`];
+}
+function show(el){
+  if(mode==='now'){
+    const txt=el.dataset.path||(el.dataset.full!=null?el.textContent:el.dataset.t+(el.dataset.d?': '+el.dataset.d:'')+(el.dataset.k&&!el.dataset.old?` (${el.dataset.k.replace(' ','+')})`:''));
+    tt.className='tt on '+(el.dataset.old==='native'?'native':'old');tt.textContent=txt;
+    const r=el.getBoundingClientRect();
+    if(el.dataset.old==='native'){tt.style.left=Math.min(lastX+4,innerWidth-tt.offsetWidth-8)+'px';tt.style.top=(lastY+20)+'px'}
+    else{const h=tt.offsetHeight;tt.style.left=Math.max(8,Math.min(r.left,innerWidth-308))+'px';tt.style.top=(r.bottom+6+h<innerHeight-8?r.bottom+6:r.top-6-h)+'px'}
+    return}
+  if(el.dataset.full!=null&&el.scrollWidth<=el.clientWidth)return;
+  const [kind,html]=content(el);tt.className='tt '+kind;tt.innerHTML=html;
+  const r=el.getBoundingClientRect(),w=tt.offsetWidth,h=tt.offsetHeight,pad=8,below=r.bottom+6+h<=innerHeight-pad;
+  tt.style.left=Math.max(pad,Math.min(r.left+r.width/2-w/2,innerWidth-w-pad))+'px';
+  tt.style.top=(below?r.bottom+6:r.top-6-h)+'px';tt.classList.toggle('up',!below);
+  shown=true;requestAnimationFrame(()=>tt.classList.add('on'));
+}
+let lastX=0,lastY=0;
+function hide(){clearTimeout(tTimer);if(shown)warmUntil=Date.now()+500;shown=false;tFor=null;tt.className='tt'}
+document.addEventListener('mousemove',e=>{lastX=e.clientX;lastY=e.clientY});
+document.addEventListener('mouseover',e=>{
+  const el=e.target.closest('[data-t],[data-path],[data-full]');if(el&&el.closest('.kind'))return;if(el===tFor)return;
+  hide();const warm=mode==='new'&&Date.now()<warmUntil;if(!el)return;tFor=el;
+  tTimer=setTimeout(()=>{if(tFor===el)show(el)},warm?0:(mode==='now'&&el.dataset.old==='native'?700:450));
+});
+for(const ev of ['pointerdown','keydown','wheel'])addEventListener(ev,()=>{tFor&&hide();warmUntil=0},true);
+document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('on',x===b))});
+
+// ---------- settings ----------
+const TABS=['General','Home','Profiles','Skills','About'];let tab=2,smode='new';
+const row=(t,d,v)=>`<div class="srow"><span>${t}${d?`<small>${d}</small>`:''}</span>${v}</div>`,tog='<span class="stog"></span>';
+const PAGES={
+ General:()=>`<div class="pgh">General</div>`+row('Theme','','<span class="sval">Dark ⌄</span>')+row('Clear quiet sessions','A session nobody has touched for this long leaves the sidebar. Search still finds it.','<span class="sval">After 7 days ⌄</span>')
+   +row('Offer Bypass mode','A permission mode that never asks before edits or commands.',tog)+row('Continue on another profile at a limit','The session goes on with the profile that has the most room after 5 minutes.',tog)
+   +row('Dictation language','What the mic expects to hear.','<span class="sval">English ⌄</span>')+row('Better dictation','Whisper Large v3 Turbo on your graphics card.','<span class="sval">Download</span>')+row('Project folders','Folders that hold your projects.','<span class="sval">~/workspace</span>'),
+ Home:()=>`<div class="pgh">Home</div>`+row('Background','','<span class="sval">Glow ⌄</span>')+row('Sections','Left off, Limits, Not committed','<span class="sval">Edit</span>'),
+ Profiles:()=>{const p=[['live','live@example.com','hsl(140 45% 45%)'],['full','5-hour limit reached','hsl(20 50% 48%)'],['other','other@example.com','hsl(80 40% 45%)']];
+   return`<div class="pgh">Profiles</div><div class="pfx"><div class="pfl">${p.map(([n,s,c],i)=>`<div class="pfr ${i?'':'on'}"><span class="pav" style="background:${c}">${n[0].toUpperCase()}</span><span class="pfn"><b>${n}</b><small style="${i===1?'color:var(--hot)':''}">${s}</small></span></div>`).join('')}<div class="pfadd">+ Add profile</div></div>
+   <div class="pfd"><div class="pfh"><span class="pav big" style="background:hsl(140 45% 45%)">L</span><div><b>live</b><small>live@example.com · Test</small></div></div>
+   <div class="pkv"><span>Plan</span><span>Pro</span><span>Limits</span><span><span class="meter">5h <span class="t"><i style="width:34%"></i></span>34%</span><br><span class="meter">7d <span class="t"><i style="width:41%"></i></span>41%</span></span>
+   <span>New sessions</span><span>Start on this profile</span><span>Model</span><span><span class="sval">Sonnet 5.5 ⌄</span></span><span>Effort</span><span><span class="sval">High ⌄</span></span><span>Permissions</span><span><span class="sval">Claude Code's choice ⌄</span></span></div>
+   <div class="dim2">Model, effort and permissions are this profile's own Claude Code settings. A project's settings win over them.</div>
+   <div class="pacts"><span class="sval">Sign in again</span><span class="sval" style="background:none">Rename</span><span class="gap"></span><span class="sval" style="background:none;color:var(--hot)">Remove</span></div></div></div>`},
+ Skills:()=>`<div class="pgh">Skills</div>`+['code-review','simplify','run','loop','schedule','init'].map(s=>row('/'+s,'','<span class="dim2">built-in</span>')).join(''),
+ About:()=>`<div class="pgh">About</div>`+row('Workwood','Up to date','<span class="sval">Check</span>')+row('Service','Running on port 7311','')};
+function renderS(){
+  dtabs.innerHTML='<h4>Settings</h4>'+TABS.map((t,i)=>`<button class="${i===tab?'on':''}" data-tab="${i}">${t}</button>`).join('');
+  spg.innerHTML=PAGES[TABS[tab]]();
+  const [w,h]=smode==='new'?[760,540]:TABS[tab]==='Profiles'?[760,540]:[640,420];
+  dlg.style.width=w+'px';dlg.style.height=h+'px';size.textContent=`${w} × ${h}`;
+}
+dtabs.onclick=e=>{const b=e.target.closest('[data-tab]');if(b){tab=+b.dataset.tab;renderS()}};
+document.querySelectorAll('[data-smode]').forEach(b=>b.onclick=()=>{smode=b.dataset.smode;document.querySelectorAll('[data-smode]').forEach(x=>x.classList.toggle('on',x===b));renderS()});
+renderS();
+
+theme.onclick=()=>{const d=document.documentElement,l=d.dataset.theme==='dark';d.dataset.theme=l?'light':'dark';theme.textContent=l?'Dark':'Light'};
+</script>
+</body></html>

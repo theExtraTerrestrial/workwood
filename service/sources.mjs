@@ -465,10 +465,11 @@ export async function takeAttachments(text, list) {
   if (files.length) text += (text ? '\n\n' : '') + 'Attached files:\n' + files.map(f => '- ' + f).join('\n');
   return images.length ? [...(text ? [{ type: 'text', text }] : []), ...images] : text;
 }
-export async function clearOldAttachments(days = 30) {
-  await fs.mkdir(ATTACH_ROOT, { recursive: true }).catch(() => {});
-  let names; try { names = await fs.readdir(ATTACH_ROOT); } catch { return; }
-  for (const n of names) { const d = path.join(ATTACH_ROOT, n); try { if (Date.now() - (await fs.stat(d)).mtimeMs > days * 864e5) await fs.rm(d, { recursive: true, force: true }); } catch {} }
+// Also used for the pictures kept from messages: one gone is written again the next time its transcript is read.
+export async function clearOldAttachments(days = 30, root = ATTACH_ROOT) {
+  await fs.mkdir(root, { recursive: true }).catch(() => {});
+  let names; try { names = await fs.readdir(root); } catch { return; }
+  for (const n of names) { const d = path.join(root, n); try { if (Date.now() - (await fs.stat(d)).mtimeMs > days * 864e5) await fs.rm(d, { recursive: true, force: true }); } catch {} }
 }
 
 // Where each command comes from, for the skills list. Claude Code marks its own; a "plugin:name" is a plugin's;

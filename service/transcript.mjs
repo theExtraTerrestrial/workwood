@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import readline from 'node:readline';
 import path from 'node:path';
 import os from 'node:os';
+import { createHash } from 'node:crypto';
 
 const base = p => (typeof p === 'string' ? path.basename(p) : '');
 const clip = (s, n = 90) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
@@ -127,6 +128,20 @@ export function windowFor(model, used = 0) {
   return /\[1m\]/i.test(model || '') || /^claude-(fable|mythos)-/.test(model || '') || used > 200000 ? 1000000 : 200000;
 }
 
+// A picture in a message you wrote is kept once, named by what is in it, so the window can show it again later
+// without the transcript's base64 travelling with every read. Served by /api/picture/<id>.
+export const PICTURE_ROOT = path.join(os.homedir(), '.cache', 'workwood', 'pictures');
+const PICTURE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
+const PICTURE_NAME = /\.(png|jpe?g|gif|webp)$/i;
+export const PICTURE_ID = /^[0-9a-f]{32}\.(png|jpg|gif|webp)$/;
+function keepPicture(part) {
+  const src = part.source, ext = PICTURE_EXT[src?.media_type];
+  if (src?.type !== 'base64' || !ext || !src.data) return null;
+  const id = createHash('sha256').update(src.data).digest('hex').slice(0, 32) + '.' + ext, file = path.join(PICTURE_ROOT, id);
+  try { if (!fs.existsSync(file)) { fs.mkdirSync(PICTURE_ROOT, { recursive: true }); fs.writeFileSync(file, Buffer.from(src.data, 'base64')); } } catch { return null; }
+  return { id };
+}
+
 export class Builder {
   constructor(seq = 0, cwd = null, { keepOutput = false } = {}) {
     this.items = []; this.context = null; this.lastTool = null; this.seq = seq; this.fresh = new Map(); this.groups = []; this.cwd = cwd; this.named = [];
@@ -237,7 +252,7 @@ export class Builder {
   push(it) { it.n = this.seq++; this.items.push(it); return it; }
   user(content, ts) {
     const parts = typeof content === 'string' ? [{ type: 'text', text: content }] : (content || []);
-    const out = [], images = parts.filter(p => p.type === 'image').length;
+    const out = [], images = parts.filter(p => p.type === 'image').map(keepPicture).filter(Boolean);
     let mine = null;
     const say = (text, skill) => {
       const m = /(?:^|\n+)Attached files:\n((?:- .+\n?)+)$/.exec(text), it = { kind: 'user', text: m ? text.slice(0, m.index) : text, ts };
@@ -256,10 +271,18 @@ export class Builder {
         else if (!isNoise(p.text)) say(p.text);
       }
     }
-    // A picture that is also listed by its path is shown once, by name.
-    const unnamed = images - (mine?.files || []).filter(f => /\.(png|jpe?g|gif|webp)$/i.test(f)).length;
-    if (images && !mine) say('');
-    if (unnamed > 0) mine.images = unnamed;
+    // Pictures show as themselves. One that was also attached by its path is shown once, as a picture with its name
+    // (in the order they were attached); a picture too large to go in the message stays a name only.
+    if (images.length && !mine) say('');
+    if (images.length) {
+      const named = (mine.files || []).filter(f => PICTURE_NAME.test(f));
+      if (named.length && named.length <= images.length) {
+        mine.files = mine.files.filter(f => !PICTURE_NAME.test(f));
+        if (!mine.files.length) delete mine.files;
+        if (named.length === images.length) images.forEach((p, i) => { p.name = named[i]; });
+      }
+      mine.pics = images;
+    }
     return out;
   }
   /** `cwd`: where Claude Code's shell was when the message was saved, which a transcript line records. */

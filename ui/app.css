@@ -131,6 +131,15 @@
   #skl .skr{padding:6px 9px}
   .ath{background-size:cover;background-position:center}
   .box.drop{border-color:var(--accent)}
+  /* pictures you sent: small cards in your message, opened large on a click */
+  .mpics{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}.me .mpics:not(:last-child){margin-bottom:8px}
+  .mpic{width:112px;height:84px;border-radius:10px;overflow:hidden;padding:0;box-shadow:0 0 0 1px var(--line2);background:repeating-conic-gradient(rgba(128,128,128,.10) 0 25%,transparent 0 50%) 0 0/16px 16px;cursor:zoom-in;transition:box-shadow .12s}
+  .mpics.one .mpic{width:176px;height:132px}
+  .mpic:hover{box-shadow:0 0 0 1.5px var(--faint)}
+  .mpic img{width:100%;height:100%;object-fit:cover;display:block}
+  .lbx{z-index:70;background:rgba(0,0,0,.72);cursor:zoom-out}
+  .lbx img{max-width:92vw;max-height:86vh;border-radius:10px;box-shadow:var(--shadow);background:repeating-conic-gradient(rgba(128,128,128,.14) 0 25%,#fff 0 50%) 0 0/16px 16px}
+  .lbxn{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);font-size:12px;color:#fff;background:rgba(0,0,0,.5);padding:3px 10px;border-radius:10px}
   .matt{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}.me .matt:not(:first-child){margin-top:8px}
   .matt .fch{padding-right:8px;white-space:nowrap}
   #vCancel{width:24px;height:24px;margin-right:-4px}#vCancel svg{width:13px;height:13px}
@@ -138,7 +147,7 @@
   #mic{margin-right:4px}#mic.wait{opacity:.5;pointer-events:none}
   .wave i{animation:none;transition:transform .08s}
   .qfoot [data-act=stop]{color:var(--dim)}
-  .dlg{height:460px;width:680px}.dlg .pg{display:flex;flex-direction:column}#spage{flex:1;min-height:0;display:flex;flex-direction:column}
+  .dlg .pg{display:flex;flex-direction:column}#spage{flex:1;min-height:0;display:flex;flex-direction:column}
   .fmenu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
   select.sval{border:0;color:var(--text);font:inherit;font-size:12px;outline:0;cursor:pointer;max-width:180px}select.sval option{background:var(--pop);color:var(--text)}
   button.sval:hover,select.sval:hover{background:rgba(128,128,128,.24)}
@@ -170,7 +179,15 @@
   .app.compact .sess.sel{width:51px;margin:2px 0 2px 7px;justify-content:flex-start}
   .app.compact .side-foot{flex-direction:column;padding:8px 0 10px}
   .app.compact .newb{width:34px;flex:none;padding:0;gap:0;font-size:0}
-  .tip2{position:fixed;z-index:60;width:300px;max-width:calc(100vw - 16px);box-sizing:border-box;background:var(--pop);border:1px solid var(--line2);border-radius:10px;box-shadow:var(--shadow);padding:9px 12px;font-size:12px;line-height:1.5;color:var(--text);pointer-events:none;overflow-wrap:anywhere;max-height:60vh;overflow:hidden}
+  /* hover notes (design/round39.html): fit their text, centred on what they explain; a name, a dim line, keys */
+  .tip2{position:fixed;z-index:60;width:max-content;max-width:min(280px,calc(100vw - 16px));box-sizing:border-box;background:var(--pop);border:1px solid var(--line2);border-radius:8px;box-shadow:var(--shadow);padding:5px 9px;font-size:12px;line-height:1.45;color:var(--text);pointer-events:none;overflow-wrap:anywhere;max-height:60vh;overflow:hidden;opacity:0;transform:translateY(-2px);transition:opacity .08s,transform .08s}
+  .tip2.up{transform:translateY(2px)}.tip2.on{opacity:1;transform:none}
+  .tip2 .tipn{display:flex;align-items:baseline;gap:10px}
+  .tip2 .tipk{display:inline-flex;gap:3px;margin-left:auto;flex:none}
+  .tip2 kbd{font-family:inherit;font-size:10.5px;font-weight:600;line-height:16px;color:var(--dim);border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:0 5px;min-width:18px;text-align:center}
+  .tip2.note{padding:8px 11px 9px}.tip2.note .tipn{font-weight:600}
+  .tip2 .tipd{display:block;color:var(--dim);margin-top:2px}
+  .tip2.path{max-width:min(460px,calc(100vw - 16px));font-family:"Cascadia Code","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;font-size:11.5px}.tip2.path .dir{color:var(--faint)}
   .tip2[hidden]{display:none}
   .skf{flex:none;padding:10px 16px;margin:0}
   #skl .skr .src{margin-left:6px}
@@ -583,7 +600,7 @@
   .fch button:hover{background:rgba(128,128,128,.22);color:var(--text)}.fch button svg{width:10px;height:10px}
   .dim{position:fixed;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:40}
   .dim[hidden]{display:none}
-  .dlg{width:640px;height:420px;max-width:92vw;background:var(--pop);border:1px solid var(--line2);border-radius:16px;box-shadow:var(--shadow);display:flex;overflow:hidden}
+  .dlg{width:760px;height:540px;max-width:92vw;max-height:92vh;background:var(--pop);border:1px solid var(--line2);border-radius:16px;box-shadow:var(--shadow);display:flex;overflow:hidden}
   .dlg .dtabs{width:160px;flex:none;border-right:1px solid var(--line);padding:12px 8px}
   .dlg .dtabs h3{font-size:13px;font-weight:600;margin:2px 8px 10px}
   .dlg .dtabs button{display:block;width:100%;text-align:left;padding:6px 9px;border-radius:8px;color:var(--dim);font-size:12.5px}
@@ -960,7 +977,6 @@
 .pop .lab .kbd{float:right;font-size:10.5px;color:var(--faint);border:1px solid var(--line2);border-radius:4px;padding:0 4px}
 
 /* ---------- Settings › Profiles: the list on the left, the open profile on the right ---------- */
-.dlg:has(.pfx){width:760px;height:540px;max-height:92vh}
 .pfx{display:flex;gap:14px;flex:1;min-height:0;padding:0 2px 2px 8px}
 .pfl{width:178px;flex:none;display:flex;flex-direction:column;min-height:0}
 .pfls{overflow:auto;min-height:0;scrollbar-width:thin;display:flex;flex-direction:column;gap:1px}

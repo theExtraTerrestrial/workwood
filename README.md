@@ -157,7 +157,7 @@ On a fresh WSL install the Electron window needs GTK once:
 - Compact sidebar: in a window narrower than about 1000 pixels, or when a side
   panel would squeeze the conversation, the sidebar becomes a strip of project
   tiles; hovering a tile shows the session's name. The button at the top of
-  the sidebar, or Ctrl+B, switches between the two at any width.
+  the sidebar, or B, switches between the two at any width.
 - Writing while the agent works: a message sent mid-turn waits in a queue on
   top of the message box until the agent finishes the step it is on. Then the
   agent reads it before its next step, or runs it as the next turn. Until then,
@@ -187,7 +187,8 @@ On a fresh WSL install the Electron window needs GTK once:
   its reply. A card opens the file at full width (beside the conversation while
   a question waits there); the header button opens it as a side panel. Either
   way you can step through everything the session made, switch between full
-  width and side panel, or open it in your browser.
+  width and side panel, or open it in your browser. N opens and closes the
+  side panel, M switches it to full width and back, ← and → step through the files.
 - The window opens where you left it, at the size you left it (and maximized,
   if it was).
 - Session actions, from the "…" on a session or a right-click:
@@ -224,7 +225,7 @@ On a fresh WSL install the Electron window needs GTK once:
   from there (the Electron window only; Edge cannot tell where a file lives).
   Anything else, such as a pasted picture, is saved under
   `~/.cache/workwood/attachments`; copies are cleared after 30 days.
-- Dictation: the mic button records, shows what it has heard so far while you
+- Dictation: the mic button (or Ctrl+Shift+Space, from anywhere) records, shows what it has heard so far while you
   speak, and puts the text in the message box after what you typed; nothing is
   sent until you press send. Escape discards the recording. Speech is turned
   into text on this machine by a Whisper model (about 240 MB, downloaded once on
@@ -236,6 +237,10 @@ On a fresh WSL install the Electron window needs GTK once:
   their PyPI packages, pinned and checked by hash, into `~/.cache/workwood/cuda`),
   then turns it on; a switch after that. If the card cannot be used, dictation
   says why and goes on with the standard model.
+- Hover notes: every button and path has one, in Workwood's own style rather
+  than the browser's: a name, sometimes a line on what it does, and its keys.
+  Single keys (B, N, M, and ← → in a preview) work whenever you are not typing in a field or
+  the terminal.
 - Settings (gear, "All settings…"): theme, the profile new sessions start on,
   when quiet sessions clear themselves, the dictation language, your profiles with their usage,
   the skills list, and versions.

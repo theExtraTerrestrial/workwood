@@ -9,7 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as src from './sources.mjs';
-import { readTranscript, outputFromTranscript } from './transcript.mjs';
+import { readTranscript, outputFromTranscript, PICTURE_ROOT, PICTURE_ID } from './transcript.mjs';
 import { runs, startTurn, answer, setMode, stop, stopStep, liveOutput, taskOutput, publicRun, listCommands, addToTurn, unqueue, sendNow, contextOf } from './runs.mjs';
 import { terms, openTerm, attach, typeInto, resize, closeTerm, closeAll } from './terminals.mjs';
 import { changesFor, changeOf } from './changes.mjs';
@@ -296,6 +296,12 @@ async function api(req, res, url) {
   if (req.method === 'GET' && parts[0] === 'status') {    // for the Windows window: is anything here working or waiting, while you look at the other side?
     const all = state.sessions.map(decorate).filter(s => !s.outside && !s.term);
     return send(res, 200, { wait: all.filter(s => s.status === 'wait').length, work: all.filter(s => s.status === 'work').length, bg: all.reduce((n, s) => n + (s.bg || 0), 0) });
+  }
+  if (req.method === 'GET' && parts[0] === 'picture') {   // a picture from a message you wrote; its name is its content, so it never changes
+    if (!PICTURE_ID.test(parts[1] || '')) return send(res, 404, { error: 'No such picture.' });
+    let data; try { data = await fs.readFile(path.join(PICTURE_ROOT, parts[1])); } catch { return send(res, 404, { error: 'No such picture.' }); }
+    res.writeHead(200, { 'content-type': TYPES[path.extname(parts[1])] || 'application/octet-stream', 'cache-control': 'private, max-age=31536000, immutable' });
+    return res.end(data);
   }
   if (req.method === 'GET' && parts[0] === 'defaults') return send(res, 200, await src.defaultsFor(url.searchParams.get('cwd'), url.searchParams.get('profile'), state.profiles));
   if (req.method === 'GET' && parts[0] === 'about') {
@@ -705,7 +711,7 @@ const server = http.createServer(async (req, res) => {
 
 /** Starts the service and resolves with the address to open. */
 export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
-  src.clearOldAttachments(); voice.warmIfPresent(prefs.speech);
+  src.clearOldAttachments(); src.clearOldAttachments(30, PICTURE_ROOT); voice.warmIfPresent(prefs.speech);
   state.claude = await src.claudePath();
   await new Promise(r => server.listen(port, '127.0.0.1', r));
   await new Promise(r => previews.listen(0, '127.0.0.1', r));

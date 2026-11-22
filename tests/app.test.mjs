@@ -925,14 +925,22 @@ test('attachments: pictures go to the agent as pictures, other files are saved a
     { name: 'shot.png', type: 'image/png', data: PNG }, { name: '../../notes.txt', type: 'text/plain', data: Buffer.from('remember the milk').toString('base64') }] });
   assert.equal(r.status, 200);
   const s = await idle(r.body.sessionId), u = s.items.find(i => i.kind === 'user');
-  assert.deepEqual([u.text, u.images, u.files], ['Look at these', 1, ['notes.txt']]);
+  assert.deepEqual([u.text, u.pics?.length, u.files], ['Look at these', 1, ['notes.txt']]);
+  // the picture is kept once, by what is in it, and the window gets it back with the token only
+  const kept = path.join(sb.home, '.cache', 'workwood', 'pictures', u.pics[0].id);
+  assert.match(u.pics[0].id, /^[0-9a-f]{32}\.png$/); assert.equal(fs.readFileSync(kept).toString('base64'), PNG);
+  const pic = await fetch(new URL(`/api/picture/${u.pics[0].id}?token=test-token`, svc.address));
+  assert.equal(pic.status, 200); assert.equal(pic.headers.get('content-type'), 'image/png');
+  assert.equal(Buffer.from(await pic.arrayBuffer()).toString('base64'), PNG);
+  assert.equal((await fetch(new URL(`/api/picture/${u.pics[0].id}`, svc.address))).status, 403);
+  assert.equal((await fetch(new URL('/api/picture/..%2F..%2F.claude.json?token=test-token', svc.address))).status, 404);
   assert.ok(readLog(sb).slice(before).some(l => l.startsWith('pictures=1')));
   const saved = /- (\S+notes\.txt)/.exec(lastText(s))[1];                  // the agent was told where the file is
   assert.ok(saved.startsWith(path.join(sb.home, '.cache', 'workwood', 'attachments') + path.sep));
   assert.equal(fs.readFileSync(saved, 'utf8'), 'remember the milk');
   // a message can be attachments alone; and the saved history reads back the same way
   assert.equal((await svc.call(`sessions/${r.body.sessionId}/send`, { text: '', attachments: [{ name: 'a.png', type: 'image/png', data: PNG }] })).status, 200);
-  assert.deepEqual((await idle(r.body.sessionId)).items.filter(i => i.kind === 'user').map(i => [i.text, i.images]), [['Look at these', 1], ['', 1]]);
+  assert.deepEqual((await idle(r.body.sessionId)).items.filter(i => i.kind === 'user').map(i => [i.text, i.pics?.length]), [['Look at these', 1], ['', 1]]);
   assert.equal((await svc.call(`sessions/${r.body.sessionId}/send`, { text: '' })).status, 400);
   // a file that is already on disk is named where it is, not copied; a picture among them is still sent as one
   const logo = path.join(sb.projects.alpha, 'logo.png'), spec = path.join(sb.projects.alpha, 'spec.txt');
@@ -940,7 +948,7 @@ test('attachments: pictures go to the agent as pictures, other files are saved a
   const copies = fs.readdirSync(path.join(sb.home, '.cache', 'workwood', 'attachments')).length, at = readLog(sb).length;
   const there = await svc.call('sessions', { cwd: sb.projects.alpha, profile: 'live', text: 'Use these', attachments: [{ name: 'logo.png', type: 'image/png', path: logo }, { name: 'spec.txt', type: 'text/plain', path: spec }] });
   const ts = await idle(there.body.sessionId), tu = ts.items.find(i => i.kind === 'user');
-  assert.deepEqual([tu.text, tu.images, tu.files], ['Use these', undefined, ['logo.png', 'spec.txt']]);
+  assert.deepEqual([tu.text, tu.pics?.map(p => p.name), tu.files], ['Use these', ['logo.png'], ['spec.txt']]);   // a picture by its path: shown once, as a picture with its name
   assert.ok(lastText(ts).includes('- ' + logo) && lastText(ts).includes('- ' + spec));
   assert.ok(readLog(sb).slice(at).some(l => l.startsWith('pictures=1')));
   assert.equal(fs.readdirSync(path.join(sb.home, '.cache', 'workwood', 'attachments')).length, copies);
@@ -952,7 +960,7 @@ test('attachments: pictures go to the agent as pictures, other files are saved a
   const old = addSession(sb, 'alpha', 'live', [{ type: 'text', text: 'Compare\n\nAttached files:\n- /x/y/spec.pdf\n- /x/y/data.csv' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: PNG } }], 'Compared.', 20);
   await until(async () => (await svc.call('sessions/' + old)).status === 200, 'the session to be listed', 15000);
   const o = (await session(old)).items.find(i => i.kind === 'user');
-  assert.deepEqual([o.text, o.images, o.files], ['Compare', 1, ['spec.pdf', 'data.csv']]);
+  assert.deepEqual([o.text, o.pics?.length, o.files], ['Compare', 1, ['spec.pdf', 'data.csv']]);
 });
 
 test('dictation: a recording comes back as text, and only with the token', async () => {
@@ -1137,6 +1145,14 @@ test('updates: checks the folder Workwood runs from against its upstream, and re
   assert.notEqual(head(), tip);
   execFileSync('git', ['-C', sb.app, 'checkout', '--', 'package.json']);
   assert.equal((await svc.call('update/check', {})).body.state, 'ready');   // pulled by the window's test below
+});
+
+test('the window has no browser tooltips: every hover note is its own (an iframe keeps its title, for screen readers)', () => {
+  for (const f of ['ui/index.html', 'ui/app.js']) {
+    const text = fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+    const left = [...text.matchAll(/<(\w+)[^<>]*\stitle=|\.title\s*=(?!=)/g)].filter(m => m[1] !== 'iframe' && !/s\.title\s*=/.test(text.slice(m.index - 2, m.index + 10)));
+    assert.deepEqual(left.map(m => text.slice(m.index, m.index + 60)), [], f);
+  }
 });
 
 /* ---------- the window, driven by real clicks ---------- */
@@ -1416,7 +1432,7 @@ ui('window: Stop on a question card ends the turn without an answer, by click or
   let before = readLog(sb).length;
   await page.click('#qcard [data-act=stop]');
   await page.waitForSelector('#qcard', { state: 'hidden' });
-  await page.waitForSelector('#send[title="Send"]');
+  await page.waitForSelector('#send[data-tip="Send"]');
   assert.ok(readLog(sb).slice(before).some(l => l.includes('interrupted')));
   await startNew('ASK and then escape');
   await page.waitForSelector('#qcard:has-text("Which direction")');
@@ -1425,7 +1441,7 @@ ui('window: Stop on a question card ends the turn without an answer, by click or
   await page.evaluate(() => document.activeElement.blur());
   await page.keyboard.press('Escape');
   await page.waitForSelector('#qcard', { state: 'hidden' });
-  await page.waitForSelector('#send[title="Send"]');
+  await page.waitForSelector('#send[data-tip="Send"]');
   assert.ok(readLog(sb).slice(before).some(l => l.includes('interrupted')));
 });
 
@@ -1554,9 +1570,9 @@ ui('window: a session working in the app says what it is doing under its name; n
   await page.waitForSelector('.sess.sel .l2:has-text("Running Wait a long time")');
   assert.equal(await page.locator(`.sess[data-id="${sb.sessions.alphaOutside}"] .l2`).count(), 0);   // working, but in a terminal
   assert.equal(await page.locator('.sess .l2').count(), 1);
-  await page.keyboard.press('Control+b');
+  await page.evaluate(() => document.activeElement?.blur()); await page.keyboard.press('b');
   await page.waitForSelector('.app.compact'); assert.equal(await page.locator('.sess.sel .l2').isHidden(), true);
-  await page.keyboard.press('Control+b'); await page.waitForSelector('.app:not(.compact)');
+  await page.keyboard.press('b'); await page.waitForSelector('.app:not(.compact)');
   await page.click('#send'); await page.waitForSelector('.sys:has-text("Interrupted")');
   await page.waitForFunction(() => !document.querySelector('.sess .l2'));       // it goes when the session stops
 });
@@ -1578,10 +1594,10 @@ ui('window: limit card continues on another profile, and goes the moment you pre
 ui('window: stop button', async () => {
   await startNew('be SLOW in the window');
   await page.waitForSelector('.w1:has-text("Running Wait a long time")');
-  assert.equal(await page.locator('#send').getAttribute('title'), 'Stop');
+  assert.equal(await page.locator('#send').getAttribute('data-tip'), 'Stop');
   await page.click('#send');
   await page.waitForSelector('.sys:has-text("Interrupted")');
-  assert.equal(await page.locator('#send').getAttribute('title'), 'Send');
+  assert.equal(await page.locator('#send').getAttribute('data-tip'), 'Send');
 });
 
 ui('window: preview cards open at full width, the header button beside the conversation; step, pick from the list, close', async () => {
@@ -1630,6 +1646,14 @@ ui('window: preview cards open at full width, the header button beside the conve
   assert.equal(await page.locator('#bPreview.on').count(), 1);
   assert.equal(await page.locator('#conv').isVisible(), true);                   // from the header it opens beside the conversation
   await page.click('#bPreview'); assert.equal(await page.locator('#panel').isHidden(), true);
+  // the same by keys: N opens and closes it, M toggles its full width
+  await page.evaluate(() => document.activeElement?.blur()); await page.keyboard.press('n'); await page.waitForSelector('#panel:not([hidden])');
+  await page.keyboard.press('m'); assert.equal(await page.locator('#conv').isHidden(), true);
+  await page.keyboard.press('m'); assert.equal(await page.locator('#conv').isVisible(), true);
+  const first = await page.locator('#pName').innerText();                        // ← → step through what the session made
+  await page.keyboard.press('ArrowRight'); assert.notEqual(await page.locator('#pName').innerText(), first);
+  await page.keyboard.press('ArrowLeft'); assert.equal(await page.locator('#pName').innerText(), first);
+  await page.keyboard.press('n'); assert.equal(await page.locator('#panel').isHidden(), true);
   await page.click('.hc:has-text("dark.html")'); await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`);
   await page.waitForSelector('.ai:has-text("The readme is tidied.")'); assert.equal(await page.locator('#panel').isHidden(), true); // another session, no panel
   assert.equal(await page.locator('#bPreview').isHidden(), true);                                      // and nothing to preview
@@ -1851,10 +1875,16 @@ ui('window: the skills button in the box opens the same list as "/", and keeps w
   await page.waitForSelector('#tip:visible');
   assert.equal(await page.innerText('#tip'), 'Free up context by summarizing the conversation so far');
   const tb = await page.locator('#tip').boundingBox();
-  assert.ok(tb.width === 300 && tb.x >= 0 && tb.x + tb.width <= 700 && tb.y >= 0 && tb.y + tb.height <= 500, JSON.stringify(tb));
+  assert.ok(tb.width <= 280 && tb.x >= 0 && tb.x + tb.width <= 700 && tb.y >= 0 && tb.y + tb.height <= 500, JSON.stringify(tb));
   await page.setViewportSize({ width: 1400, height: 880 });
   await page.mouse.move(5, 5);
   await page.waitForSelector('#tip', { state: 'hidden' });
+  await page.hover('#bSkills'); await page.waitForSelector('#tip.note:visible');                // a name, a dim line, and its key
+  assert.equal(await page.textContent('#tip .tipn'), 'Skills/'); assert.equal(await page.innerText('#tip kbd'), '/');
+  await page.hover('#mic');                                                                    // straight on to the next one: no wait
+  await page.waitForFunction(() => document.querySelector('#tip .tipn')?.textContent.startsWith('Dictate'), null, { timeout: 300 });
+  assert.deepEqual(await page.locator('#tip kbd').allInnerTexts(), ['Ctrl', 'Shift', 'Space']);
+  await page.mouse.move(5, 5); await page.waitForSelector('#tip', { state: 'hidden' });
   await page.click('#bSkills');                                              // pressing it again closes the list
   await page.waitForSelector('#slash', { state: 'hidden' }); assert.equal(await page.inputValue('#input'), '');
   await page.fill('#input', 'a header');                                     // with a message already written, the skill goes in front of it
@@ -1864,7 +1894,7 @@ ui('window: the skills button in the box opens the same list as "/", and keeps w
   await page.waitForSelector('.me:has-text("a header") .chip:has-text("mockup")');
 });
 
-ui('window: attach files with the paperclip, remove one, send; the message shows what went with it', async () => {
+ui('window: attach files with the paperclip, remove one, send; the message shows the picture as a card and the file by name', async () => {
   await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`);
   await page.waitForSelector('.me:has-text("Tidy the alpha readme")');
   await page.setInputFiles('#filePick', [
@@ -1876,14 +1906,20 @@ ui('window: attach files with the paperclip, remove one, send; the message shows
   await page.click('#atts .ath >> nth=1 >> [data-rm]');
   assert.equal(await page.locator('#atts .ath').count(), 1);
   await send('Use these for the header');
-  await page.waitForSelector('.me:has-text("Use these for the header") .matt:has-text("1 image")');
-  assert.match(await page.innerText('.me:has-text("Use these for the header") .matt'), /tokens\.css/);
+  const mine = '.me:has-text("Use these for the header")';
+  await page.waitForSelector(`${mine} .mpic img`);
+  assert.equal(await page.locator(`${mine} .mpic`).count(), 1);
+  assert.equal(await page.innerText(`${mine} .matt`), 'tokens.css');
+  const img = page.locator(`${mine} .mpic img`);
+  await until(async () => (await img.getAttribute('src')).startsWith('/api/picture/') && await img.evaluate(i => i.naturalWidth === 1), 'the service\'s copy of the picture, once it has the message', 5000);
+  await page.click(`${mine} .mpic`); await page.waitForSelector('#lbx:not([hidden]) #lbxImg');      // opens large
+  await page.keyboard.press('Escape'); await page.waitForSelector('#lbx', { state: 'hidden' });
   assert.equal(await page.locator('#atts .ath, #atts .fch').count(), 0);   // the box is empty again
   // where the window can tell where a file lives (the Electron window), the path is sent, not the contents
   const real = path.join(sb.projects.alpha, 'spec.txt'); fs.writeFileSync(real, 'the spec');
   await page.evaluate(p => { window.workwood = { pathFor: () => p }; }, real);
   await page.waitForSelector('.ai:has-text("Echo: Use these for the header")');
-  await page.waitForSelector('#send[title="Send"]');             // the first turn is over; until then the button means Stop
+  await page.waitForSelector('#send[data-tip="Send"]');             // the first turn is over; until then the button means Stop
   await page.setInputFiles('#filePick', [{ name: 'spec.txt', mimeType: 'text/plain', buffer: Buffer.from('not this') }]);
   await page.waitForSelector('#atts .fch[data-tip]');
   await send('Follow the spec');
@@ -1951,11 +1987,11 @@ ui('window: the mic button dictates into the message box, after what was typed; 
 ui('window: while the agent works you can write to it; the button stops only when the box is empty', async () => {
   await startNew('please LISTEN while you build');
   await page.waitForSelector('.w1:has-text("Build everything")');
-  assert.equal(await page.locator('#send').getAttribute('title'), 'Stop');
+  assert.equal(await page.locator('#send').getAttribute('data-tip'), 'Stop');
   assert.match(await page.locator('#input').getAttribute('placeholder'), /reads this when the current step ends/);
   await page.press('#input', 'Enter');                                            // Enter on an empty box does not stop the turn
   await page.fill('#input', 'use the blue one');
-  assert.equal(await page.locator('#send').getAttribute('title'), 'Send');
+  assert.equal(await page.locator('#send').getAttribute('data-tip'), 'Send');
   await page.press('#input', 'Enter');
   await page.waitForSelector('.me:has-text("use the blue one")');
   await page.waitForSelector('.ai:has-text("Heard mid-turn: use the blue one")');
@@ -1983,7 +2019,7 @@ ui('window: a long conversation has a rail of turns and an outline you can searc
   await startNew('first thing to do'); await page.waitForSelector('.ai:has-text("Echo: first thing")');
   assert.equal(await page.locator('#rail').isHidden(), true);                      // nothing to navigate yet
   const rid = await page.locator('.sess.sel').getAttribute('data-id');
-  for (const t of ['take a SCREENSHOT', 'third and last']) { await idle(rid); await page.waitForSelector('#send[title="Send"]'); await send(t); await page.waitForSelector(`.me:has-text("${t}")`); await until(async () => (await session(rid)).items.some(i => i.kind === 'user' && i.text === t), 'the message to arrive'); }
+  for (const t of ['take a SCREENSHOT', 'third and last']) { await idle(rid); await page.waitForSelector('#send[data-tip="Send"]'); await send(t); await page.waitForSelector(`.me:has-text("${t}")`); await until(async () => (await session(rid)).items.some(i => i.kind === 'user' && i.text === t), 'the message to arrive'); }
   await page.waitForSelector('.ai:has-text("Echo: third and last")');
   await page.waitForFunction(() => document.querySelectorAll('#rail button').length === 3);
   assert.match(await page.locator('#rail button').nth(1).getAttribute('data-tip'), /^Turn 2 of 3 .*1 command.* — take a SCREENSHOT$/);
@@ -2063,7 +2099,7 @@ ui('window: scrolled up, a mark counts the replies that arrive below, and a clic
   await page.waitForFunction(() => { const s = document.getElementById('scroll'), l = document.querySelector('.newline'); return Math.abs(s.scrollTop - (l.offsetTop - 16)) < 4 || s.scrollHeight - s.scrollTop - s.clientHeight < 4; });
   await page.waitForSelector('#jump', { state: 'hidden' });                        // read: the count is gone, and so is the mark at the bottom
   assert.equal(await page.locator('.newline').count(), 1);                         // the line keeps your place until you send something
-  const id = await page.locator('.sess.sel').getAttribute('data-id'); await idle(id); await page.waitForSelector('#send[title="Send"]');
+  const id = await page.locator('.sess.sel').getAttribute('data-id'); await idle(id); await page.waitForSelector('#send[data-tip="Send"]');
   await page.evaluate(() => { document.getElementById('scroll').scrollTop = 0; });
   await page.waitForSelector('#jump:not(.new)');
   await send('and now'); await page.waitForSelector('.ai:has-text("Echo: and now")');   // sending takes you to the bottom and clears the line
@@ -2149,7 +2185,7 @@ ui('window: a project can be given by typing its folder', async () => {
   assert.equal(await page.locator('#where').innerText().then(t => t.includes('theta')), true);
 });
 
-ui('window: the sidebar goes compact by itself in a narrow window, and by its button or Ctrl+B at any width', async () => {
+ui('window: the sidebar goes compact by itself in a narrow window, and by its button or B at any width', async () => {
   const size = page.viewportSize(), compact = () => page.evaluate(() => document.querySelector('.app').classList.contains('compact'));
   const width = () => page.evaluate(() => document.querySelector('.side').offsetWidth);
   try {
@@ -2159,13 +2195,23 @@ ui('window: the sidebar goes compact by itself in a narrow window, and by its bu
     assert.match(await page.locator('.sess[data-id]').first().getAttribute('data-tip'), / — /);       // the name is in the hover note
     assert.equal(await page.locator('.sess[data-id]').first().getAttribute('title'), null);
     assert.equal(await page.evaluate(() => localStorage.getItem('ww.side')), 'compact');                  // remembered for next time
-    await page.keyboard.press('Control+b'); assert.equal(await compact(), false);
+    await page.focus('#input'); await page.keyboard.press('b'); assert.equal(await compact(), true);      // a letter typed in the box is just a letter
+    await page.fill('#input', '');
+    await page.locator('#bSide').focus(); await page.keyboard.press('b'); assert.equal(await compact(), false);
     await page.setViewportSize({ width: 950, height: size.height }); await page.waitForFunction(() => document.querySelector('.app').classList.contains('compact'));
     await page.click('#bSide'); assert.equal(await compact(), false);                                    // you can still ask for the full one
     await page.setViewportSize(size); assert.equal(await compact(), false);
     await page.click('#bSide'); await page.click('#bSide'); assert.equal(await compact(), false);
     assert.equal(await page.evaluate(() => localStorage.getItem('ww.side')), 'auto');
   } finally { await page.setViewportSize(size); await page.evaluate(() => localStorage.removeItem('ww.side')); }
+});
+
+ui('window: Settings is one size on every tab, Profiles too', async () => {
+  await page.evaluate(() => openSettings(0));          // not by the gear: the next test's click on it would land inside its double-click guard
+  const sizes = [];
+  for (const t of await page.locator('#stabs [data-st]').all()) { await t.click(); const b = await page.locator('#dlg').boundingBox(); sizes.push(`${b.width}x${b.height}`); }
+  assert.deepEqual([...new Set(sizes)], ['760x540']);
+  await page.keyboard.press('Escape'); await page.waitForSelector('#sdim', { state: 'hidden' });
 });
 
 ui('window: Settings, Profiles: add a profile by signing in, rename it in place, remove it after a question', async () => {
@@ -2292,7 +2338,7 @@ ui('window: a session whose history ends signed out offers the sign-in, though n
 
 ui('window: a sent message shows at once, before the service answers, and comes back to the box if it could not be sent', async () => {
   await page.keyboard.press('Escape');
-  await startNew('quick first'); await page.waitForSelector('.ai:has-text("Echo: quick first")'); await page.waitForSelector('#send[title="Send"]');
+  await startNew('quick first'); await page.waitForSelector('.ai:has-text("Echo: quick first")'); await page.waitForSelector('#send[data-tip="Send"]');
   await page.route('**/api/sessions/*/send', async r => { await sleep(700); await r.continue(); });
   await send('shown straight away');
   await page.waitForSelector('#thread [data-k="pend"]:has-text("shown straight away")', { timeout: 400 });
@@ -2300,7 +2346,7 @@ ui('window: a sent message shows at once, before the service answers, and comes 
   await page.waitForSelector('.ai:has-text("Echo: shown straight away")');
   assert.equal(await page.locator('#thread [data-k="pend"]').count(), 0);
   assert.equal(await page.locator('.me:has-text("shown straight away")').count(), 1);
-  await page.unroute('**/api/sessions/*/send'); await page.waitForSelector('#send[title="Send"]');
+  await page.unroute('**/api/sessions/*/send'); await page.waitForSelector('#send[data-tip="Send"]');
   await page.route('**/api/sessions/*/send', r => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"The service is not answering."}' }));
   await send('never arrives');
   await page.waitForSelector('#oops:has-text("The service is not answering.")');
@@ -2322,7 +2368,7 @@ ui('window: an answered card goes at once, and comes back if the answer could no
   await page.waitForSelector('#qcard', { state: 'hidden', timeout: 400 });
   await page.waitForSelector('#thread [data-k="working"]');
   await page.unroute('**/api/sessions/*/answer');
-  await page.waitForSelector('#send[title="Send"]');
+  await page.waitForSelector('#send[data-tip="Send"]');
 });
 
 test('sandbox containment', () => {

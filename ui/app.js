@@ -826,6 +826,20 @@ const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 let stab=0,about=null,L=null,PE=null,PSel=null,PAdd=false,PD=null; // PSel: the profile open on the Profiles page; PAdd: the add form is showing; PD: its Claude Code defaults {name, d}
  // L: the sign-in terminal on screen {name, term, es, ro}; PE: a profile being renamed or asked about {name, kind}
 function dropLogin(close){if(!L)return;const l=L;L=null;l.es?.close();l.ro?.disconnect();l.term?.dispose();if(close)api(`profiles/${l.name}/login/close`,{}).catch(()=>{})}
+// The better dictation model, offered only where there is an NVIDIA card: Download, and it turns itself on; a switch after that.
+let VS=null,vsT=0;   // the speech status, while Settings is open
+const readVS=()=>api('voice').then(v=>{VS=v;renderSettings()}).catch(()=>{});
+function speechRow(){
+  if(!VS){readVS();return''}
+  const b=VS.better,on=A.prefs?.speech==='turbo';if(!b?.gpu)return'';
+  if(b.state==='getting'||on&&VS.state==='loading'){clearTimeout(vsT);vsT=setTimeout(readVS,800)}
+  const say=b.state==='failed'?`<b class="bad">${esc(b.error)}</b>`:on&&VS.fallback?`<b class="bad">${esc(VS.fallback)}</b>`
+    :`Whisper Large v3 Turbo on your ${esc(b.gpu)}: more accurate, and faster.${b.state==='present'?'':` A ${b.size} download, once.`}`;
+  const right=b.state==='getting'?`<span class="sstate">Downloading ${b.progress}%</span>`
+    :b.state==='present'?`${on&&VS.state==='loading'?'<span class="sstate">Loading…</span>':''}<i class="stog ${on?'on':''}" data-set="speech"></i>`
+    :`<button class="sval" data-set="getspeech">${b.state==='failed'?'Try again':'Download'}</button>`;
+  return `<div class="srow"><span>Better dictation<small>${say}</small></span>${right}</div>`;
+}
 function renderSettings(){
   if($('sdim').hidden)return;
   $('stabs').innerHTML=SORDER.map(i=>`<button data-st="${i}" class="${i===stab?'on':''}">${STABS[i]}</button>`).join('');
@@ -837,7 +851,7 @@ function renderSettings(){
     <div class="srow"><span>Clear quiet sessions<small>A session nobody has touched for this long leaves the sidebar. Search still finds it.</small></span><select class="sval" id="sDays">${[[1,'After a day'],[3,'After 3 days'],[7,'After 7 days'],[14,'After 14 days'],[30,'After 30 days'],[0,'Never']].map(([v,n])=>`<option value="${v}" ${(pf.doneDays??7)===v?'selected':''}>${n}</option>`).join('')}</select></div>${LOGIN?`<div class="srow"><span>Open at login<small>Start Workwood when you sign in to this computer.</small></span><i class="stog ${loginOn?'on':''}" data-set="login"></i></div>`:''}
     <div class="srow"><span>Offer Bypass mode<small>A permission mode that never asks before edits or commands. Only for work you trust completely.</small></span><i class="stog ${pf.bypass?'on':''}" data-set="bypass"></i></div>
     ${A.profiles.length>1?`<div class="srow"><span>Continue on another profile at a limit<small>When a session hits a limit, it goes on with the profile that has the most room after 5 minutes. The card counts down, so you can cancel.</small></span><i class="stog ${pf.autoContinue?'on':''}" data-set="auto"></i></div>`:''}
-    <div class="srow"><span>Dictation language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>
+    <div class="srow"><span>Dictation language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>${speechRow()}
     <div class="srow"><span>Project folders<small>Folders that hold your projects. Separate several with a semicolon.</small></span><input class="sval sin mono" id="sFolders" spellcheck="false" autocomplete="off" value="${esc((pf.folders||[]).map(short).join('; '))}" placeholder="${esc(short((A.folders||[])[0]||''))}">${window.workwood?.pickFolder?'<button class="sval" id="sBrowse" data-tip="Choose a folder to add">Add…</button>':''}</div>`;
   else if(stab===1)renderProfilePage(pg);
   else if(stab===4){const k=hbgKind(),list=A.sessions.filter(s=>!s.done).sort((a,b)=>b.mts-a.mts).slice(0,14),[h1,h2,h3]=hbgHues();
@@ -848,7 +862,7 @@ function renderSettings(){
   else{pg.innerHTML=`<div class="pgh">About</div>`+(about?`<div class="srow"><span>Workwood</span><span class="sstate">${esc(about.version)}</span></div>
     ${updRow()}
     <div class="srow"><span>Claude Code<small>Runs your sessions.</small></span><span class="sstate ${about.claude?'':'bad'}">${esc(about.claude||'Not found')}</span></div>
-    <div class="srow"><span>Speech model<small>${esc(about.speech.model)}, on this computer.</small></span><span class="sstate ${about.speech.state==='failed'?'bad':''}">${{idle:'Not loaded yet',loading:'Loading…',ready:'Ready',failed:'Could not be loaded'}[about.speech.state]}</span></div>
+    <div class="srow"><span>Speech model<small>${esc(about.speech.model)}, on ${about.speech.device==='cuda'?'the graphics card':'the processor'}.</small></span><span class="sstate ${about.speech.state==='failed'?'bad':''}">${{idle:'Not loaded yet',loading:'Loading…',ready:'Ready',failed:'Could not be loaded'}[about.speech.state]}</span></div>
     <div class="srow"><span>Service<small>Node ${esc(about.node)}</small></span><span class="sstate">Running</span></div>`:'<div class="cap2">Loading…</div>');
     if(!about)api('about').then(a=>{about=a;renderSettings()}).catch(()=>{})}
 }
@@ -970,7 +984,7 @@ function renderProfilePage(pg){
   if(PE?.kind==='rename'&&$('sRen')){const i=$('sRen');i.focus();i.select()}
   if(PAdd&&$('sNew')&&document.activeElement?.id!=='sNew')$('sNew').focus();
 }
-function openSettings(tab=0,prof){closePops();stab=tab;if(prof){PSel=prof;PAdd=false}about=null;$('sdim').hidden=false;renderSettings()}
+function openSettings(tab=0,prof){closePops();stab=tab;if(prof){PSel=prof;PAdd=false}about=null;VS=null;$('sdim').hidden=false;renderSettings()}
 function closeSettings(){dropLogin(true);$('sdim').hidden=true}
 // Links in a terminal open in your browser. xterm's own way opens an empty window and then sends it to the link,
 // so the window was handed about:blank to open, and Windows could not.
@@ -1033,6 +1047,8 @@ $('spage').onclick=async e=>{
   if(e.target.closest('[data-add]')){const n=$('sNew').value.trim();if(!n){$('sNew').focus();return}PE=null;PAdd=false;PSel=n;startLogin(n,true);return}
   if(e.target.closest('#sBrowse')){const f=await window.workwood.pickFolder();if(!f)return;
     try{A.prefs=await api('settings',{folders:[...(A.prefs.folders||[]),f]});renderSettings()}catch(err){oops(err.message)}return}
+  if(s?.dataset.set==='getspeech'){try{VS=await api('voice/better',{});renderSettings()}catch(err){oops(err.message)}return}
+  if(s?.dataset.set==='speech'){try{A.prefs=await api('settings',{speech:A.prefs?.speech==='turbo'?'small':'turbo'});VS=null;renderSettings()}catch(err){oops(err.message)}return}
   if(s?.dataset.set==='login'){await setLogin(!loginOn);renderSettings()}
   if(s?.dataset.set==='auto'){try{A.prefs=await api('settings',{autoContinue:!A.prefs?.autoContinue});renderSettings()}catch(err){oops(err.message)}}
   if(s?.dataset.set==='bypass'){try{A.prefs=await api('settings',{bypass:!A.prefs?.bypass});renderSettings();renderComposer()}catch(err){oops(err.message)}}

@@ -143,7 +143,7 @@
   select.sval{border:0;color:var(--text);font:inherit;font-size:12px;outline:0;cursor:pointer;max-width:180px}select.sval option{background:var(--pop);color:var(--text)}
   button.sval:hover,select.sval:hover{background:rgba(128,128,128,.24)}
   .srow .stog{background:rgba(128,128,128,.35);cursor:pointer}.srow .stog::after{right:auto;left:2px;transition:left .12s}.srow .stog.on{background:var(--go)}.srow .stog.on::after{left:15px}
-  .sstate{font-size:12px;color:var(--faint);white-space:nowrap}.sstate.bad{color:var(--hot)}
+  .sstate{font-size:12px;color:var(--faint);white-space:nowrap}.sstate.bad{color:var(--hot)}.srow small .bad{color:var(--hot);font-weight:inherit}
   .lgx{flex:1;min-height:0;background:var(--term);border-radius:10px;padding:8px;margin:4px 0 8px;overflow:hidden}
   .srow .sib{width:26px;height:26px;flex:none}.srow .sib svg{width:14px;height:14px}.srow .sib:hover:not([disabled]){background:var(--surface);color:var(--text)}.srow .sib[disabled]{opacity:.35;cursor:default}
   .srow .pren{width:150px;font-weight:500}.srow .sin#sNew{width:130px}

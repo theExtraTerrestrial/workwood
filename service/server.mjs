@@ -44,7 +44,8 @@ const done = new Map(Object.entries(kept.done || {})); for (const id of kept.arc
 let own = Array.isArray(kept.own) ? new Set(kept.own) : null;   // null until the first list is read: then everything recent is yours
 const unread = new Set(kept.unread || []);
 const prefs = { defaultProfile: kept.defaultProfile || null, language: kept.language || null, folders: Array.isArray(kept.folders) ? kept.folders : [],
-  doneDays: Number.isInteger(kept.doneDays) ? kept.doneDays : 7, bypass: kept.bypass === true, autoContinue: kept.autoContinue === true };   // your choices in the settings dialog
+  doneDays: Number.isInteger(kept.doneDays) ? kept.doneDays : 7, bypass: kept.bypass === true, autoContinue: kept.autoContinue === true,
+  speech: kept.speech === 'turbo' ? 'turbo' : 'small' };   // your choices in the settings dialog
 const folders = () => prefs.folders.length ? prefs.folders : [src.WORKSPACE];   // where the project menu looks
 // A mode you may pick: any Workwood offers, but Bypass only once it is turned on in Settings. Null for none.
 const modeOf = m => !m ? null : src.MODES.includes(m) && (m !== 'bypassPermissions' || prefs.bypass) ? m : undefined;
@@ -297,7 +298,7 @@ async function api(req, res, url) {
   }
   if (req.method === 'GET' && parts[0] === 'defaults') return send(res, 200, await src.defaultsFor(url.searchParams.get('cwd'), url.searchParams.get('profile'), state.profiles));
   if (req.method === 'GET' && parts[0] === 'about') {
-    return send(res, 200, { version: lib('../package.json').version, claude: await src.claudeVersion(state.claude), node: process.version, speech: { model: voice.MODEL, ...voice.status } });
+    return send(res, 200, { version: lib('../package.json').version, claude: await src.claudeVersion(state.claude), node: process.version, speech: voice.status });
   }
   if (req.method === 'GET' && parts[0] === 'profiles' && parts[2] === 'login') {
     if (!terms.has('login:' + parts[1])) return send(res, 404, { error: 'No sign-in is under way for this profile.' });
@@ -393,6 +394,10 @@ async function api(req, res, url) {
   }
   if (parts[0] === 'voice') {
     if (req.method === 'GET') { if (url.searchParams.has('warm')) voice.warm(); return send(res, 200, voice.status); }
+    if (parts[1] === 'better') {   // get the GPU model, then use it: it takes minutes, so this answers at once and the status tells how far it is
+      voice.getBetter().then(async ok => { if (ok) { prefs.speech = 'turbo'; voice.choose('turbo'); await keep(); pushState(); } }, e => console.error(e.message));
+      await new Promise(ok => setTimeout(ok, 50)); return send(res, 200, voice.status);
+    }
     // The body is the recording itself: 16 kHz mono, 32-bit floats. A preview is skipped while another is being worked on.
     if (url.searchParams.has('preview') && voice.isBusy()) { req.resume(); return send(res, 200, { skipped: true }); }
     const chunks = []; let n = 0;
@@ -413,6 +418,7 @@ async function api(req, res, url) {
     if ('doneDays' in b) prefs.doneDays = [0, 1, 3, 7, 14, 30].includes(+b.doneDays) ? +b.doneDays : 7;
     if ('bypass' in b) prefs.bypass = b.bypass === true;
     if ('autoContinue' in b) { prefs.autoContinue = b.autoContinue === true; if (!prefs.autoContinue) for (const id of [...autos.keys()]) dropAuto(id); }
+    if ('speech' in b) { prefs.speech = b.speech === 'turbo' ? 'turbo' : 'small'; voice.choose(prefs.speech); }
     if ('language' in b) prefs.language = /^[a-z]{3,20}$/.test(b.language || '') ? b.language : null;
     if ('folders' in b) {
       try { prefs.folders = await src.checkFolders(b.folders); } catch (e) { return send(res, 400, { error: e.message }); }
@@ -698,7 +704,7 @@ const server = http.createServer(async (req, res) => {
 
 /** Starts the service and resolves with the address to open. */
 export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
-  src.clearOldAttachments(); voice.warmIfPresent();
+  src.clearOldAttachments(); voice.warmIfPresent(prefs.speech);
   state.claude = await src.claudePath();
   await new Promise(r => server.listen(port, '127.0.0.1', r));
   await new Promise(r => previews.listen(0, '127.0.0.1', r));

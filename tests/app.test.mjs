@@ -960,12 +960,31 @@ test('dictation: a recording comes back as text, and only with the token', async
   assert.equal((await fetch(new URL('/api/voice', svc.address), { method: 'POST', body: new Float32Array(16000) })).status, 403);
 });
 
+test('dictation: the GPU model is downloaded only when asked, then used, and can be turned off again', async () => {
+  const say = () => fetch(new URL('/api/voice', svc.address), { method: 'POST', headers: { 'x-workwood-token': 'test-token' }, body: new Float32Array(16000) }).then(r => r.json());
+  const voice = async () => (await svc.call('voice')).body;
+  let v = await voice();
+  assert.deepEqual([v.better.gpu, v.better.state, v.device, (await state()).prefs.speech], ['Test GPU', 'absent', 'cpu', 'small']);
+  assert.equal((await svc.call('settings', { speech: 'turbo' })).body.speech, 'turbo');   // wanted, but not here yet: the standard model goes on
+  assert.equal((await voice()).device, 'cpu');
+  await svc.call('settings', { speech: 'small' });
+  assert.equal((await svc.call('voice/better', {})).body.better.state, 'present');       // the stand-in arrives at once
+  await until(async () => (await state()).prefs.speech === 'turbo', 'the GPU model to be turned on once it is here');
+  await until(async () => { v = await voice(); return v.state === 'ready' && v.device === 'cuda'; }, 'the GPU model to be in use');
+  assert.equal(v.model, 'Whisper Large v3 Turbo');
+  assert.deepEqual(await say(), { text: 'dictated words' });
+  assert.equal(JSON.parse(fs.readFileSync(path.join(sb.home, '.config', 'workwood', 'state.json'), 'utf8')).speech, 'turbo');
+  await svc.call('settings', { speech: 'small' });
+  await until(async () => { v = await voice(); return v.state === 'ready' && v.device === 'cpu'; }, 'the standard model to be back');
+  assert.deepEqual(await say(), { text: 'dictated words' });
+});
+
 test('settings: default profile and dictation language are kept; sign-in again runs Claudius in a terminal', async () => {
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false });
-  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small' });
+  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small' });
   const kept = JSON.parse(fs.readFileSync(path.join(sb.home, '.config', 'workwood', 'state.json'), 'utf8'));
   assert.deepEqual([kept.defaultProfile, kept.language, typeof kept.done], ['other', 'latvian', 'object']);
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small' });
   const a = (await svc.call('about')).body;
   assert.deepEqual([a.version, a.claude, typeof a.speech.model], ['0.1.0', '2.1.322', 'string']);
   assert.equal((await svc.call('profiles/nobody/login', {})).status, 404);

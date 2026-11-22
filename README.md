@@ -228,6 +228,12 @@ On a fresh WSL install the Electron window needs GTK once:
   into text on this machine by a Whisper model (about 240 MB, downloaded once on
   first use into `~/.cache/workwood/models`); no audio leaves it. English by
   default: pick another language in Settings; `WORKWOOD_STT_MODEL` names another model.
+  With an NVIDIA graphics card (Linux or WSL), Settings offers "Better dictation":
+  Whisper Large v3 Turbo on the card, more accurate and faster. Download gets it
+  once (about 2.7 GB: the model, and NVIDIA's CUDA 13 and cuDNN 9 libraries from
+  their PyPI packages, pinned and checked by hash, into `~/.cache/workwood/cuda`),
+  then turns it on; a switch after that. If the card cannot be used, dictation
+  says why and goes on with the standard model.
 - Settings (gear, "All settings…"): theme, the profile new sessions start on,
   when quiet sessions clear themselves, the dictation language, your profiles with their usage,
   the skills list, and versions.

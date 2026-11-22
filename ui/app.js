@@ -1363,7 +1363,7 @@ function renderProfiles(){
     +roomOrder(A.profiles).map(p=>{const old=p.at&&now-p.at>900,why=p.failed&&WHY[p.failed],full=Math.max(p.h5||0,p.d7||0)>=100;
       return `<button class="prow ${p.reading?'reading':''} ${full?'full':''} ${p.name===curProfile()?'cur':''}" data-prof="${esc(p.name)}">${p.name===curProfile()?svg('check','ck'):'<span></span>'}
       <span class="pn"><b>${esc(p.name)}</b><small class="age">${p.reading?'<i class="spin"></i>':why?esc(why)+(p.at?' '+ago(p.at):''):old?ago(p.at)+' ago':''}</small></span>${cell(p,'h5')}${cell(p,'d7')}</button>`}).join('')
-    +`<div class="pft"><button class="pman" data-manage data-tip="Settings for each profile, and what to do when one has a problem">Manage…</button><span>${V.isNew?'':'Applies from your next message.'}</span><span class="upd">${busy?'Reading…':newest?'Updated '+(ago(newest)==='now'?'just now':ago(newest)+' ago'):''}</span><button class="ib rf ${busy?'busy':''}" data-refresh data-tip="Read every profile's limits again, one after another. Nothing is sent to Claude.">${svg('refresh')}</button></div>`;
+    +`<div class="pft"><button class="pman" data-manage data-tip="Settings for each profile, and what to do when one has a problem">Manage…</button><span>${V.isNew?'':'Applies from your next message.'}</span><span class="pread">${busy?'Reading…':newest?'Updated '+(ago(newest)==='now'?'just now':ago(newest)+' ago'):''}</span><button class="ib rf ${busy?'busy':''}" data-refresh data-tip="Read every profile's limits again, one after another. Nothing is sent to Claude.">${svg('refresh')}</button></div>`;
 }
 function renderMenus(){
   const f=V.find.toLowerCase(),list=A.projects.filter(p=>!f||p.name.toLowerCase().includes(f)||p.cwd.toLowerCase().includes(f));
@@ -1782,7 +1782,7 @@ function renderHead(){
   const pl=V.place||{project:s.project,worktree:null,branch:s.branch,cwd:s.cwd};
   w.dataset.tip=pl.cwd||s.cwd;
   w.innerHTML=(pl.worktree?`<span class="pl1">${svg('tree')}<b>${esc(pl.worktree)}</b><small>worktree</small></span>${pl.branch&&pl.branch!==pl.worktree?`<span>${svg('branch')}${esc(pl.branch)}</span>`:''}`
-    :pl.branch?`<span class="pl1">${svg('branch')}<b>${esc(pl.branch)}</b></span>`:'')+`<span class="${pl.worktree||pl.branch?'pj':'pl1'}">${pl.worktree||pl.branch?'':svg('folder')}${pl.worktree||pl.branch?esc(pl.project||s.project):`<b>${esc(pl.project||s.project)}</b>`}</span>`;
+    :pl.branch?`<span class="pl1">${svg('branch')}<b>${esc(pl.branch)}</b></span>`:'')+`<span class="${pl.worktree||pl.branch?'plp':'pl1'}">${pl.worktree||pl.branch?'':svg('folder')}${pl.worktree||pl.branch?esc(pl.project||s.project):`<b>${esc(pl.project||s.project)}</b>`}</span>`;
   const d=$('bDone');d.innerHTML=`${svg(s.done?'refresh':'check')}<span>${s.done?'Back to inbox':'Done'}</span>`;d.dataset.tip=s.done?'Bring this session back into the sidebar':'Mark done: it leaves the sidebar, and search still finds it (Ctrl+D)';
 }
 function render(){

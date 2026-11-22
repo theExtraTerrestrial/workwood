@@ -1321,7 +1321,7 @@ ui('window: the profile menu is a table of 5h and 7d limits, most room first, an
   assert.deepEqual(await full.locator('.pc .v').allInnerTexts(), ['100%', '72%']);
   assert.equal(await full.locator('.pc.hot').count(), 1);
   assert.equal(await page.locator('#mProfile .prow[data-prof="live"] .pc .bar b').count(), 2);   // how far each window has run
-  await page.waitForSelector('#mProfile .pft .upd:has-text("Updated")');        // next to the refresh button, once a reading an earlier turn started is in
+  await page.waitForSelector('#mProfile .pft .pread:has-text("Updated")');        // next to the refresh button, once a reading an earlier turn started is in
   sb.usage.other = [44, 20]; const from = sb.usageReads.length;
   try {
     await page.click('#mProfile [data-refresh]');

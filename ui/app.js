@@ -116,6 +116,8 @@ const ago=mts=>{const s=Math.max(0,Date.now()/1000-mts);return s<90?'now':s<3600
 const until=ts=>{const s=Math.max(0,ts-Date.now()/1000);return s<3600?Math.max(1,Math.round(s/60))+'m':s<86400?Math.floor(s/3600)+'h '+Math.round(s%3600/60)+'m':Math.round(s/86400)+'d'};
 const dur=ms=>{const s=Math.round(ms/1000);return s<60?s+'s':Math.floor(s/60)+'m '+String(s%60).padStart(2,'0')+'s'};
 const clock=ts=>{const d=new Date(ts);return isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})};
+// A reset time in full, for hovering over the relative one: "Tue 25 Nov, 14:30".
+const fullAt=ts=>new Date(ts*1000).toLocaleDateString([],{weekday:'short',day:'numeric',month:'short'})+', '+clock(ts*1000);
 const selSession=()=>A.sessions.find(s=>s.id===V.sel)||null;
 const profile=n=>A.profiles.find(p=>p.name===n);
 const startProfile=()=>A.profiles.find(p=>p.name===A.prefs?.defaultProfile)||globalProfile();
@@ -1037,7 +1039,7 @@ function renderProfilePage(pg){
     <div class="cap2" style="padding:12px 0 0">Profiles live in ~/.claude-profiles, where Claudius finds them too.</div>`;
   else if(p){
     const now=Date.now()/1000,d=PD?.d,ps=problems(p),ren=PE?.name===p.name&&PE.kind==='rename',rm=PE?.name===p.name&&PE.kind==='remove';
-    const meter=k=>{const v=p[k],r=p[WIN[k][1]];return `<span class="pm ${lvl(v??0)}"><span class="pk">${k==='h5'?'5h':'7d'}</span><span class="bar"><i style="width:${Math.min(100,v||0)}%"></i></span><span class="v">${v??'–'}%</span>${r?`<small>${v>=100?'clears':'resets'} in ${until(r)}</small>`:''}</span>`};
+    const meter=k=>{const v=p[k],r=p[WIN[k][1]];return `<span class="pm ${lvl(v??0)}"><span class="pk">${k==='h5'?'5h':'7d'}</span><span class="bar"><i style="width:${Math.min(100,v||0)}%"></i></span><span class="v">${v??'–'}%</span>${r?`<small data-tip="${v>=100?'Clears':'Resets'} ${fullAt(r)}">${v>=100?'clears':'resets'} in ${until(r)}</small>`:''}</span>`};
     const sel=(id,opts,v,dis)=>{const has=!v||opts.some(o=>o[0]===v);return `<select class="sval" id="${id}" ${dis?'disabled':''}>${has?'':`<option value="${esc(v)}" selected>${esc(v)}</option>`}${opts.map(([k,n])=>`<option value="${esc(k)}" ${(v||'')===k?'selected':''}>${k?esc(n):"Claude Code's choice"}</option>`).join('')}</select>`};
     const modes=MODES.filter(m=>m[0]!=='bypassPermissions'||A.prefs?.bypass||d?.mode==='bypassPermissions');
     const act=(x,i)=>x.k==='signin'?`<button class="sval ${x.pri?'pri':''}" data-login="${esc(p.name)}">${x.t}</button>`:`<button class="sval ${x.pri?'pri':''}" data-fix="${x.k}" ${x.id?`data-id="${esc(x.id)}"`:''} ${x.name?`data-name="${esc(x.name)}"`:''}>${esc(x.t)}</button>`;
@@ -1458,7 +1460,7 @@ function renderProfiles(){
   const now=Date.now()/1000,busy=A.profiles.some(p=>p.reading);
   const newest=Math.max(0,...A.profiles.map(p=>p.at||0));
   const cell=(p,k)=>{const v=p[k],r=p[WIN[k][1]],run=r?Math.min(100,Math.max(0,(1-(r-now)/WIN[k][0])*100)):null;
-    return `<span class="pc ${lvl(v??0)}" data-k="${k}" ${r?`data-tip="${k==='h5'?'5-hour':'7-day'} limit ${v>=100?'clears':'resets'} in ${until(r)}"`:''}><span class="t"><span class="v">${v??'–'}%</span><small class="rs">${r?until(r):''}</small></span><span class="bar"><i style="width:${Math.min(100,v||0)}%"></i>${run!=null&&v<100?`<b style="left:${run}%"></b>`:''}</span></span>`};
+    return `<span class="pc ${lvl(v??0)}" data-k="${k}" ${r?`data-tip="${k==='h5'?'5-hour':'7-day'} limit ${v>=100?'clears':'resets'} in ${until(r)} · ${fullAt(r)}"`:''}><span class="t"><span class="v">${v??'–'}%</span><small class="rs">${r?until(r):''}</small></span><span class="bar"><i style="width:${Math.min(100,v||0)}%"></i>${run!=null&&v<100?`<b style="left:${run}%"></b>`:''}</span></span>`};
   $('mProfile').innerHTML=`<div class="lab">${V.isNew?'Start this session on':'Continue this conversation on'}</div>`
     +`<div class="phd"><span></span><span>Account</span><span>5h</span><span>7d</span></div>`
     +roomOrder(A.profiles).map(p=>{const old=p.at&&now-p.at>900,why=p.failed&&WHY[p.failed],full=Math.max(p.h5||0,p.d7||0)>=100;
@@ -1712,7 +1714,7 @@ function winBlock(p,k,tr){
   const v=p[k],[len,rk]=WIN[k],r=p[rk],now=Date.now()/1000,run=r?Math.min(100,Math.max(0,(1-(r-now)/len)*100)):null,h=k==='h5';
   const rate=tr?.[h?'rate5':'rate7'],eta=tr?.[h?'eta5':'eta7'],pts=tr?.[h?'s5':'s7'];
   const when=eta?(h?clock(eta*1000):new Date(eta*1000).toLocaleDateString([],{weekday:'short'})+' '+clock(eta*1000)):'';
-  return `<div class="pw ${lvl(v??0)}"><div class="pwt"><span class="pwl">${h?'5<small>h</small>':'7<small>d</small>'}</span><span class="pwv">${v??'–'}<small>%</small></span><span class="pwr">${r?`<small>resets in</small>${until(r)}`:''}</span></div>
+  return `<div class="pw ${lvl(v??0)}"><div class="pwt"><span class="pwl">${h?'5<small>h</small>':'7<small>d</small>'}</span><span class="pwv">${v??'–'}<small>%</small></span><span class="pwr" ${r?`data-tip="${v>=100?'Clears':'Resets'} ${fullAt(r)}"`:''}>${r?`<small>resets in</small>${until(r)}`:''}</span></div>
     <div class="pwb" data-tip="${v??0}% used"><i style="width:${Math.min(100,v||0)}%"></i></div><div class="pwb t" data-tip="${run==null?'':Math.round(run)+'% of the window has run'}"><i style="width:${run??0}%"></i></div>
     <div class="pwf"><span>${rate!=null?(rate>0?'+':'')+rate.toFixed(1)+'%/h':H.d?'no rate yet':skl('52px','ln')}</span>${spark(pts,r?r-len:now-len,r||now)}<span class="gap"></span>${when?`<span class="eta" data-tip="At this rate the ${h?'5-hour':'7-day'} limit is reached then, before it resets">${svg('flag')}${esc(when)}</span>`:''}</div></div>`;
 }

@@ -163,7 +163,7 @@ const askLabel=l=>{const m=/^(\d+) question/.exec(l);return m?m[1]+' question'+(
 const stateOf=s=>(s.bg&&s.status==='idle'?`<span class="bgc" data-tip="${plural(s.bg,'task')} running in the background"><i></i>${s.bg}</span>`:'')+stateOf1(s);
 const stateOf1=s=>s.status==='work'?'<i class="spin"></i>':s.status==='wait'?`<span class="askl">${esc(askLabel(s.line))}</span>`:`${s.unread?'<i class="dot"></i>':''}<time>${ago(s.mts)}</time>`;
 let drawing=false;
-function renderList(){drawing=true;try{drawList()}finally{drawing=false}
+function renderList(){drawing=true;try{drawList()}finally{drawing=false}renderBgs()
   const r=$('renIn');if(r){r.value=V.renameText;r.focus();r.setSelectionRange(V.caret,V.caret)}}
 function drawList(){
   $('prog').classList.toggle('on',!A.fresh);$('list').classList.toggle('stale',A.ready&&!A.fresh);
@@ -880,7 +880,7 @@ document.addEventListener('keydown',e=>{if(!(e.ctrlKey&&e.shiftKey&&!e.altKey&&!
   e.preventDefault();if(R){if(!R.done)stopVoice();return}startVoice(document.activeElement?.id==='qText'?'qText':'input')});
 
 /* ---------- settings dialog ---------- */
-const STABS=['General','Profiles','Skills','About','Home'],SORDER=[0,4,1,2,3],LANGS=['english','latvian','russian','german','french','spanish','italian','polish','lithuanian','estonian','finnish','swedish','ukrainian'];
+const STABS=['General','Profiles','Skills','About','Look'],SORDER=[0,4,1,2,3],LANGS=['english','latvian','russian','german','french','spanish','italian','polish','lithuanian','estonian','finnish','swedish','ukrainian'];
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 let stab=0,about=null,L=null,PE=null,PSel=null,PAdd=false,PD=null; // PSel: the profile open on the Profiles page; PAdd: the add form is showing; PD: its Claude Code defaults {name, d}
  // L: the sign-in terminal on screen {name, term, es, ro}; PE: a profile being renamed or asked about {name, kind}
@@ -899,6 +899,25 @@ function speechRow(){
     :`<button class="sval" data-set="getspeech">${b.state==='failed'?'Try again':'Download'}</button>`;
   return `<div class="srow"><span>Better dictation<small>${say}</small></span>${right}</div>`;
 }
+// Look: the theme, and a background for Home, a session and the sidebar, each with its own Motion and Warn at limits.
+function renderLook(pg){
+  const ed=V.lookEdit||'home',b=bgOf(ed),k=b.kind,still=BGSTILL.includes(k),th=themePref(),who=ed==='session'?'this session':'an agent';
+  const key=[ed,k,b.motion,b.limits,th,root.dataset.theme,bgHues(ed,selSession()),skyList().map(s=>s.id)].join('|');
+  if(pg.dataset.look===key&&pg.querySelector('.hbgs')){for(const t of pg.querySelectorAll('[data-tk="constel"]'))skyMark(t);return}
+  pg.dataset.look=key;
+  const seg=(items,cur,attr)=>`<div class="lseg">${items.map(([v,n])=>`<button data-${attr}="${v}" class="${v===cur?'on':''}">${n}</button>`).join('')}</div>`;
+  const tiles=list=>`<div class="hbgs">${list.filter(v=>!(v==='constel'&&ed!=='home')).map(v=>`<button class="hbgt ${v===k?'on':''}" data-bgk="${v}"><span class="hbg ${ed==='session'?'insession':ed==='side'?'inside':''}${BGCALM.includes(v)?' calm':''}${v==='paper'?' paperbg':''}" data-tk="${v}"></span><b>${BG.find(x=>x[0]===v)[1]}</b></button>`).join('')}</div>`;
+  pg.innerHTML=`<div class="pgh">Look</div>
+    <div class="srow"><span>Theme${th==='auto'?'<small>Follows your system.</small>':''}</span>${seg([['dark','Dark'],['light','Light'],['auto','Auto']],th,'th')}</div>
+    <div class="lhead"><span>Background</span>${seg(BGPLACES,ed,'bgp')}</div>
+    <div class="lgrp">Moving</div>${tiles(BGMOVE)}
+    <div class="lgrp">Calm, for reading</div>${tiles([...BGCALM,'none'])}
+    <div class="srow lstack ${still?'off':''}"><span>Motion<small>${still?(k==='none'?'Nothing to move.':'This one is always still.'):b.motion==='working'?`Only while ${who} works, then it comes to rest.`:b.motion==='always'?`Livelier while ${who} works.`:'Holds still, in the same colours.'}</small></span>${seg([['always','Always'],['working','While working'],['never','Never']],b.motion,'bgm')}</div>
+    <div class="srow"><span>Warn at limits<small>Warm near ${ed==='session'?'this session’s':'a'} limit, red at it. Even when still or None.</small></span><i class="stog ${b.limits?'on':''}" data-set="bglim"></i></div>`;
+  const [h1,h2,h3]=bgHues(ed,selSession());
+  for(const t of pg.querySelectorAll('[data-tk]')){const v=t.dataset.tk;t.style.cssText=`--h1:${h1};--h2:${h2};--h3:${h3}`;
+    t.innerHTML=v==='none'?'':v==='constel'?skySVG(skyList(),skyDims(t,true),null):hbgHTML(v)+'<span class="fld grain"></span>';if(v==='constel')skyMark(t)}
+}
 function renderSettings(){
   if($('sdim').hidden)return;
   $('stabs').innerHTML=SORDER.map(i=>`<button data-st="${i}" class="${i===stab?'on':''}">${STABS[i]}</button>`).join('');
@@ -906,17 +925,13 @@ function renderSettings(){
   if(stab===0&&$('spage').contains(document.activeElement)&&document.activeElement.tagName==='SELECT')return; // a menu is open
   const cd=svg('chev-d'),pf=A.prefs||{},pg=$('spage');
   if(stab===0)pg.innerHTML=`<div class="pgh">General</div>
-    <div class="srow"><span>Theme</span><button class="sval" data-set="theme">${root.dataset.theme==='dark'?'Dark':'Light'}${cd}</button></div>
     <div class="srow"><span>Clear quiet sessions<small>A session nobody has touched for this long leaves the sidebar. Search still finds it.</small></span><select class="sval" id="sDays">${[[1,'After a day'],[3,'After 3 days'],[7,'After 7 days'],[14,'After 14 days'],[30,'After 30 days'],[0,'Never']].map(([v,n])=>`<option value="${v}" ${(pf.doneDays??7)===v?'selected':''}>${n}</option>`).join('')}</select></div>${LOGIN?`<div class="srow"><span>Open at login<small>Start Workwood when you sign in to this computer.</small></span><i class="stog ${loginOn?'on':''}" data-set="login"></i></div>`:''}
     <div class="srow"><span>Offer Bypass mode<small>A permission mode that never asks before edits or commands. Only for work you trust completely.</small></span><i class="stog ${pf.bypass?'on':''}" data-set="bypass"></i></div>
     ${A.profiles.length>1?`<div class="srow"><span>Continue on another profile at a limit<small>When a session hits a limit, it goes on with the profile that has the most room after 5 minutes. The card counts down, so you can cancel.</small></span><i class="stog ${pf.autoContinue?'on':''}" data-set="auto"></i></div>`:''}
     <div class="srow"><span>Dictation language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>${speechRow()}
     <div class="srow"><span>Project folders<small>Folders that hold your projects. Separate several with a semicolon.</small></span><input class="sval sin mono" id="sFolders" spellcheck="false" autocomplete="off" value="${esc((pf.folders||[]).map(short).join('; '))}" placeholder="${esc(short((A.folders||[])[0]||''))}">${window.workwood?.pickFolder?'<button class="sval" id="sBrowse" data-tip="Choose a folder to add">Add…</button>':''}</div>`;
   else if(stab===1)renderProfilePage(pg);
-  else if(stab===4){const k=hbgKind(),list=A.sessions.filter(s=>!s.done).sort((a,b)=>b.mts-a.mts).slice(0,14),[h1,h2,h3]=hbgHues();
-    pg.innerHTML=`<div class="pgh">Home</div><div class="srow" style="border:0"><span>Background<small>Behind the home page only, in the colours of the projects you are working on.</small></span></div>
-    <div class="hbgs">${HBG.map(([v,n])=>`<button class="hbgt ${v===k?'on':''}" data-hbg="${v}"><span class="hbg working" style="--h1:${h1};--h2:${h2};--h3:${h3}">${hbgHTML(v,list)}<span class="fld grain"></span></span><b>${n}</b></button>`).join('')}</div>
-    <div class="srow"><span>Moves with the work<small>Livelier while an agent works, and warm when the profile for your next session is near a limit.</small></span><i class="stog ${hbgLive()?'on':''}" data-set="hlive"></i></div>`}
+  else if(stab===4)renderLook(pg);
   else if(stab===2){needSkills();const all=skillList();pg.innerHTML=`<div class="pgh">Skills</div>`+(!all?'<div class="cap2">Loading skills…</div>':V.sk.err?`<div class="cap2">${esc(V.sk.err)}</div>`:all.map(s=>`<div class="srow" data-tip="${esc(s.about)}"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">/${esc(s.name)}</span><span class="sstate">${s.from}</span></div>`).join('')+`<div class="cap2" style="padding:10px 8px">As Claude Code reports them for ${V.isNew?'a new session here':'the open session'}.</div>`)}
   else{pg.innerHTML=`<div class="pgh">About</div>`+(about?`<div class="srow"><span>Workwood</span><span class="sstate">${esc(about.version)}</span></div>
     ${updRow()}
@@ -1083,8 +1098,11 @@ $('stabs').onclick=e=>{const b=e.target.closest('[data-st]');if(!b)return;dropLo
 $('spage').onclick=async e=>{
   const s=e.target.closest('[data-set]'),l=e.target.closest('[data-login]');
   if(e.target.closest('#lgBack')){dropLogin(true);renderSettings();return}
-  const hb=e.target.closest('[data-hbg]');if(hb){localStorage.setItem('ww.hbg',hb.dataset.hbg);renderSettings();renderHomeBg();return}
-  if(s?.dataset.set==='hlive'){localStorage.setItem('ww.hlive',hbgLive()?'off':'on');renderSettings();renderHomeBg();return}
+  const lk=e.target.closest('[data-bgk],[data-bgp],[data-bgm],[data-th]');
+  if(lk){const ed=V.lookEdit||'home',d=lk.dataset;
+    if(d.th)setTheme(d.th);else if(d.bgp)V.lookEdit=d.bgp;else if(d.bgk)setBg(ed,'bg',d.bgk);else if(d.bgm)setBg(ed,'motion',d.bgm);
+    renderSettings();return}
+  if(s?.dataset.set==='bglim'){const ed=V.lookEdit||'home';setBg(ed,'limits',bgOf(ed).limits?'off':'on');renderSettings();return}
   if(e.target.closest('#lgOpen')&&L?.url){openLink(e,L.url);return}
   if(e.target.closest('#lgCopy')&&L?.url){const b=$('lgCopy');try{await copyText(L.url);b.textContent='Copied'}catch{b.textContent='Select it in the terminal'}setTimeout(()=>{if(b.isConnected)b.textContent='Copy link'},1500);return}
   if(l){PE=null;startLogin(l.dataset.login);return}
@@ -1114,7 +1132,6 @@ $('spage').onclick=async e=>{
   if(s?.dataset.set==='updcheck'){U.err='';U.later=null;localStorage.removeItem('ww.updLater');api('update/check',{}).catch(err=>oops(err.message));setTimeout(renderSettings,50)}
   if(s?.dataset.set==='updgo'){U.later=null;localStorage.removeItem('ww.updLater');closeSettings();doUpdate()}
   if(s?.dataset.set==='updrestart')window.workwood.restart().catch(()=>{});
-  if(s?.dataset.set==='theme'){setTheme(root.dataset.theme==='dark'?'light':'dark');renderSettings()}
 };
 $('spage').addEventListener('keydown',async e=>{
   if(e.target.id==='sNew'&&e.key==='Enter'){e.preventDefault();$('spage').querySelector('[data-add]').click();return}
@@ -1812,47 +1829,150 @@ $('dash').onclick=async e=>{
 };
 new ResizeObserver(fitThumbs).observe($('dash'));
 
-// The background behind Home: one of a few slow fields, in the colours of the projects you are working on. It moves
-// with the work: faster and brighter while an agent works, and warm while the next session's profile is near a limit.
-// Chosen under Settings, Home; kept in this window.
-const HBG=[['none','None'],['aurora','Aurora'],['caustics','Caustics'],['orbits','Orbits'],['constel','Constellation']];
-const hbgKind=()=>{const k=localStorage.getItem('ww.hbg');return HBG.some(x=>x[0]===k)?k:'aurora'};
-const hbgLive=()=>localStorage.getItem('ww.hlive')!=='off';
-const seeded=seed=>{let s=seed>>>0||1;return ()=>(s=(s*1664525+1013904223)>>>0)/4294967296};
-// Stars: the newest sessions, each in its project's colour, joined to the next star of the same project.
-function constelHTML(list){
-  const pts=list.map(s=>{const r=seeded(hueOf(s.id)*7919+s.id.length);return {x:8+r()*84,y:10+r()*78,h:hueOf(s.project),p:s.root||s.cwd,w:s.status==='work'}});
-  let edges='';const last=new Map();
-  for(const p of pts){const q=last.get(p.p);last.set(p.p,p);if(!q)continue;const dx=p.x-q.x,dy=p.y-q.y;
-    edges+=`<span class="edge" style="--h:${p.h};left:${q.x}%;top:${q.y}%;width:${Math.hypot(dx,dy).toFixed(1)}%;transform:rotate(${(Math.atan2(dy,dx)*180/Math.PI).toFixed(1)}deg)"></span>`}
-  return `<span class="fld tone"></span><span class="fld constel"><span class="cfig">${edges}${pts.map((p,i)=>`<span class="vx ${p.w?'w':''}" style="--h:${p.h};left:${p.x}%;top:${p.y}%;animation-delay:-${(i*1.3).toFixed(1)}s"></span>`).join('')}</span></span>`;
+// Backgrounds: one for Home, one behind a session, one behind the sidebar, each chosen under Settings, Look and kept in
+// this window. The moving kinds are slow fields in the projects' colours; the calm ones are made for reading. Motion says
+// when a background may move (always, only while an agent works, never) and Warn at limits adds a glow near a limit —
+// two settings, so any mix works: still with a glow, moving only while working with none, and so on.
+const BG=[['aurora','Aurora'],['caustics','Caustics'],['orbits','Orbits'],['constel','Constellation'],['paper','Paper'],['dusk','Dusk'],['edges','Edges'],['lines','Lines'],['none','None']];
+const BGMOVE=['aurora','caustics','orbits','constel'],BGCALM=['paper','dusk','edges','lines'],BGSTILL=['paper','lines','none'];
+const BGDEF={home:{kind:'aurora',motion:'always',limits:true},session:{kind:'none',motion:'working',limits:true},side:{kind:'none',motion:'working',limits:false}};
+const BGPLACES=[['home','Home'],['session','Sessions'],['side','Sidebar']];
+// The Home background's old keys carry over once.
+{const o=localStorage.getItem('ww.hbg');if(o!=null&&localStorage.getItem('ww.bg.home')==null)localStorage.setItem('ww.bg.home',o);
+ if(localStorage.getItem('ww.hlive')==='off'&&localStorage.getItem('ww.limits.home')==null)localStorage.setItem('ww.limits.home','off');
+ localStorage.removeItem('ww.hbg');localStorage.removeItem('ww.hlive')}
+function bgOf(place){
+  const d=BGDEF[place],k=localStorage.getItem('ww.bg.'+place),m=localStorage.getItem('ww.motion.'+place),l=localStorage.getItem('ww.limits.'+place);
+  const kind=BG.some(x=>x[0]===k)&&!(k==='constel'&&place!=='home')?k:d.kind;   // the constellation maps the inbox: Home only
+  return {kind,motion:['always','working','never'].includes(m)?m:d.motion,limits:l==null?d.limits:l==='on'};
 }
-function hbgHTML(kind,list){
+const setBg=(place,what,v)=>{localStorage.setItem(`ww.${what}.${place}`,v);renderBgs()};
+const seeded=seed=>{let s=seed>>>0||1;return ()=>(s=(s*1664525+1013904223)>>>0)/4294967296};
+const inbox=()=>A.sessions.filter(s=>!s.done).sort((a,b)=>b.mts-a.mts);
+// Home and the sidebar take the colours of the newest sessions' projects, up to three, as their tiles show them.
+function hbgHues(){
+  const hs=[];for(const s of inbox()){const h=hueOf(s.project);if(!hs.includes(h))hs.push(h);if(hs.length===3)break}
+  if(!hs.length)hs.push(168);while(hs.length<3)hs.push((hs[hs.length-1]+50)%360);return hs;
+}
+const bgHues=(place,s)=>{if(place!=='session'||!s)return hbgHues();const h=hueOf(s.project);return [h,(h+40)%360,(h+320)%360]};
+function hbgHTML(kind){
   if(kind==='aurora')return '<span class="fld blob b1"></span><span class="fld blob b2"></span><span class="fld blob b3"></span>';
   if(kind==='caustics')return '<span class="fld caustic c1"></span><span class="fld caustic c2"></span><span class="fld caustic c3"></span>';
   if(kind==='orbits')return '<span class="fld tone"></span><span class="fld orbits"><i style="--h:var(--h1)"></i><i style="--h:var(--h2)"></i><i style="--h:var(--h3)"></i></span>';
-  if(kind==='constel')return constelHTML(list);
+  if(kind==='paper')return '<span class="fld paper"></span><span class="fld fibre"></span>';
+  if(kind==='dusk')return '<span class="fld dusk"></span>';
+  if(kind==='edges')return '<span class="fld edges"></span>';
+  if(kind==='lines')return '<span class="fld lines"></span>';
   return '';
 }
-// Its colours: the projects of the newest sessions in the inbox, up to three, as their tiles show them.
-function hbgHues(){
-  const hs=[];for(const s of A.sessions.filter(x=>!x.done).sort((a,b)=>b.mts-a.mts)){const h=hueOf(s.project);if(!hs.includes(h))hs.push(h);if(hs.length===3)break}
-  if(!hs.length)hs.push(168);while(hs.length<3)hs.push((hs[hs.length-1]+50)%360);return hs;
+
+/* ---- the constellation: each project a figure, its recent sessions the stars ----
+   One SVG, 1000 units high and as wide as its box, so stars stay round, lines meet them and nothing is cropped; the
+   Settings tile is the same drawing, smaller. A project keeps a slot in the sky; a session's place in its figure comes
+   from its id, and the oldest are placed first, so a new session only adds a star. */
+const SLOTS=[[.17,.27],[.82,.25],[.55,.66],[.2,.76],[.84,.77],[.5,.2]];
+// The page's sky keeps one scale at any window size (a unit is 0.54px, as the round-41 drawing); the Settings tile
+// fits the same sky into its box and draws stars and lines larger (z), so they still read at that size.
+const skyDims=(box,tile)=>{const w=Math.max(1,box.clientWidth),h=Math.max(1,box.clientHeight);
+  return tile?{W:Math.round(1000*w/h),H:1000,z:5}:{W:Math.round(w/.54),H:Math.round(h/.54),z:1}};
+function skyFigures(list,W,H){
+  const byP=new Map();list.forEach((s,rank)=>{if(!byP.has(s.project))byP.set(s.project,[]);byP.get(s.project).push({s,rank})});
+  const used=new Set(),figs=[];
+  for(const [p,ss] of [...byP].slice(0,SLOTS.length)){
+    let i=hueOf(p)%SLOTS.length;while(used.has(i))i=(i+1)%SLOTS.length;used.add(i);
+    const cx=SLOTS[i][0]*W,cy=SLOTS[i][1]*H,pts=[];
+    for(const {s,rank} of ss.slice(0,7).sort((a,b)=>b.rank-a.rank)){
+      const r=seeded(hueOf(s.id)*7919+s.id.length);let x,y,n=0;
+      do{const a=r()*Math.PI*2,d=(pts.length?55:0)+r()*130;x=Math.max(60,Math.min(W-60,cx+Math.cos(a)*d*1.25));y=Math.max(60,Math.min(H-90,cy+Math.sin(a)*d*.8));n++}
+      while(n<30&&pts.some(q=>Math.hypot(q.x-x,q.y-y)<70));
+      pts.push({x,y,s,rad:rank<3?5:rank<8?3.8:2.8,old:rank>=8});
+    }
+    // a minimum spanning tree: each star joins the nearest one already in the figure, as star charts draw them
+    const edges=[],inT=[pts[0]],out=pts.slice(1);
+    while(out.length){let b=null;for(const a of inT)for(const c of out){const d=Math.hypot(a.x-c.x,a.y-c.y);if(!b||d<b[2])b=[a,c,d]}edges.push(b);inT.push(b[1]);out.splice(out.indexOf(b[1]),1)}
+    figs.push({p,h:hueOf(p),pts,edges});
+  }
+  return figs;
 }
-let hbgKey='';
-function renderHomeBg(){
-  const el=$('hbg'),kind=hbgKind(),on=isHome()&&kind!=='none';el.hidden=!on;
-  if(!on){hbgKey='';el.innerHTML='';return}
-  const live=hbgLive(),list=A.sessions.filter(s=>!s.done).sort((a,b)=>b.mts-a.mts).slice(0,14);
-  const working=live&&A.sessions.some(s=>s.status==='work'),p=profile(V.profile),use=p?Math.max(p.h5||0,p.d7||0):0;
-  const [h1,h2,h3]=hbgHues();
+function skyFar(W,H,z){const r=seeded(4242),n=Math.round(170*W*H/1.6e6);let s='';
+  for(let i=0;i<n;i++){const x=r()*W,y=r()*H,rad=(.6+r()*r()*1.6)*Math.min(z,2.5),tw=r()<.35;
+    s+=`<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${rad.toFixed(2)}" ${tw?`class="tw" style="--d:${(3+r()*5).toFixed(1)}s;animation-delay:-${(r()*8).toFixed(1)}s"`:`opacity="${(.25+r()*.5).toFixed(2)}"`}/>`}
+  return s}
+const skyList=()=>inbox().slice(0,30);
+function skySVG(list,{W,H,z},born){
+  const f1=n=>n.toFixed(1),isNew=id=>born?.has(id);
+  const figs=skyFigures(list,W,H).map(f=>{
+    const lines=f.edges.map(([a,b])=>{const d=Math.hypot(b.x-a.x,b.y-a.y),ux=(b.x-a.x)/d,uy=(b.y-a.y)/d,g1=(a.rad+7)*z,g2=(b.rad+7)*z;
+      const pth=`M${f1(a.x+ux*g1)} ${f1(a.y+uy*g1)}L${f1(b.x-ux*g2)} ${f1(b.y-uy*g2)}`;
+      return `<path class="ln${isNew(a.s.id)||isNew(b.s.id)?' draw':''}" pathLength="100" d="${pth}"/><path class="run" pathLength="100" style="animation-delay:-${(seeded(hueOf(a.s.id+b.s.id))()*2.6).toFixed(2)}s" d="${pth}"/>`}).join('');
+    const stars=f.pts.map(p=>`<g class="star${isNew(p.s.id)?' born':''}" data-id="${esc(p.s.id)}"><circle class="halo" cx="${f1(p.x)}" cy="${f1(p.y)}" r="${f1(p.rad*2.8*z)}"/><circle class="ring" style="--r0:${(p.rad+2)*z}px" cx="${f1(p.x)}" cy="${f1(p.y)}" r="${(p.rad+2)*z}"/><circle class="st${p.old?' old':''}" cx="${f1(p.x)}" cy="${f1(p.y)}" r="${p.rad*z}"/></g>`).join('');
+    const lx=Math.max(30,Math.min(W-220,Math.min(...f.pts.map(p=>p.x)))),ly=Math.min(H-30,Math.max(...f.pts.map(p=>p.y))+40);
+    return `<g class="fig" data-p="${esc(f.p)}" style="--h:${f.h}">${lines}${stars}<text class="lab" x="${lx.toFixed(0)}" y="${ly.toFixed(0)}">${esc(f.p)}</text></g>`;
+  }).join('');
+  return `<svg class="sky" viewBox="0 0 ${W} ${H}" style="--z:${z}"><defs><linearGradient id="mtr" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><g class="rot"><g class="far">${skyFar(W,H,z)}</g>${figs}<g class="fx"></g></g></svg>`;
+}
+// Working state only changes classes, so the sky never restarts: a working star pulses and light runs along its figure.
+function skyMark(el){
+  const work=new Set(A.sessions.filter(s=>s.status==='work').map(s=>s.id));
+  for(const g of el.querySelectorAll('.star'))g.classList.toggle('w',work.has(g.dataset.id));
+  for(const f of el.querySelectorAll('.fig'))f.classList.toggle('w',!!f.querySelector('.star.w'));
+}
+// A turn that ends: its star flares and a shooting star crosses the sky.
+function skyTurnEnds(id){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches||document.hidden)return;
+  for(const svg of document.querySelectorAll('#hbg .sky, #spage .sky')){
+    if(svg.closest('#hbg')&&bgOf('home').motion==='never')continue;
+    const st=svg.querySelector(`.star[data-id="${CSS.escape(id)}"] .st`);if(!st)continue;
+    const fx=svg.querySelector('.fx'),vw=svg.viewBox.baseVal.width,r=seeded(Date.now()),mx=vw*.55+r()*vw*.35,my=60+r()*200,h=st.closest('.fig').style.getPropertyValue('--h');
+    fx.insertAdjacentHTML('beforeend',`<circle class="flare" style="--h:${h}" cx="${st.getAttribute('cx')}" cy="${st.getAttribute('cy')}" r="6"/><line class="meteor" x1="${mx.toFixed(0)}" y1="${my.toFixed(0)}" x2="${(mx+170).toFixed(0)}" y2="${(my-85).toFixed(0)}"/>`);
+    const added=[...fx.children].slice(-2);setTimeout(()=>added.forEach(n=>n.remove()),1800);
+  }
+}
+
+/* ---- the layers ---- */
+const BGL={hbg:{key:'',rate:1,raf:0,ids:null},sbg:{key:'',rate:1,raf:0,ids:null}};
+// Speed eases to where it should be, so starting and coming to rest glide over a couple of seconds instead of snapping.
+function bgRate(id,to,now){
+  const l=BGL[id],el=$(id);cancelAnimationFrame(l.raf);
+  const anims=()=>el.getAnimations({subtree:true}).filter(a=>!a.effect?.target?.closest?.('.fx'));
+  if(now||Math.abs(l.rate-to)<.001){l.rate=to;for(const a of anims()){if(to<.001)a.pause();else{a.playbackRate=to;if(a.playState==='paused')a.play()}}return}
+  const from=l.rate,t0=performance.now(),D=2000;
+  const step=t=>{const p=Math.min(1,(t-t0)/D),e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;l.rate=from+(to-from)*e;
+    for(const a of anims()){if(l.rate<.001)a.pause();else{a.playbackRate=l.rate;if(a.playState==='paused')a.play()}}
+    if(p<1)l.raf=requestAnimationFrame(step)};
+  l.raf=requestAnimationFrame(step);
+}
+function paintBg(id,place,s){
+  const el=$(id),l=BGL[id];
+  if(!place){el.hidden=true;if(l.key){l.key='';el.innerHTML=''}return}
+  const b=bgOf(place),k=b.kind,mine=place==='session'?[s]:A.sessions;
+  const working=mine.some(x=>x?.status==='work');
+  const p=profile(place==='session'?(s.profile||V.run?.profile):V.profile),use=p?Math.max(p.h5||0,p.d7||0):0,warn=!b.limits?'':use>=100?'hot':use>=80?'warm':'';
+  el.hidden=k==='none'&&!warn;if(el.hidden){if(l.key){l.key='';el.innerHTML=''}return}
+  const [h1,h2,h3]=bgHues(place,s);
   el.style.cssText=`--h1:${h1};--h2:${h2};--h3:${h3}`;
-  el.className='hbg '+(working?'working ':'')+(live&&use>=100?'hot ':live&&use>=80?'warm ':'');
-  const key=kind+'|'+(kind==='constel'?list.map(s=>s.id+s.status).join():'');
-  if(key!==hbgKey){hbgKey=key;el.innerHTML=hbgHTML(kind,list)+'<span class="fld glow"></span><span class="fld grain"></span>'}
+  const moves=!BGSTILL.includes(k)&&!document.hidden&&(b.motion==='always'||b.motion==='working'&&working);
+  el.className='hbg '+({home:'',session:'insession',side:'inside'}[place])+(BGCALM.includes(k)?' calm':'')+(k==='paper'?' paperbg':'')
+    +(BGMOVE.includes(k)?' moving-kind':'')+(b.motion==='always'&&working?' working':'')+(moves?' moving':'')+(warn?' '+warn:'');
+  let key=place+'|'+k+'|'+h1+h2+h3,born=null;
+  if(k==='constel'){const list=skyList(),ids=list.map(x=>x.id);const dm=skyDims(el,false);key+='|'+dm.W+'x'+dm.H+'|'+ids.join();
+    if(l.ids&&key!==l.key)born=new Set(ids.filter(i=>!l.ids.includes(i)));l.ids=ids}else l.ids=null;
+  if(key!==l.key){l.key=key;el.innerHTML=(k==='constel'?skySVG(skyList(),skyDims(el,false),born):hbgHTML(k)+'<span class="fld grain"></span>')+'<span class="fld glow"></span>';bgRate(id,moves?1:0,true)}
+  else bgRate(id,moves?1:0,document.hidden);
+  if(k==='constel')skyMark(el);
 }
-document.addEventListener('visibilitychange',()=>$('hbg').classList.toggle('paused',document.hidden));
-$('hset').onclick=()=>openSettings(STABS.indexOf('Home'));
+// A turn ends when a session leaves 'work'.
+const bgWas=new Map();
+function renderBgs(){
+  for(const s of A.sessions){const was=bgWas.get(s.id);if(was==='work'&&s.status!=='work')skyTurnEnds(s.id);bgWas.set(s.id,s.status)}
+  const s=selSession(),place=isHome()?'home':!V.isNew&&s?'session':null;
+  paintBg('hbg',place,s);paintBg('sbg','side',null);
+  $('main').classList.toggle('bglane',place==='session'&&BGMOVE.includes(bgOf('session').kind));
+}
+const renderHomeBg=renderBgs;
+document.addEventListener('visibilitychange',renderBgs);   // a hidden window holds still
+new ResizeObserver(()=>{if(!$('hbg').hidden&&bgOf('home').kind==='constel'&&isHome())renderBgs()}).observe($('hbg'));
+$('hset').onclick=()=>{V.lookEdit='home';openSettings(STABS.indexOf('Look'))};
 
 /* ---------- everything together ---------- */
 // Under the title, always starting at the same place: where the work is happening. The worktree when there is one,
@@ -1902,11 +2022,15 @@ document.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey)||e.shiftKey||
 $('bCode').onclick=()=>api('open-editor',{sessionId:V.sel}).catch(e=>oops(e.message));
 
 const root=document.documentElement;
-const setTheme=t=>{root.dataset.theme=t;localStorage.setItem('ww.theme',t);$('gThemeV').textContent=t==='dark'?'Dark':'Light';if(T?.term)T.term.options.theme=termTheme()};
+const themePref=()=>{const t=localStorage.getItem('ww.theme');return ['dark','light','auto'].includes(t)?t:'dark'};
+const sysDark=matchMedia('(prefers-color-scheme: dark)');
+const setTheme=t=>{localStorage.setItem('ww.theme',t);root.dataset.theme=t==='auto'?(sysDark.matches?'dark':'light'):t;
+  $('gThemeV').textContent={dark:'Dark',light:'Light',auto:'Auto'}[t];if(T?.term)T.term.options.theme=termTheme()};
+sysDark.addEventListener('change',()=>{if(themePref()==='auto'){setTheme('auto');renderSettings()}});
 let gearAt=-1e9;
 $('bGear').onclick=e=>{e.stopPropagation();if(e.timeStamp-gearAt<350)return;gearAt=e.timeStamp;$('bGear').blur();const was=$('gmenu').hidden;closePops();if(was){$('gProf').hidden=A.profiles.length<2;$('gProfV').textContent=A.prefs?.defaultProfile||A.profiles.find(p=>p.global)?.name||'';const r=$('bGear').getBoundingClientRect(),m=$('gmenu');m.hidden=false;m.style.left=r.left+'px';m.style.top='auto';m.style.bottom=(innerHeight-r.top+6)+'px';$('bGear').classList.add('on')}};
 $('gmenu').onclick=e=>e.stopPropagation();
-$('gTheme').onclick=()=>setTheme(root.dataset.theme==='dark'?'light':'dark');
+$('gTheme').onclick=()=>setTheme({dark:'light',light:'auto',auto:'dark'}[themePref()]);   // Dark, Light, Auto in turn
 // Open at login: only where the window can arrange it (the Windows window).
 const LOGIN=window.workwood?.login||null;let loginOn=!!LOGIN?.on;
 async function setLogin(on){try{loginOn=!!(await LOGIN.set(on))}catch{}$('gLoginV').textContent=loginOn?'On':'Off'}
@@ -1931,4 +2055,4 @@ function connect(){
   es.addEventListener('item',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const i=V.items.findIndex(x=>x.n===d.item.n),end=!awayNow();noteArrival(d.item,i<0);if(i>=0)V.items[i]=d.item;else V.items.push(d.item);if(d.item.kind==='work'){addWork(d.item.files);renderPanel()}checkSoon();changesSoon();renderThread();follow(end,i<0&&d.item.kind==='assistant'?d.item.n:null)});
   es.onerror=()=>{};
 }
-hydrate();setTheme(localStorage.getItem('ww.theme')||'dark');render();connect();
+hydrate();setTheme(themePref());render();connect();

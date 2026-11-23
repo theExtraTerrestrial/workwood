@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 41: Constellation, redrawn</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root{color-scheme:dark;--accent:hsl(168 62% 62%);--warn:#ffb955;--go:#4fd6a4;--hot:#f0706a}
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0c0e;color:#e8e9ec;font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;padding-bottom:80px}
+  [data-theme=light] body{background:#e9eaee;color:#1d1e22}
+  button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:14px;padding:24px 0 2px}.top h1{font-size:17px;margin:0;flex:1}
+  .intro{color:#b9bcc3;max-width:760px;margin:6px 0 16px;font-size:14px}[data-theme=light] .intro{color:#555}
+  h3{font-size:15px;margin:38px 0 6px}
+  .notes{color:#b9bcc3;max-width:780px;font-size:13.5px;padding-left:18px}.notes li{margin:6px 0}.notes b{color:#fff}
+  [data-theme=light] .notes{color:#444}[data-theme=light] .notes b{color:#000}
+  details{margin-top:26px;color:#b9bcc3;max-width:900px}[data-theme=light] details{color:#444}
+  summary{cursor:pointer;font-weight:650}
+  code{font-family:"JetBrains Mono",monospace;font-size:11.5px}
+
+  .app{--bg:#18191c;--surface:#222428;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.14);--text:#f0f1f3;--dim:#a6aab2;--faint:#6d717a;color:var(--text)}
+  [data-theme=light] .app{--bg:#fbfbfc;--surface:#fff;--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.14);--text:#1b1c1f;--dim:#5b5f68;--faint:#8d919a}
+
+  .try{display:flex;align-items:center;gap:10px;margin:0 0 10px;font-size:12px;color:#8f939b;flex-wrap:wrap}
+  .seg{display:flex;background:rgba(128,128,128,.16);border-radius:9px;padding:2px}
+  .seg button{padding:3px 11px;border-radius:7px;font-size:12px;color:#a6aab2}.seg button.on{background:#2a2c31;color:#fff}
+  [data-theme=light] .seg button.on{background:#fff;color:#111}
+  .btn{padding:4px 11px;border-radius:8px;font-size:12px;background:rgba(128,128,128,.16);color:#c9ccd2}[data-theme=light] .btn{color:#333}
+  .btn:hover{background:rgba(128,128,128,.26)}
+
+  .stage{position:relative;height:540px;border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:0 30px 90px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.1)}
+  [data-theme=light] .stage{box-shadow:0 30px 90px rgba(0,0,0,.16),0 0 0 1px rgba(0,0,0,.1)}
+  #sky{position:absolute;inset:0}#sky>svg,.tile>svg,#sky>.old{position:absolute;inset:0;width:100%;height:100%}
+  .hm{position:relative;z-index:1;max-width:640px;margin:0 auto;padding:34px 24px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;transition:opacity .3s}
+  .hm h2{grid-column:1/-1;margin:0 0 4px;font-size:20px;font-weight:700}
+  .card{background:color-mix(in srgb,var(--surface) 80%,transparent);border:1px solid var(--line);border-radius:12px;padding:12px;min-height:88px;backdrop-filter:blur(8px)}
+  .card b{display:block;font-size:12.5px;margin-bottom:6px}.card i{display:block;height:6px;border-radius:3px;background:rgba(128,128,128,.18);margin:6px 0}
+  .card.w2{grid-column:span 2}.card.w3{grid-column:1/-1}
+  .stage.bare .hm{opacity:0}
+  .row2{display:flex;gap:18px;align-items:flex-end;margin-top:16px}
+  .tilebox{font-size:12px;color:#8f939b}
+  .tile{position:relative;display:block;width:130px;height:78px;border-radius:10px;overflow:hidden;background:var(--bg);box-shadow:0 0 0 2px var(--accent);margin-bottom:6px}
+  .tile.lg{width:260px;height:156px;box-shadow:0 0 0 1px var(--line2)}
+
+  /* ===== the sky ===== */
+  .sky{--int:1}
+  .sky .rot{transform-box:view-box;transform-origin:50% 260%;animation:skyturn 140s ease-in-out infinite alternate}
+  @keyframes skyturn{from{transform:rotate(-1.6deg)}to{transform:rotate(1.6deg)}}
+  .sky .far circle{fill:#cfd6e6}
+  [data-theme=light] .sky .far circle{fill:#5c6474}
+  .sky .tw{animation:tw var(--d,5s) ease-in-out infinite alternate}
+  @keyframes tw{from{opacity:.15}to{opacity:1}}
+  .sky .ln{fill:none;stroke:hsl(var(--h) 45% 72%/.34);stroke-width:1.3;stroke-linecap:round}
+  [data-theme=light] .sky .ln{stroke:hsl(var(--h) 35% 40%/.38)}
+  .sky .run{fill:none;stroke:hsl(var(--h) 80% 80%);stroke-width:2.2;stroke-linecap:round;stroke-dasharray:7 93;animation:run 2.6s linear infinite;filter:drop-shadow(0 0 4px hsl(var(--h) 80% 65%))}
+  [data-theme=light] .sky .run{stroke:hsl(var(--h) 70% 42%)}
+  @keyframes run{from{stroke-dashoffset:100}to{stroke-dashoffset:0}}
+  .sky .halo{fill:hsl(var(--h) 75% 65%);opacity:.32;filter:blur(5px)}
+  [data-theme=light] .sky .halo{opacity:.2}
+  .sky .st{fill:hsl(var(--h) 70% 92%)}
+  [data-theme=light] .sky .st{fill:hsl(var(--h) 45% 30%)}
+  .sky .st.old{opacity:.6}
+  .sky .ring{vector-effect:non-scaling-stroke;fill:none;stroke:hsl(var(--h) 80% 75%);stroke-width:1.5;animation:ring 2.4s ease-out infinite}
+  @keyframes ring{from{r:var(--r0);opacity:.7}to{r:calc(var(--r0) * 4.5);opacity:0}}
+  .sky .lab{font:600 20px "Manrope",sans-serif;letter-spacing:.22em;fill:hsl(var(--h) 30% 80%/.36);text-transform:uppercase}
+  [data-theme=light] .sky .lab{fill:hsl(var(--h) 25% 30%/.42)}
+  .sky.small .lab{display:none}
+  .sky .born{animation:born 1.4s ease-out both;transform-box:fill-box;transform-origin:center}
+  @keyframes born{from{opacity:0;transform:scale(.2)}}
+  .sky .draw{stroke-dasharray:100;animation:draw 1.6s .3s ease-out both}
+  @keyframes draw{from{stroke-dashoffset:100}to{stroke-dashoffset:0}}
+  .sky .flare{vector-effect:non-scaling-stroke;fill:none;stroke:hsl(var(--h) 85% 80%);stroke-width:2;animation:flare 1.6s ease-out forwards}
+  @keyframes flare{from{r:6px;opacity:.9}to{r:54px;opacity:0}}
+  .sky .meteor{stroke:url(#mtr);stroke-width:2.2;stroke-linecap:round;animation:meteor 1.3s cubic-bezier(.3,.6,.4,1) forwards}
+  @keyframes meteor{from{transform:translate(0,0);opacity:0}15%{opacity:1}to{transform:translate(-520px,260px);opacity:0}}
+  @media (prefers-reduced-motion:reduce){.sky *{animation:none!important}}
+
+  /* today's, for comparison (as built: % lengths, mixed-unit angles) */
+  .old{position:absolute;inset:0;--sat:62%;--lum:56%}
+  .old .vx{position:absolute;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;background:hsl(var(--h) var(--sat) calc(var(--lum) + 16%));box-shadow:0 0 10px 3px hsl(var(--h) var(--sat) var(--lum)/.4)}
+  .old .vx.w{width:7px;height:7px;margin:-3.5px 0 0 -3.5px}
+  .old .edge{position:absolute;height:1px;transform-origin:0 50%;background:linear-gradient(90deg,hsl(var(--h) var(--sat) var(--lum)/.05),hsl(var(--h) var(--sat) var(--lum)/.35),hsl(var(--h) var(--sat) var(--lum)/.05))}
+  .old .tone{position:absolute;inset:-30%;filter:blur(60px);opacity:.22;background:radial-gradient(40% 40% at 70% 30%,hsl(168 62% 56%/.7),transparent 70%),radial-gradient(35% 35% at 25% 80%,hsl(215 62% 56%/.5),transparent 70%)}
+</style></head>
+<body><div class="wrap">
+<div class="top"><h1>Round 41 — Constellation, redrawn</h1></div>
+<p class="intro">Each project is a constellation: its recent sessions are the stars, joined the way star charts join them. A faint sky turns slowly behind them. A working session pulses and light runs along its lines; when a turn ends, a shooting star crosses the sky. The Settings preview is the same drawing, only smaller.</p>
+
+<div class="try">
+  <div class="seg" id="tVer"><button data-v="new" class="on">New</button><button data-v="old">Today's</button></div>
+  <div class="seg" id="tMo"><button data-m="always" class="on">Always</button><button data-m="working">While working</button><button data-m="never">Never</button></div>
+  <button class="btn" id="bWork">Agent starts working</button>
+  <button class="btn" id="bDone">Turn ends</button>
+  <button class="btn" id="bNew">New session</button>
+  <button class="btn" id="bHome">Hide Home</button>
+  <button class="btn" id="bTheme">Light</button>
+</div>
+<div class="stage app" id="stage">
+  <div id="sky"></div>
+  <div class="hm"><h2>Good afternoon</h2><div class="card w2"><b>Left off</b><i style="width:80%"></i><i style="width:55%"></i></div><div class="card"><b>Limits</b><i></i><i style="width:60%"></i></div><div class="card"><b>Not committed</b><i style="width:70%"></i></div><div class="card w2"><b>Time</b><i></i><i style="width:40%"></i></div></div>
+</div>
+<div class="row2 app">
+  <div class="tilebox"><span class="tile" id="tile"></span>The Settings tile — same drawing, also moving</div>
+  <div class="tilebox"><span class="tile lg" id="tile2"></span>Twice the size: the figures keep their shape</div>
+</div>
+
+<h3>What it shows</h3>
+<ul class="notes">
+  <li><b>One constellation per project</b>, up to six projects, each in its own part of the sky and always in the same place. Its name is written faintly beside it, like a star chart.</li>
+  <li><b>Stars are recent sessions.</b> Newer ones are brighter; done ones leave. Lines join each star to its nearest neighbour, so a figure looks drawn, not a zigzag.</li>
+  <li><b>Moves only when something means it.</b> The sky turns slowly and stars twinkle. A working session pulses and light runs along its figure. A finished turn sends a shooting star. A new session fades in and its line draws itself.</li>
+  <li><b>Light theme</b> is a printed star chart: ink stars on paper.</li>
+  <li>Follows round 40: Motion (Always · While working · Never) and Warn at limits apply as for every background.</li>
+</ul>
+
+<details><summary>Under the hood</summary><ul class="notes">
+  <li><b>Why today's is broken:</b> each line's length is a % of the width, but its angle is worked out from x in % of the width and y in % of the height, so on any non-square window the lines miss their stars. The stars are placed at random across the whole page, with no grouping.</li>
+  <li><b>New:</b> one SVG, 1000 units high, its width set to the box's own shape, so stars stay round, lines always meet them and no figure is cut off. The Settings tile renders the same SVG from the same data, which is why it matches and moves.</li>
+  <li>Places: a project takes one of six slots, set as parts of the width and height and picked from <code>hueOf(project)</code>, moving to the next free slot if that one is taken; a session's spot within its figure comes from <code>seeded(id)</code>, kept at least a star's width from the others. Stars are placed oldest first, so a new session adds a star without moving the others. Lines are a minimum spanning tree per project.</li>
+  <li>The SVG is rebuilt only when the set of sessions changes. Working state, turn ends and new stars only add or remove classes, so the sky doesn't restart. Turn ends come from the existing session status events (work → idle).</li>
+  <li>The background stars are ~160 fixed points; a third twinkle. Everything is CSS animation, so the round-40 playback ramp and the hidden-window pause apply as they are.</li>
+</ul></details>
+
+<h3>Decided</h3>
+<ul class="notes">
+  <li>Project names stay in the sky.</li>
+  <li>A shooting star at the end of every turn.</li>
+</ul>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const hueOf=n=>{let h=0;for(const c of String(n))h=(h*31+c.charCodeAt(0))>>>0;return h%360};
+const seeded=seed=>{let s=seed>>>0||1;return ()=>(s=(s*1664525+1013904223)>>>0)/4294967296};
+const H=1000,SLOTS=[[.17,.27],[.82,.25],[.55,.66],[.2,.76],[.84,.77],[.5,.2]];   // as parts of the width and height
+
+// the inbox: newest first; age 0 = newest
+let sessions=[
+  ['workwood','w1',0,'work'],['workwood','w2',1],['workwood','w3',3],['workwood','w4',6],['workwood','w5',9],['workwood','w6',12],
+  ['site','s1',2],['site','s2',7],['site','s3',11],
+  ['claudius','c1',4],['claudius','c2',5],['claudius','c3',10],['claudius','c4',13],
+  ['speech','p1',8],['speech','p2',14],['dotfiles','d1',15]
+].map(([project,id,age,status])=>({project,id:project+id,age,status:status||'idle'}));
+let fresh=null,motion='always',ver='new';
+
+function layout(list,W){
+  const byP=new Map();for(const s of list){if(!byP.has(s.project))byP.set(s.project,[]);byP.get(s.project).push(s)}
+  const used=new Set(),figs=[];
+  for(const [p,ss] of [...byP].slice(0,6)){
+    let i=hueOf(p)%SLOTS.length;while(used.has(i))i=(i+1)%SLOTS.length;used.add(i);
+    const cx=SLOTS[i][0]*W,cy=SLOTS[i][1]*H,h=hueOf(p),pts=[];
+    // oldest first, so a new session only adds a star and the figure you know stays put
+    for(const s of ss.slice(0,7).sort((a,b)=>b.age-a.age)){
+      const r=seeded(hueOf(s.id)*7919+s.id.length);let x,y,tries=0;
+      do{const a=r()*Math.PI*2,d=(pts.length?55:0)+r()*130;x=Math.max(60,Math.min(W-60,cx+Math.cos(a)*d*1.25));y=Math.max(60,Math.min(H-90,cy+Math.sin(a)*d*.8));tries++}
+      while(tries<30&&pts.some(q=>Math.hypot(q.x-x,q.y-y)<70));
+      pts.push({x,y,s,rad:s.age<3?5:s.age<8?3.8:2.8});
+    }
+    // minimum spanning tree: each new star joins the nearest one already in the figure
+    const edges=[],inT=[pts[0]],out=pts.slice(1);
+    while(out.length){let best=null;for(const a of inT)for(const b of out){const d=Math.hypot(a.x-b.x,a.y-b.y);if(!best||d<best[2])best=[a,b,d]}
+      edges.push(best);inT.push(best[1]);out.splice(out.indexOf(best[1]),1)}
+    figs.push({p,h,pts,edges,cx,cy});
+  }
+  return figs;
+}
+function farStars(W){const r=seeded(4242);let s='';const n=Math.round(170*W/1600);for(let i=0;i<n;i++){const x=r()*W,y=r()*H,rad=.6+r()*r()*1.6,tw=r()<.35;
+  s+=`<circle cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" r="${rad.toFixed(2)}" ${tw?`class="tw" style="--d:${(3+r()*5).toFixed(1)}s;animation-delay:-${(r()*8).toFixed(1)}s"`:`opacity="${(.25+r()*.5).toFixed(2)}"`}/>`}return s}
+// the sky takes the box's own shape (height 1000), so stars stay round, lines meet them and nothing is cropped
+function skySVG(list,small,box){
+  const W=Math.round(H*box.clientWidth/Math.max(1,box.clientHeight)),figs=layout(list,W);let lines='',stars='',labs='';
+  for(const f of figs){
+    const working=f.pts.some(p=>p.s.status==='work');
+    for(const [a,b] of f.edges){const d=Math.hypot(b.x-a.x,b.y-a.y),ux=(b.x-a.x)/d,uy=(b.y-a.y)/d,g1=a.rad+7,g2=b.rad+7;
+      const pth=`M${(a.x+ux*g1).toFixed(1)} ${(a.y+uy*g1).toFixed(1)}L${(b.x-ux*g2).toFixed(1)} ${(b.y-uy*g2).toFixed(1)}`,nw=fresh&&(b.s.id===fresh||a.s.id===fresh);
+      lines+=`<path class="ln${nw?' draw':''}" pathLength="100" style="--h:${f.h}" d="${pth}"/>`;
+      if(working)lines+=`<path class="run" pathLength="100" style="--h:${f.h};animation-delay:-${(Math.random()*2.6).toFixed(2)}s" d="${pth}"/>`}
+    for(const p of f.pts){const nw=p.s.id===fresh,w=p.s.status==='work';
+      stars+=`<g style="--h:${f.h}" data-id="${p.s.id}" class="${nw?'born':''}"><circle class="halo" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(p.rad*(w?3.4:2.6)).toFixed(1)}"/>${w?`<circle class="ring" style="--r0:${p.rad+2}px" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${p.rad+2}"/>`:''}<circle class="st ${p.s.age>=8?'old':''}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${p.rad}"/></g>`}
+    const lx=Math.max(30,Math.min(W-220,Math.min(...f.pts.map(p=>p.x)))),ly=Math.min(H-30,Math.max(...f.pts.map(p=>p.y))+40);
+    labs+=`<text class="lab" style="--h:${f.h}" x="${lx.toFixed(0)}" y="${ly.toFixed(0)}">${f.p}</text>`;
+  }
+  return `<svg class="sky${small?' small':''}" viewBox="0 0 ${W} ${H}"><defs><linearGradient id="mtr" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+    <g class="rot"><g class="far">${farStars(W)}</g>${lines}${stars}${labs}<g class="fx"></g></g></svg>`;
+}
+// today's version, ported as built, for comparison
+function oldHTML(){
+  const list=sessions.slice().sort((a,b)=>a.age-b.age).slice(0,14);
+  const pts=list.map(s=>{const r=seeded(hueOf(s.id)*7919+s.id.length);return {x:8+r()*84,y:10+r()*78,h:hueOf(s.project),p:s.project,w:s.status==='work'}});
+  let edges='';const last=new Map();
+  for(const p of pts){const q=last.get(p.p);last.set(p.p,p);if(!q)continue;const dx=p.x-q.x,dy=p.y-q.y;
+    edges+=`<span class="edge" style="--h:${p.h};left:${q.x}%;top:${q.y}%;width:${Math.hypot(dx,dy).toFixed(1)}%;transform:rotate(${(Math.atan2(dy,dx)*180/Math.PI).toFixed(1)}deg)"></span>`}
+  return `<div class="old"><span class="tone"></span>${edges}${pts.map(p=>`<span class="vx ${p.w?'w':''}" style="--h:${p.h};left:${p.x}%;top:${p.y}%"></span>`).join('')}</div>`;
+}
+function render(){
+  $('bWork').textContent=sessions.find(x=>x.id==='workwoodw1').status==='work'?'Agent stops working':'Agent starts working';
+  for(const id of ['sky','tile','tile2'])$(id).innerHTML=ver==='new'?skySVG(sessions,id!=='sky',$(id)):oldHTML();
+  setRate(target(),true);
+}
+const anyWork=()=>sessions.some(s=>s.status==='work');
+const target=()=>motion==='always'?1:motion==='working'&&anyWork()?1:0;
+// round 40's ramp: speed eases to the target so starting and stopping glide
+let rate=1,ramp=0;
+function setRate(to,now){
+  cancelAnimationFrame(ramp);const from=now?to:rate,t0=performance.now(),D=now?1:2000;
+  const els=()=>['sky','tile','tile2'].flatMap(id=>$(id).getAnimations({subtree:true})).filter(a=>!a.effect?.target?.closest?.('.fx'));
+  const step=t=>{const p=Math.min(1,(t-t0)/D),e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;rate=from+(to-from)*e;
+    els().forEach(a=>{if(rate<.001)a.pause();else{if(a.playState==='paused')a.play();a.playbackRate=rate}});if(p<1)ramp=requestAnimationFrame(step)};
+  ramp=requestAnimationFrame(step);
+}
+// a finished turn: a flare at its star, and a shooting star across the sky
+function turnEnds(id){
+  if(motion==='never'||ver!=='new')return;
+  for(const box of ['sky','tile','tile2']){const svg=$(box).querySelector('svg'),g=svg.querySelector(`[data-id="${id}"] .st`);if(!g)continue;
+    const fx=svg.querySelector('.fx'),cx=+g.getAttribute('cx'),cy=+g.getAttribute('cy'),h=hueOf(sessions.find(s=>s.id===id).project);
+    const vw=svg.viewBox.baseVal.width,r=seeded(Date.now()),mx=vw*.55+r()*vw*.35,my=60+r()*200;
+    fx.insertAdjacentHTML('beforeend',`<circle class="flare" style="--h:${h}" cx="${cx}" cy="${cy}" r="6"/><line class="meteor" x1="${mx}" y1="${my}" x2="${mx+170}" y2="${my-85}"/>`);
+    setTimeout(()=>fx.innerHTML='',1800)}
+}
+$('bWork').onclick=()=>{const s=sessions.find(x=>x.id==='workwoodw1');
+  if(s.status==='work'){s.status='idle';render();turnEnds(s.id);if(motion==='working'){rate=1;setRate(1,true);setRate(0)}}
+  else{s.status='work';render();if(motion==='working'){rate=0;setRate(0,true);setRate(1)}}};
+$('bDone').onclick=()=>{const s=sessions.find(x=>x.status==='work')||sessions.find(x=>x.id==='sites1');const was=s.status==='work';s.status='idle';
+  render();turnEnds(s.id);if(was&&motion==='working'){rate=1;setRate(1,true);setRate(0)}};
+$('bNew').onclick=()=>{sessions.forEach(s=>s.age++);const id='site'+'n'+Date.now()%100000;sessions.unshift({project:'site',id,age:0,status:'idle'});fresh=id;render();setTimeout(()=>fresh=null,2000)};
+$('bHome').onclick=()=>{const b=$('stage').classList.toggle('bare');$('bHome').textContent=b?'Show Home':'Hide Home'};
+$('bTheme').onclick=()=>{const r=document.documentElement,d=r.dataset.theme==='dark';r.dataset.theme=d?'light':'dark';r.style.colorScheme=d?'light':'dark';$('bTheme').textContent=d?'Dark':'Light'};
+$('tVer').onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;ver=b.dataset.v;$('tVer').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));render()};
+$('tMo').onclick=e=>{const b=e.target.closest('[data-m]');if(!b)return;motion=b.dataset.m;$('tMo').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));setRate(target())};
+render();addEventListener('resize',()=>render());
+</script>
+</body></html>

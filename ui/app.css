@@ -1203,23 +1203,24 @@
   @container (max-width:420px){.pcard .spk{display:none}.pws{gap:14px}}
   @container (max-width:300px){.pws{grid-template-columns:1fr}}
 
-  /* ---------- home background: slow fields in the projects' colours, behind everything on Home ---------- */
+  /* ---------- backgrounds: Home, behind a session, behind the sidebar ---------- */
   .main{position:relative}
   .main>.head,.main>.split{position:relative;z-index:1}
   .hbg{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;--sp:1.5;--int:.7;--sat:62%;--lum:56%;transition:opacity 1.2s}
   .hbg.working{--sp:.6;--int:1}
   [data-theme=light] .hbg{--lum:62%;--int:.55}[data-theme=light] .hbg.working{--int:.8}
+  .hbg.insession{--int:.42}.hbg.insession.working{--int:.55}
+  .hbg.inside{--int:.55}.hbg.inside.working{--int:.7}
   .hbg .fld{position:absolute;inset:0}
   .hbg .grain{opacity:.06;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
   [data-theme=light] .hbg .grain{mix-blend-mode:multiply;opacity:.04}
-  .hbg.paused *{animation-play-state:paused!important}
   @media (prefers-reduced-motion:reduce){.hbg *{animation:none!important}}
   @keyframes hturn{to{transform:rotate(360deg)}}
   /* aurora: a soft field per project, drifting */
   .hbg .blob{inset:auto;width:62%;aspect-ratio:1;border-radius:50%;filter:blur(80px);opacity:calc(var(--int) * .3);will-change:transform}
-  .hbg .b1{left:-14%;top:-34%;background:hsl(var(--h1) var(--sat) var(--lum));animation:hwander calc(34s * var(--sp)) ease-in-out infinite alternate}
-  .hbg .b2{right:-18%;top:-6%;background:hsl(var(--h2) var(--sat) var(--lum));animation:hwander calc(41s * var(--sp)) ease-in-out infinite alternate-reverse}
-  .hbg .b3{left:22%;bottom:-48%;background:hsl(var(--h3) var(--sat) var(--lum));opacity:calc(var(--int) * .2);animation:hwander calc(47s * var(--sp)) ease-in-out infinite alternate}
+  .hbg .b1{left:-14%;top:-34%;background:hsl(var(--h1) var(--sat) var(--lum));animation:hwander calc(34s * var(--sp)) ease-in-out infinite alternate -9s}
+  .hbg .b2{right:-18%;top:-6%;background:hsl(var(--h2) var(--sat) var(--lum));animation:hwander calc(41s * var(--sp)) ease-in-out infinite alternate-reverse -14s}
+  .hbg .b3{left:22%;bottom:-48%;background:hsl(var(--h3) var(--sat) var(--lum));opacity:calc(var(--int) * .2);animation:hwander calc(47s * var(--sp)) ease-in-out infinite alternate -20s}
   @keyframes hwander{0%{transform:translate(-4%,-3%) scale(1)}50%{transform:translate(8%,9%) scale(1.12)}100%{transform:translate(-7%,5%) scale(.94)}}
   /* caustics: light turning, as through water */
   .hbg .caustic{inset:-60%;border-radius:50%;mix-blend-mode:screen;will-change:transform}
@@ -1227,36 +1228,97 @@
   .hbg .c1{filter:blur(30px);opacity:calc(var(--int) * .32);background:conic-gradient(from 0deg,transparent 0 16%,hsl(var(--h1) var(--sat) var(--lum)/.85) 30%,transparent 46%,hsl(var(--h2) var(--sat) var(--lum)/.7) 68%,transparent 86%);animation:hturn calc(40s * var(--sp)) linear infinite}
   .hbg .c2{filter:blur(42px);opacity:calc(var(--int) * .26);background:conic-gradient(from 140deg,transparent 0 22%,hsl(var(--h2) var(--sat) var(--lum)/.8) 38%,transparent 58%);animation:hturn calc(58s * var(--sp)) linear infinite reverse}
   .hbg .c3{filter:blur(54px);opacity:calc(var(--int) * .24);background:conic-gradient(from 250deg,transparent 0 30%,hsl(var(--h3) var(--sat) calc(var(--lum) + 8%)/.75) 50%,transparent 70%);animation:hturn calc(76s * var(--sp)) linear infinite}
-  /* a soft tone under orbits and stars */
+  /* a soft tone under the orbits */
   .hbg .tone{inset:-30%;filter:blur(60px);opacity:calc(var(--int) * .22);background:radial-gradient(40% 40% at 70% 30%,hsl(var(--h1) var(--sat) var(--lum)/.7),transparent 70%),radial-gradient(35% 35% at 25% 80%,hsl(var(--h2) var(--sat) var(--lum)/.5),transparent 70%);animation:hwander calc(40s * var(--sp)) ease-in-out infinite alternate}
   /* orbits: a ring per project, each with a body going round */
   .hbg .orbits{opacity:calc(var(--int) * .9)}
   .hbg .orbits i{position:absolute;left:72%;top:28%;aspect-ratio:1;border-radius:50%;border:1px solid hsl(var(--h) var(--sat) var(--lum)/.16)}
   .hbg .orbits i::after{content:"";position:absolute;top:-3px;left:50%;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:hsl(var(--h) var(--sat) calc(var(--lum) + 14%));box-shadow:0 0 12px 4px hsl(var(--h) var(--sat) var(--lum)/.45)}
-  .hbg .orbits i:nth-child(1){width:30%;margin:-15% 0 0 -15%;animation:hturn calc(26s * var(--sp)) linear infinite}
-  .hbg .orbits i:nth-child(2){width:56%;margin:-28% 0 0 -28%;animation:hturn calc(40s * var(--sp)) linear infinite reverse}
-  .hbg .orbits i:nth-child(3){width:88%;margin:-44% 0 0 -44%;animation:hturn calc(62s * var(--sp)) linear infinite}
-  /* constellation: a star per recent session, joined within a project; a working session's star pulses */
-  .hbg .constel{opacity:calc(var(--int) * .95);animation:hdrift calc(50s * var(--sp)) ease-in-out infinite alternate}
-  @keyframes hdrift{0%{transform:translate(-2%,-2%) scale(1)}100%{transform:translate(2%,2%) scale(1.04)}}
-  .hbg .cfig{position:absolute;inset:0}
-  .hbg .vx{position:absolute;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;background:hsl(var(--h) var(--sat) calc(var(--lum) + 16%));box-shadow:0 0 10px 3px hsl(var(--h) var(--sat) var(--lum)/.4);animation:htwinkle calc(5s * var(--sp)) ease-in-out infinite alternate}
-  .hbg .vx.w{width:7px;height:7px;margin:-3.5px 0 0 -3.5px;animation:hpulse 1.6s ease-in-out infinite}
-  @keyframes htwinkle{0%{opacity:.4}100%{opacity:1}}
-  @keyframes hpulse{0%,100%{box-shadow:0 0 8px 2px hsl(var(--h) var(--sat) var(--lum)/.5)}50%{box-shadow:0 0 22px 9px hsl(var(--h) var(--sat) var(--lum)/.55)}}
-  .hbg .edge{position:absolute;height:1px;transform-origin:0 50%;background:linear-gradient(90deg,hsl(var(--h) var(--sat) var(--lum)/.05),hsl(var(--h) var(--sat) var(--lum)/.35),hsl(var(--h) var(--sat) var(--lum)/.05))}
-  /* near a limit: a warm glow breathing low in the page */
-  .hbg .glow{inset:auto 10% -30% 10%;height:70%;border-radius:50%;filter:blur(90px);opacity:0;background:var(--warn);transition:opacity 2s}
-  .hbg.warm .glow{opacity:.13;animation:hbreathe 8s ease-in-out infinite}
-  .hbg.hot .glow{opacity:.13;background:var(--hot);animation:hbreathe 8s ease-in-out infinite}
-  @keyframes hbreathe{50%{opacity:.2;transform:scale(1.1)}}
+  .hbg .orbits i:nth-child(1){width:30%;margin:-15% 0 0 -15%;animation:hturn calc(26s * var(--sp)) linear infinite -5s}
+  .hbg .orbits i:nth-child(2){width:56%;margin:-28% 0 0 -28%;animation:hturn calc(40s * var(--sp)) linear infinite reverse -11s}
+  .hbg .orbits i:nth-child(3){width:88%;margin:-44% 0 0 -44%;animation:hturn calc(62s * var(--sp)) linear infinite -30s}
+  /* the calm ones, for reading: low contrast, nothing busy behind the words */
+  .hbg .paper{background:hsl(38 30% 50%/.07)}
+  [data-theme=light] .hbg .paper{background:hsl(40 60% 88%/.55)}
+  .hbg.paperbg .grain{opacity:.11}[data-theme=light] .hbg.paperbg .grain{opacity:.07}
+  .hbg .fibre{opacity:.5;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(128,110,80,.025) 3px 4px)}
+  .hbg .dusk{background:linear-gradient(180deg,hsl(var(--h1) 40% var(--lum)/.16),transparent 55%),linear-gradient(0deg,hsl(var(--h2) 40% var(--lum)/.07),transparent 40%);background-size:100% 130%;animation:hdusk calc(60s * var(--sp)) ease-in-out infinite alternate}
+  @keyframes hdusk{to{background-position:0 100%}}
+  .hbg .edges{box-shadow:inset 0 0 120px 10px hsl(var(--h1) var(--sat) var(--lum)/.22),inset 0 0 40px 0 hsl(var(--h2) var(--sat) var(--lum)/.12);animation:hedge calc(14s * var(--sp)) ease-in-out infinite}
+  @keyframes hedge{50%{opacity:.7}}
+  .hbg .lines{background-image:linear-gradient(rgba(128,128,128,.1) 1px,transparent 1px);background-size:100% 28px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 15%,#000 85%,transparent)}
+  /* the sidebar: a light veil keeps the names readable; its glow rises from the bottom */
+  .side{position:relative}
+  .side>:not(.hbg){position:relative;z-index:1}
+  .hbg.inside::after{content:"";position:absolute;inset:0;background:color-mix(in srgb,var(--side) 40%,transparent)}
+  .hbg.inside.calm::after{display:none}
+  .hbg.inside .blob{width:160%;filter:blur(50px)}
+  .hbg.inside .orbits i{left:80%;top:12%}
+  .hbg.inside .edges{box-shadow:inset 0 0 60px 4px hsl(var(--h1) var(--sat) var(--lum)/.22)}
+  .hbg.inside .glow{inset:auto -50% -20% -50%;height:40%;filter:blur(50px)}
+  /* in a session, moving kinds keep out of the column you read */
+  .main.bglane .conv::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+    background:linear-gradient(90deg,transparent calc(50% - 480px),color-mix(in srgb,var(--bg) 62%,transparent) calc(50% - 380px),color-mix(in srgb,var(--bg) 62%,transparent) calc(50% + 380px),transparent calc(50% + 480px))}
+  /* near a limit: a warm glow low in the page, red at the limit — on its own switch, so it shows when still or None */
+  .hbg .glow{inset:auto 10% -30% 10%;height:70%;border-radius:50%;filter:blur(90px);opacity:0;background:var(--warn);transition:opacity 2s,background 2s}
+  .hbg.warm .glow{opacity:.16}
+  .hbg.hot .glow{opacity:.18;background:var(--hot)}
+  .hbg.moving.warm .glow,.hbg.moving.hot .glow{animation:hbreathe 8s ease-in-out infinite}
+  @keyframes hbreathe{50%{opacity:.26;transform:scale(1.1)}}
+
+  /* the constellation: each project a figure, its recent sessions the stars; light theme is a printed star chart */
+  .hbg svg.sky{position:absolute;inset:0;width:100%;height:100%;opacity:calc(.45 + var(--int) * .55)}
+  .sky .rot{transform-box:view-box;transform-origin:50% 260%;animation:skyturn 140s ease-in-out infinite alternate}
+  @keyframes skyturn{from{transform:rotate(-1.6deg)}to{transform:rotate(1.6deg)}}
+  .sky .far circle{fill:#cfd6e6}
+  [data-theme=light] .sky .far circle{fill:#5c6474}
+  .sky .tw{animation:skytw var(--d,5s) ease-in-out infinite alternate}
+  @keyframes skytw{from{opacity:.15}to{opacity:1}}
+  .sky .ln{fill:none;stroke:hsl(var(--h) 45% 72%/.34);stroke-width:calc(1.3 * var(--z,1));stroke-linecap:round}
+  [data-theme=light] .sky .ln{stroke:hsl(var(--h) 35% 40%/.38)}
+  .sky .run{display:none;fill:none;stroke:hsl(var(--h) 80% 80%);stroke-width:calc(2.2 * var(--z,1));stroke-linecap:round;stroke-dasharray:7 93;animation:skyrun 2.6s linear infinite;filter:drop-shadow(0 0 4px hsl(var(--h) 80% 65%))}
+  [data-theme=light] .sky .run{stroke:hsl(var(--h) 70% 42%)}
+  .sky .fig.w .run{display:inline}
+  @keyframes skyrun{from{stroke-dashoffset:100}to{stroke-dashoffset:0}}
+  .sky .halo{fill:hsl(var(--h) 75% 65%);opacity:.32;filter:blur(3px)}
+  [data-theme=light] .sky .halo{opacity:.2}
+  .sky .st{fill:hsl(var(--h) 70% 92%)}
+  [data-theme=light] .sky .st{fill:hsl(var(--h) 45% 30%)}
+  .sky .st.old{opacity:.6}
+  .sky .ring{display:none;vector-effect:non-scaling-stroke;fill:none;stroke:hsl(var(--h) 80% 75%);stroke-width:1.5;animation:skyring 2.4s ease-out infinite}
+  .sky .star.w .ring{display:inline}
+  @keyframes skyring{from{r:var(--r0);opacity:.7}to{r:calc(var(--r0) * 4.5);opacity:0}}
+  .sky .lab{font:600 20px "Manrope",sans-serif;letter-spacing:.22em;fill:hsl(var(--h) 30% 80%/.36);text-transform:uppercase}
+  [data-theme=light] .sky .lab{fill:hsl(var(--h) 25% 30%/.42)}
+  .hbgt .sky .lab{display:none}
+  .sky .born{animation:skyborn 1.4s ease-out both;transform-box:fill-box;transform-origin:center}
+  @keyframes skyborn{from{opacity:0;transform:scale(.2)}}
+  .sky .draw{stroke-dasharray:100;animation:skydraw 1.6s .3s ease-out both}
+  @keyframes skydraw{from{stroke-dashoffset:100}to{stroke-dashoffset:0}}
+  .sky .flare{vector-effect:non-scaling-stroke;fill:none;stroke:hsl(var(--h) 85% 80%);stroke-width:2;animation:skyflare 1.6s ease-out forwards}
+  @keyframes skyflare{from{r:6px;opacity:.9}to{r:54px;opacity:0}}
+  .sky .meteor{stroke:url(#mtr);stroke-width:2.2;stroke-linecap:round;animation:skymeteor 1.3s cubic-bezier(.3,.6,.4,1) forwards}
+  [data-theme=light] .sky .meteor{stroke:#5c6474}
+  @keyframes skymeteor{from{transform:translate(0,0);opacity:0}15%{opacity:1}to{transform:translate(-520px,260px);opacity:0}}
+
   /* the page above it stays readable */
   .home .conv,.home .scroll{background:transparent}
   .hset{color:var(--faint);margin-right:4px}.hset:hover{color:var(--text)}
-  /* Settings, Home */
-  .hbgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;padding:2px 8px 14px}
-  .hbgt{display:flex;flex-direction:column;gap:6px;text-align:left;font-size:12px}
-  .hbgt .hbg{position:relative;display:block;height:78px;border-radius:10px;background:var(--bg);box-shadow:0 0 0 1px var(--line2);--int:1}
+  /* Settings, Look */
+  .lseg{display:flex;flex:none;background:rgba(128,128,128,.14);border-radius:9px;padding:2px}
+  .lseg button{padding:3px 10px;border-radius:7px;font-size:12px;color:var(--dim)}.lseg button:hover{color:var(--text)}
+  .lseg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.2)}
+  .lhead{display:flex;align-items:center;gap:10px;padding:14px 8px 6px;font-size:12.5px;font-weight:600;border-top:1px solid var(--line)}
+  .lhead>span{flex:1}
+  .lgrp{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding:6px 8px}
+  .srow.lstack{flex-wrap:wrap}.srow.lstack>span:first-child{flex:1 1 100%}
+  .srow.off>:not(span:first-child),.srow.off>span:first-child{opacity:.45}.srow.off .lseg{pointer-events:none}
+  .hbgs{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;padding:2px 8px 10px}
+  .hbgt{display:flex;flex-direction:column;gap:5px;text-align:left;font-size:11.5px;min-width:0}
+  .hbgt .hbg{position:relative;display:block;height:56px;border-radius:9px;background:var(--bg);box-shadow:0 0 0 1px var(--line2);--int:1;--sp:.6}
+  .hbgt .hbg.insession{--int:.8}
   .hbgt.on .hbg{box-shadow:0 0 0 2px var(--accent)}
-  .hbgt b{font-weight:550;color:var(--dim)}.hbgt.on b{color:var(--text)}
-  .hbgt .blob{filter:blur(18px)}.hbgt .caustic{filter:blur(10px)}.hbgt .tone{filter:blur(16px)}.hbgt .vx{width:3px;height:3px}
+  .hbgt b{font-weight:550;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hbgt.on b{color:var(--text)}
+  .hbgt .blob{filter:blur(16px)}.hbgt .caustic{filter:blur(9px)}.hbgt .tone{filter:blur(14px)}
+  .hbgt .edges{box-shadow:inset 0 0 22px 2px hsl(var(--h1) var(--sat) var(--lum)/.4)}.hbgt .lines{background-size:100% 9px}
+  .hbgt .hbg::after{display:none}

@@ -1146,7 +1146,9 @@ test('updates: checks the folder Workwood runs from against its upstream, and re
   assert.equal(refused.status, 409); assert.match(refused.body.error, /Uncommitted changes/);
   assert.notEqual(head(), tip);
   execFileSync('git', ['-C', sb.app, 'checkout', '--', 'package.json']);
-  assert.equal((await svc.call('update/check', {})).body.state, 'ready');   // pulled by the window's test below
+  // package-lock.json changed on its own is npm's rewrite (an older npm drops fields), not an edit: it does not block
+  fs.appendFileSync(path.join(sb.app, 'package-lock.json'), '\n');
+  assert.equal((await svc.call('update/check', {})).body.state, 'ready');   // pulled by the window's test below, lock and all
 });
 
 test('the window has no browser tooltips: every hover note is its own (an iframe keeps its title, for screen readers)', () => {
@@ -2076,13 +2078,21 @@ ui('window: home shows where work was left and each profile\'s limits, with two 
   await page.waitForSelector('#spage .pfr.on[data-psel="other"]');
   await page.keyboard.press('Escape'); await page.waitForSelector('#sdim', { state: 'hidden' });
   await page.waitForSelector('#hbg:not([hidden]) .blob');                           // the background, aurora unless you chose another
-  await page.click('#hset'); await page.waitForSelector('#spage .hbgt.on[data-hbg="aurora"]');   // the quiet button beside the views: Settings, Home
-  await page.click('#spage [data-hbg="constel"]'); await page.waitForSelector('#spage .hbgt.on[data-hbg="constel"]');
+  await page.click('#hset'); await page.waitForSelector('#spage .hbgt.on[data-bgk="aurora"]');   // the quiet button beside the views: Settings, Look
+  await page.click('#spage [data-bgk="constel"]'); await page.waitForSelector('#spage .hbgt.on[data-bgk="constel"]');
+  await page.waitForSelector('#spage [data-tk="constel"] svg.sky .star');            // its preview is the same drawing
   await page.keyboard.press('Escape');
-  await page.waitForSelector('#hbg .constel .vx');                                  // a star for each recent session
-  await page.click('#hset'); await page.click('#spage [data-hbg="none"]'); await page.keyboard.press('Escape');
-  assert.equal(await page.locator('#hbg').isHidden(), true);
-  await page.evaluate(() => localStorage.removeItem('ww.hbg'));
+  await page.waitForSelector('#hbg svg.sky .fig .star');                             // a figure per project, a star per recent session
+  const sky = await page.evaluate(() => [...document.querySelectorAll('#hbg .fig')].map(f => {
+    const st = [...f.querySelectorAll('.st')].map(c => [+c.getAttribute('cx'), +c.getAttribute('cy'), +c.getAttribute('r')]);
+    const ends = [...f.querySelectorAll('.ln')].flatMap(l => l.getAttribute('d').slice(1).split('L').map(p => p.split(' ').map(Number)));
+    return { stars: st.length, lines: ends.length / 2, near: ends.every(([x, y]) => st.some(([a, b, r]) => Math.abs(Math.hypot(x - a, y - b) - (r + 7)) < 1)) };
+  }));
+  assert.ok(sky.length >= 1);
+  for (const f of sky) { assert.equal(f.lines, f.stars - 1); assert.ok(f.near); }      // each figure is joined into one, and every line ends at a star
+  await page.click('#hset'); await page.click('#spage [data-bgk="none"]'); await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#hbg .fld:not(.glow), #hbg svg').count(), 0);
+  await page.evaluate(() => localStorage.removeItem('ww.bg.home'));
   await page.click('#dseg [data-hv="projects"]'); await page.waitForSelector('#dash .pj:has-text("alpha")');
   assert.equal(await widths('#dash .pj'), 1);
   await page.click('#dseg [data-hv="time"]'); await page.waitForSelector('#dash .hstat');
@@ -2103,7 +2113,30 @@ ui('window: home shows where work was left and each profile\'s limits, with two 
   await page.click('#dash .hcard >> nth=0'); await page.waitForSelector(`.sess.sel[data-id="${id}"]`);
   assert.equal(await page.locator('#dash').isHidden(), true);
   assert.equal(await page.locator('#dseg').isHidden(), true);
-  assert.equal(await page.locator('#hbg').isHidden(), true);                        // a conversation keeps a plain background
+  assert.equal(await page.locator('#hbg .fld:not(.glow), #hbg svg').count(), 0);    // a conversation starts with a plain background
+});
+
+ui('window: Look sets the theme, and a background for a session and the sidebar with their own motion', async () => {
+  await page.click('.sess >> nth=0'); await page.waitForSelector('.sess.sel');
+  await page.click('#bGear'); await page.click('#gAll'); await page.click('#stabs [data-st="4"]');
+  await page.click('#spage [data-th="auto"]');
+  assert.equal(await page.evaluate(() => localStorage.getItem('ww.theme')), 'auto');
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  await page.click('#spage [data-th="dark"]');
+  await page.click('#spage [data-bgp="session"]'); await page.waitForSelector('#spage [data-bgp="session"].on');
+  assert.equal(await page.locator('#spage [data-bgk="constel"]').count(), 0);          // the constellation maps the inbox: Home only
+  await page.click('#spage [data-bgk="paper"]'); await page.waitForSelector('#spage .srow.lstack.off');   // Paper never moves
+  await page.click('#spage [data-bgk="aurora"]'); await page.click('#spage [data-bgm="never"]');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#hbg.insession .blob');
+  assert.equal(await page.evaluate(() => document.getElementById('hbg').classList.contains('moving')), false);
+  assert.equal(await page.evaluate(() => document.getElementById('main').classList.contains('bglane')), true);   // the reading column stays calm
+  await page.click('#bGear'); await page.click('#gAll'); await page.click('#stabs [data-st="4"]');
+  await page.click('#spage [data-bgp="side"]'); await page.click('#spage [data-bgk="dusk"]'); await page.keyboard.press('Escape');
+  await page.waitForSelector('#sbg.inside .dusk');
+  await page.evaluate(() => { for (const k of ['ww.bg.session', 'ww.motion.session', 'ww.bg.side']) localStorage.removeItem(k); });
+  await page.reload(); await page.waitForSelector('.sess');
+  assert.equal(await page.locator('#sbg .fld:not(.glow)').count(), 0);
 });
 
 ui('window: scrolled up, a mark counts the replies that arrive below, and a click lands on the first of them', async () => {

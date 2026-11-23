@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 40: backgrounds behind sessions too</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root{color-scheme:dark;--accent:hsl(168 62% 62%);--warn:#ffb955;--go:#4fd6a4;--hot:#f0706a}
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0c0e;color:#e8e9ec;font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;padding-bottom:80px}
+  [data-theme=light] body{background:#e9eaee;color:#1d1e22}
+  button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:14px;padding:24px 0 2px}.top h1{font-size:17px;margin:0;flex:1}
+  .top button{background:#1d1f23;color:#c9ccd2;padding:6px 11px;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  [data-theme=light] .top button{background:#fff;color:#333;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+  .intro{color:#b9bcc3;max-width:720px;margin:6px 0 18px;font-size:14px}[data-theme=light] .intro{color:#555}
+  h3{font-size:15px;margin:38px 0 6px}
+  .notes{color:#b9bcc3;max-width:760px;font-size:13.5px;padding-left:18px}.notes li{margin:6px 0}.notes b{color:#fff}
+  [data-theme=light] .notes{color:#444}[data-theme=light] .notes b{color:#000}
+  details{margin-top:26px;color:#b9bcc3;max-width:900px}[data-theme=light] details{color:#444}
+  summary{cursor:pointer;font-weight:650}
+  code{font-family:"JetBrains Mono",monospace;font-size:11.5px}
+
+  .app{--bg:#18191c;--side:#1a1b1e;--surface:#222428;--pop:#232529;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.14);
+    --text:#f0f1f3;--dim:#a6aab2;--faint:#6d717a;--shadow:0 12px 34px rgba(0,0,0,.45);color:var(--text)}
+  [data-theme=light] .app{--bg:#fbfbfc;--side:#f2f3f5;--surface:#fff;--pop:#fff;--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.14);
+    --text:#1b1c1f;--dim:#5b5f68;--faint:#8d919a;--shadow:0 12px 34px rgba(0,0,0,.16)}
+
+  .duo{display:grid;grid-template-columns:1fr 430px;gap:22px;align-items:start}
+  @media (max-width:1100px){.duo{grid-template-columns:1fr}}
+
+  /* ===== the window ===== */
+  .win{height:612px;border-radius:14px;background:var(--bg);box-shadow:0 30px 90px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.1);overflow:hidden;display:flex}
+  [data-theme=light] .win{box-shadow:0 30px 90px rgba(0,0,0,.16),0 0 0 1px rgba(0,0,0,.1)}
+  .side{width:200px;flex:none;background:var(--side);border-right:1px solid var(--line);padding:12px 8px;display:flex;flex-direction:column;gap:2px;position:relative;z-index:1}
+  .sit{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:12.5px;color:var(--dim);text-align:left;width:100%}
+  .sit:hover{background:rgba(128,128,128,.1)}.sit.on{background:rgba(128,128,128,.16);color:var(--text)}
+  .sit i{width:8px;height:8px;border-radius:3px;flex:none;background:hsl(var(--h) 55% 55%)}
+  .sit span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sit.work::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--go);animation:dot 1.4s ease-in-out infinite}
+  @keyframes dot{50%{opacity:.3}}
+  .side .lab{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--faint);margin:12px 8px 4px}
+  .main{flex:1;min-width:0;position:relative;display:flex;flex-direction:column}
+  .bar{height:48px;flex:none;display:flex;align-items:center;gap:8px;padding:0 18px;border-bottom:1px solid var(--line);font-weight:600;font-size:13.5px;position:relative;z-index:1}
+  .bar small{color:var(--faint);font-weight:500;font-size:12px}
+  .scroll{flex:1;min-height:0;overflow:hidden;position:relative;z-index:1}
+  .col{max-width:620px;margin:0 auto;padding:22px 24px;display:flex;flex-direction:column;gap:12px;font-size:13.5px;line-height:1.6}
+  .you{align-self:flex-end;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px 13px;max-width:78%}
+  .col p{margin:0}
+  .step{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);padding:5px 10px;border-radius:8px;background:color-mix(in srgb,var(--surface) 70%,transparent);width:max-content}
+  .step b{color:var(--text);font-weight:600}
+  pre{margin:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:12px/1.55 "JetBrains Mono",monospace;color:var(--dim);overflow:hidden}
+  pre em{font-style:normal;color:hsl(168 50% 62%)}[data-theme=light] pre em{color:hsl(168 55% 32%)}
+  .cmp{position:relative;z-index:1;margin:0 auto 16px;width:calc(100% - 48px);max-width:620px;border:1px solid var(--line2);border-radius:14px;padding:10px 12px;background:var(--surface);color:var(--faint);font-size:13px}
+  /* home */
+  .hm{max-width:680px;margin:0 auto;padding:30px 24px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .hm h2{grid-column:1/-1;margin:0 0 4px;font-size:20px;font-weight:700;letter-spacing:-.01em}
+  .card{background:color-mix(in srgb,var(--surface) 82%,transparent);border:1px solid var(--line);border-radius:12px;padding:12px;min-height:92px;backdrop-filter:blur(8px)}
+  .card b{display:block;font-size:12.5px;margin-bottom:6px}.card i{display:block;height:6px;border-radius:3px;background:rgba(128,128,128,.18);margin:6px 0}
+  .card.w2{grid-column:span 2}.card.w3{grid-column:1/-1;min-height:110px}
+
+  /* ===== backgrounds (the app's, plus the calm ones) ===== */
+  .bg{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;--sp:1.5;--int:.7;--sat:62%;--lum:56%}
+  .bg.working{--sp:.6;--int:1}
+  [data-theme=light] .bg{--lum:62%;--int:.55}
+  .bg.insession{--int:.42}.bg.insession.working{--int:.55}
+  /* in a session the column you read sits in a quiet lane */
+  .bg.insession::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 4%,color-mix(in srgb,var(--bg) 62%,transparent) 26%,color-mix(in srgb,var(--bg) 62%,transparent) 74%,transparent 96%)}
+  .bg.calm.insession::after{display:none}
+  .bg .f{position:absolute;inset:0}
+  .bg .grain{opacity:.06;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  [data-theme=light] .bg .grain{mix-blend-mode:multiply;opacity:.04}
+  .bg.still *,.bg.still::after{animation-play-state:paused!important}
+  @keyframes turn{to{transform:rotate(360deg)}}
+  @keyframes wander{0%{transform:translate(-4%,-3%) scale(1)}50%{transform:translate(8%,9%) scale(1.12)}100%{transform:translate(-7%,5%) scale(.94)}}
+  @keyframes drift{0%{transform:translate(-2%,-2%) scale(1)}100%{transform:translate(2%,2%) scale(1.04)}}
+  @keyframes breathe{50%{opacity:.7}}
+  .bg .blob{inset:auto;width:62%;aspect-ratio:1;border-radius:50%;filter:blur(80px);opacity:calc(var(--int) * .3)}
+  .bg .b1{left:-14%;top:-34%;background:hsl(var(--h1) var(--sat) var(--lum));animation:wander calc(34s * var(--sp)) ease-in-out infinite alternate -9s}
+  .bg .b2{right:-18%;top:-6%;background:hsl(var(--h2) var(--sat) var(--lum));animation:wander calc(41s * var(--sp)) ease-in-out infinite alternate-reverse -14s}
+  .bg .b3{left:22%;bottom:-48%;background:hsl(var(--h3) var(--sat) var(--lum));opacity:calc(var(--int) * .2);animation:wander calc(47s * var(--sp)) ease-in-out infinite alternate -20s}
+  .bg .caustic{inset:-60%;border-radius:50%;mix-blend-mode:screen}
+  [data-theme=light] .bg .caustic{mix-blend-mode:multiply}
+  .bg .c1{filter:blur(30px);opacity:calc(var(--int) * .32);background:conic-gradient(from 0deg,transparent 0 16%,hsl(var(--h1) var(--sat) var(--lum)/.85) 30%,transparent 46%,hsl(var(--h2) var(--sat) var(--lum)/.7) 68%,transparent 86%);animation:turn calc(40s * var(--sp)) linear infinite}
+  .bg .c2{filter:blur(42px);opacity:calc(var(--int) * .26);background:conic-gradient(from 140deg,transparent 0 22%,hsl(var(--h2) var(--sat) var(--lum)/.8) 38%,transparent 58%);animation:turn calc(58s * var(--sp)) linear infinite reverse}
+  .bg .tone{inset:-30%;filter:blur(60px);opacity:calc(var(--int) * .22);background:radial-gradient(40% 40% at 70% 30%,hsl(var(--h1) var(--sat) var(--lum)/.7),transparent 70%),radial-gradient(35% 35% at 25% 80%,hsl(var(--h2) var(--sat) var(--lum)/.5),transparent 70%);animation:wander calc(40s * var(--sp)) ease-in-out infinite alternate}
+  .bg .orbits{opacity:calc(var(--int) * .9)}
+  .bg .orbits i{position:absolute;left:72%;top:28%;aspect-ratio:1;border-radius:50%;border:1px solid hsl(var(--h) var(--sat) var(--lum)/.16)}
+  .bg .orbits i::after{content:"";position:absolute;top:-3px;left:50%;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:hsl(var(--h) var(--sat) calc(var(--lum) + 14%));box-shadow:0 0 12px 4px hsl(var(--h) var(--sat) var(--lum)/.45)}
+  .bg .orbits i:nth-child(1){width:30%;margin:-15% 0 0 -15%;animation:turn calc(26s * var(--sp)) linear infinite -5s}
+  .bg .orbits i:nth-child(2){width:56%;margin:-28% 0 0 -28%;animation:turn calc(40s * var(--sp)) linear infinite reverse -11s}
+  .bg .orbits i:nth-child(3){width:88%;margin:-44% 0 0 -44%;animation:turn calc(62s * var(--sp)) linear infinite -30s}
+  /* the calm ones: low contrast, nothing behind the words */
+  .bg .paper{background:hsl(38 30% 50%/.07)}
+  [data-theme=light] .bg .paper{background:hsl(40 60% 88%/.55)}
+  .bg.paperbg .grain{opacity:.11}[data-theme=light] .bg.paperbg .grain{opacity:.07}
+  .bg .fibre{opacity:.5;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(128,110,80,.025) 3px 4px)}
+  .bg .dusk{background:linear-gradient(180deg,hsl(var(--h1) 40% var(--lum)/.16),transparent 55%),linear-gradient(0deg,hsl(var(--h2) 40% var(--lum)/.07),transparent 40%);background-size:100% 130%;animation:dusk calc(60s * var(--sp)) ease-in-out infinite alternate}
+  @keyframes dusk{to{background-position:0 100%}}
+  .bg .edges{box-shadow:inset 0 0 120px 10px hsl(var(--h1) var(--sat) var(--lum)/.22),inset 0 0 40px 0 hsl(var(--h2) var(--sat) var(--lum)/.12);animation:breathe calc(14s * var(--sp)) ease-in-out infinite}
+  .bg .dots{background-image:radial-gradient(circle,rgba(128,128,128,.22) 1px,transparent 1.4px);background-size:18px 18px;-webkit-mask-image:linear-gradient(180deg,#000,rgba(0,0,0,.35))}
+  .bg .lines{background-image:linear-gradient(rgba(128,128,128,.1) 1px,transparent 1px);background-size:100% 28px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 15%,#000 85%,transparent)}
+
+  /* ===== settings ===== */
+  .dlg{background:var(--pop);border:1px solid var(--line2);border-radius:16px;box-shadow:var(--shadow);display:flex;overflow:hidden;height:612px}
+  .dtabs{width:104px;flex:none;border-right:1px solid var(--line);padding:12px 8px}
+  .dtabs h4{font-size:13px;font-weight:650;margin:2px 8px 10px}
+  .dtabs div{padding:6px 9px;border-radius:8px;color:var(--dim);font-size:12.5px}.dtabs div.on{background:rgba(128,128,128,.16);color:var(--text)}
+  .pg{flex:1;min-width:0;padding:12px 12px;overflow:auto;scrollbar-width:thin}
+  .pgh{display:flex;align-items:center;font-size:13px;font-weight:650;padding:4px 8px 10px}
+  .seg{margin-left:auto;display:flex;background:rgba(128,128,128,.14);border-radius:9px;padding:2px}
+  .seg button{padding:3px 11px;border-radius:7px;font-size:12px;color:var(--dim)}.seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.2)}
+  .grp{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--faint);margin:6px 8px 6px;text-transform:uppercase}
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 8px 10px}
+  .tile{display:flex;flex-direction:column;gap:5px;text-align:left;font-size:11.5px}
+  .tile .bg{position:relative;display:block;height:42px;border-radius:9px;background:var(--bg);box-shadow:0 0 0 1px var(--line2);--int:1}
+  .tile .bg.insession{--int:.8}
+  .tile.on .bg{box-shadow:0 0 0 2px var(--accent)}
+  .tile b{font-weight:550;color:var(--dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tile.on b{color:var(--text)}
+  .tile .blob{filter:blur(14px)}.tile .caustic{filter:blur(8px)}.tile .tone{filter:blur(12px)}
+  .tile .edges{box-shadow:inset 0 0 22px 2px hsl(var(--h1) var(--sat) var(--lum)/.4)}
+  .tile .dots{background-size:8px 8px}.tile .lines{background-size:100% 9px}
+  .tile .bg::after{display:none}
+  .srow{display:flex;align-items:center;gap:10px;padding:10px 8px;font-size:12.5px;border-top:1px solid var(--line)}
+  .srow>span:first-child{flex:1}.srow small{display:block;color:var(--faint);font-size:11.5px}
+  .srow.off{opacity:.4;pointer-events:none}
+  .stog{width:30px;height:17px;border-radius:9px;background:rgba(128,128,128,.35);position:relative;flex:none;cursor:pointer;transition:background .15s}
+  .stog::after{content:"";position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#fff;transition:transform .15s}
+  .stog.on{background:var(--accent)}.stog.on::after{transform:translateX(13px)}
+  .sval{height:26px;padding:0 9px;border-radius:8px;background:rgba(128,128,128,.15);font-size:12px;display:inline-flex;align-items:center;white-space:nowrap;cursor:pointer}
+  .pgh2{font-size:11.5px;font-weight:650;color:var(--dim);padding:14px 8px 8px;display:flex;align-items:center;border-top:1px solid var(--line);margin-top:2px}
+  .seg.sm button{padding:2px 9px;font-size:11.5px}
+  .srow .seg{margin-left:0;flex:none}
+  .srow.stack{flex-wrap:wrap}.srow.stack>span:first-child{flex:1 1 100%}
+  /* the limit glow, the app's, on its own switch */
+  .bg .glow{inset:auto 10% -30% 10%;height:70%;border-radius:50%;filter:blur(90px);opacity:0;background:var(--warn);transition:opacity 2s,background 2s}
+  .bg.warm .glow{opacity:.22}.bg.hot .glow{opacity:.18;background:var(--hot)}
+  .bg.warm.moving .glow,.bg.hot.moving .glow{animation:gbreathe 8s ease-in-out infinite}
+  @keyframes gbreathe{50%{opacity:.26;transform:scale(1.1)}}
+  .tile .glow{display:none}
+  /* try it */
+  .try{display:flex;align-items:center;gap:10px;margin:0 0 10px;font-size:12px;color:#8f939b}
+  .try .seg{margin-left:0;background:rgba(128,128,128,.16)}
+  .try .seg button{color:#a6aab2}.try .seg button.on{background:#2a2c31;color:#fff}
+  [data-theme=light] .try .seg button.on{background:#fff;color:#111}
+  .state{margin-left:auto;font-size:11.5px;color:#8f939b}.state b{color:var(--accent);font-weight:600}
+  .bar .wk{margin-left:auto;font-size:11.5px;font-weight:500;color:var(--faint);display:flex;align-items:center;gap:6px}
+  .bar .wk i{width:6px;height:6px;border-radius:50%;background:var(--go);animation:dot 1.4s ease-in-out infinite}
+  .bar .lim{font-size:11px;font-weight:600;padding:1px 7px;border-radius:6px;background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+  .bar .lim.hot{background:color-mix(in srgb,var(--hot) 18%,transparent);color:var(--hot)}
+  /* the sidebar's own layer: rows sit above it, a light veil keeps names readable */
+  .side>*:not(.bg){position:relative;z-index:1}
+  .bg.inside{--int:.55}.bg.inside.working{--int:.7}
+  .bg.inside::after{content:"";position:absolute;inset:0;background:color-mix(in srgb,var(--side) 40%,transparent)}
+  .bg.inside.calm::after{display:none}
+  .bg.inside .blob{width:160%;filter:blur(50px)}
+  .bg.inside .orbits i{left:80%;top:12%}
+  .bg.inside .glow{inset:auto -50% -20% -50%;height:40%;filter:blur(50px)}
+  .bg.inside .edges{box-shadow:inset 0 0 60px 4px hsl(var(--h1) var(--sat) var(--lum)/.22)}
+  .seg button:disabled{opacity:.4;cursor:default}
+</style></head>
+<body><div class="wrap">
+<div class="top"><h1>Round 40 — backgrounds for Home, sessions and the sidebar</h1></div>
+<p class="intro">Settings gets a <b>Look</b> tab: Theme (Dark · Light · Auto) and a background for each of <b>Home</b>, <b>Sessions</b> and the <b>Sidebar</b>, each with its own Motion and Warn at limits.</p>
+
+<div class="try">Try it:
+  <div class="seg" id="tWork"><button data-w="0" class="on">Idle</button><button data-w="1">Agent working</button></div>
+  <div class="seg" id="tLim"><button data-l="ok" class="on">Limit fine</button><button data-l="warm">Near limit</button><button data-l="hot">Limit reached</button></div>
+  <span class="state" id="state"></span>
+</div>
+<div class="duo">
+  <div class="win app">
+    <div class="side">
+      <div class="bg" id="sbg"></div>
+      <button class="sit" data-go="home"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 10.5 9-7.5 9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
+      <div class="lab">INBOX</div>
+      <button class="sit" data-go="s" data-h="168" style="--h:168"><i></i><span>Session backgrounds</span></button>
+      <button class="sit" data-go="s" data-h="215" style="--h:215"><i></i><span>Speech model download</span></button>
+      <button class="sit" data-go="s" data-h="290" style="--h:290"><i></i><span>Profile refresh race</span></button>
+      <button class="sit" data-go="s" data-h="32" style="--h:32"><i></i><span>Site pricing page</span></button>
+    </div>
+    <div class="main">
+      <div class="bg" id="bg"></div>
+      <div class="bar" id="bar"></div>
+      <div class="scroll" id="body"></div>
+      <div class="cmp" id="cmp">Reply…</div>
+    </div>
+  </div>
+
+  <div class="dlg app">
+    <div class="dtabs"><h4>Settings</h4><div>General</div><div class="on">Look</div><div>Profiles</div><div>Skills</div><div>About</div></div>
+    <div class="pg" id="pg"></div>
+  </div>
+</div>
+
+<h3>What changes</h3>
+<ul class="notes">
+  <li><b>Look replaces the Home tab.</b> Theme moves here from General as <b>Dark · Light · Auto</b>; Auto follows the system and switches live.</li>
+  <li><b>Background for Home · Sessions · Sidebar</b>, each with its own pick, Motion and Warn at limits.</li>
+  <li><b>Motion: Always · While working · Never.</b> "While working" moves only while an agent works — that session's agent in a session, any agent on Home and in the sidebar — and slows to rest when the turn ends. "Always" also speeds up while one works.</li>
+  <li><b>Warn at limits</b> is separate: warm near a limit, red at it, even when still or None.</li>
+  <li><b>The sidebar</b> takes the inbox's colours like Home, sits under a light veil so names stay readable, and its limit glow rises from the bottom. Constellation stays Home-only.</li>
+  <li><b>Defaults:</b> Home as today (Aurora, Always, warn on). Sessions: None, While working, warn on. Sidebar: None, While working, warn off — so a limit doesn't glow in two places at once.</li>
+  <li><b>Calm, for reading:</b> Paper and Lines never move; Dusk and Edges drift slowly. In a session, moving kinds dim and keep out of the reading column.</li>
+</ul>
+
+<details><summary>Under the hood</summary><ul class="notes">
+  <li>Local settings like today: <code>ww.bg.home|session|side</code>, <code>ww.motion.*</code> (<code>always|working|never</code>), <code>ww.limits.*</code>. <code>ww.hbg</code> carries over to Home; <code>ww.hlive</code> off becomes Motion Always + warn off.</li>
+  <li><code>ww.theme</code> gains <code>auto</code>: the page follows <code>prefers-color-scheme</code> and listens for changes; the terminal theme follows too.</li>
+  <li>Two layers: one behind <code>.main</code> (Home or the open session), one behind the sidebar's list. Each paints once per kind and changes only classes and playback after that.</li>
+  <li>Coming to rest: running animations ramp <code>playbackRate</code> to 0 over ~2 s, and back up when work starts. Reduced-motion and a hidden window still stop everything.</li>
+</ul></details>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const KINDS={aurora:'Aurora',caustics:'Caustics',orbits:'Orbits',constel:'Constellation',paper:'Paper',dusk:'Dusk',edges:'Edges',lines:'Lines',none:'None'};
+const MOVING=['aurora','caustics','orbits','constel'],CALM=['paper','dusk','edges','lines'],STILLONLY=['paper','lines','none'];
+const S={home:{kind:'aurora',motion:'always',limits:true},session:{kind:'none',motion:'working',limits:true},side:{kind:'none',motion:'working',limits:false}};
+const NAME={home:'Home',session:'This session',side:'Sidebar'};
+let place='session',edit='session',hue=168,working=false,limit='ok',theme='dark';
+
+function html(k){
+  if(k==='aurora')return '<span class="f blob b1"></span><span class="f blob b2"></span><span class="f blob b3"></span>';
+  if(k==='caustics')return '<span class="f caustic c1"></span><span class="f caustic c2"></span>';
+  if(k==='orbits')return '<span class="f tone"></span><span class="f orbits"><i style="--h:var(--h1)"></i><i style="--h:var(--h2)"></i><i style="--h:var(--h3)"></i></span>';
+  if(k==='constel'){let s='<span class="f tone"></span>';const pts=[[14,22],[30,48],[52,30],[70,62],[84,26],[62,84],[24,78]];
+    pts.forEach(([x,y],i)=>{s+=`<span class="f" style="inset:auto;left:${x}%;top:${y}%;width:5px;height:5px;border-radius:50%;background:hsl(var(--h${i%3+1}) 62% 70%);box-shadow:0 0 10px 3px hsl(var(--h${i%3+1}) 62% 56%/.45)"></span>`});return s}
+  if(k==='paper')return '<span class="f paper"></span><span class="f fibre"></span>';
+  if(k==='dusk')return '<span class="f dusk"></span>';
+  if(k==='edges')return '<span class="f edges"></span>';
+  if(k==='lines')return '<span class="f lines"></span>';
+  return '';
+}
+const hues=p=>p==='session'?[hue,(hue+40)%360,(hue+320)%360]:[168,215,290];
+const workingFor=p=>working&&(p!=='session'||hue===168);   // the demo's agent works in "Session backgrounds"
+const cls=p=>p==='session'?' insession':p==='side'?' inside':'';
+// each layer paints once per kind; motion and glow only change classes and playback, so the picture never restarts
+const L={bg:{key:'',rate:1,ramp:0},sbg:{key:'',rate:1,ramp:0}};
+function paint(id,p){
+  const s=S[p],k=s.kind,el=$(id),l=L[id],[a,b,c]=hues(p),key=p+k+(p==='session'?hue:'');
+  if(key!==l.key){l.key=key;el.style.cssText=`--h1:${a};--h2:${b};--h3:${c}`;el.innerHTML=(k==='none'?'':html(k)+'<span class="f grain"></span>')+'<span class="f glow"></span>'}
+  const wk=workingFor(p),moves=!STILLONLY.includes(k)&&(s.motion==='always'||s.motion==='working'&&wk);
+  el.className='bg'+cls(p)+(CALM.includes(k)?' calm':'')+(k==='paper'?' paperbg':'')+(s.motion==='always'&&wk?' working':'')+(moves?' moving':'')+(s.limits&&limit!=='ok'?' '+limit:'');
+  setRate(id,moves?1:0);
+  const why=STILLONLY.includes(k)?(k==='none'?'none':'still'):moves?(s.motion==='always'&&wk?'livelier':'moving'):(s.motion==='never'?'still':'at rest');
+  return `${NAME[p]}: <b>${why}${s.limits&&limit!=='ok'?(limit==='hot'?', red glow':', warm glow'):''}</b>`;
+}
+// ease playback to the target so starting and stopping glide instead of snapping
+function setRate(id,to){
+  const l=L[id];cancelAnimationFrame(l.ramp);const from=l.rate,t0=performance.now(),D=2000;
+  const step=t=>{const p=Math.min(1,(t-t0)/D),e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;l.rate=from+(to-from)*e;
+    $(id).getAnimations({subtree:true}).forEach(a=>{if(l.rate<.001){a.pause()}else{if(a.playState==='paused')a.play();a.playbackRate=l.rate}});
+    if(p<1)l.ramp=requestAnimationFrame(step)};
+  l.ramp=requestAnimationFrame(step);
+}
+function renderWin(){
+  $('state').innerHTML=paint('bg',place)+' · '+paint('sbg','side');
+  document.querySelectorAll('.sit').forEach(b=>{b.classList.toggle('on',place==='home'?b.dataset.go==='home':+b.dataset.h===hue);b.classList.toggle('work',working&&+b.dataset.h===168)});
+  const lim=limit==='ok'?'':`<span class="lim ${limit==='hot'?'hot':''}">${limit==='hot'?'5-hour limit reached':'5-hour 86%'}</span>`;
+  if(place==='home'){
+    $('bar').innerHTML=`Home <span class="wk">${working?'<i></i>1 working':''}</span>${lim}`;$('cmp').style.display='none';
+    if(!$('body').querySelector('.hm'))$('body').innerHTML='<div class="hm"><h2>Good afternoon</h2><div class="card w2"><b>Left off</b><i style="width:80%"></i><i style="width:55%"></i></div><div class="card"><b>Limits</b><i></i><i style="width:60%"></i></div><div class="card"><b>Not committed</b><i style="width:70%"></i></div><div class="card w2"><b>Time</b><i></i><i style="width:40%"></i></div><div class="card w3"><b>Pick up</b><i style="width:90%"></i><i style="width:65%"></i><i style="width:75%"></i></div></div>';
+  }else{
+    const t=document.querySelector(`.sit[data-h="${hue}"] span`).textContent;
+    $('bar').innerHTML=`${t} <small>main · workwood</small><span class="wk">${workingFor('session')?'<i></i>Working':''}</span>${lim}`;$('cmp').style.display='';
+    if(!$('body').querySelector('.col'))$('body').innerHTML=`<div class="col">
+      <div class="you">Can the Home backgrounds also sit behind a session? Readable first.</div>
+      <div class="step"><b>Read</b> ui/app.js · renderHomeBg</div>
+      <p>Yes. The layer that draws them only shows on Home today, so it moves behind the whole main area and takes its colours from the open session's project instead of the inbox.</p>
+      <pre><em>function</em> renderBg(){
+  const place=isHome()?'home':'session';
+  const k=bgKind(place), motion=bgMotion(place);
+  …
+}</pre>
+      <p>Moving kinds dim in a session and fade out under this column, so the words you are reading always sit on a quiet surface. The calm ones need no lane at all.</p>
+      <div class="step"><b>Edited</b> ui/app.css · +38 −6</div>
+    </div>`;
+  }
+}
+const who=p=>p==='session'?'this session':'an agent';
+function renderPg(){
+  const s=S[edit],k=s.kind,
+    tiles=list=>list.filter(v=>!(edit!=='home'&&v==='constel')).map(v=>`<button class="tile ${v===k?'on':''}" data-k="${v}"><span class="bg"></span><b>${KINDS[v]}</b></button>`).join(''),
+    still=STILLONLY.includes(k),M=[['always','Always'],['working','While working'],['never','Never']],TH=[['dark','Dark'],['light','Light'],['auto','Auto']];
+  $('pg').innerHTML=`<div class="pgh">Look</div>
+    <div class="srow" style="border:0"><span>Theme${theme==='auto'?'<small>Follows your system.</small>':''}</span><div class="seg sm">${TH.map(([v,n])=>`<button data-th="${v}" class="${theme===v?'on':''}">${n}</button>`).join('')}</div></div>
+    <div class="pgh2">Background<div class="seg sm" style="margin-left:auto">${['home','session','side'].map(p=>`<button data-e="${p}" class="${edit===p?'on':''}">${{home:'Home',session:'Sessions',side:'Sidebar'}[p]}</button>`).join('')}</div></div>
+    <div class="grp">Moving</div><div class="tiles">${tiles(MOVING)}</div>
+    <div class="grp">Calm, for reading</div><div class="tiles">${tiles(CALM)}${tiles(['none'])}</div>
+    <div class="srow stack ${still?'off':''}"><span>Motion<small>${still?(k==='none'?'Nothing to move.':'This one is always still.'):s.motion==='working'?`Only while ${who(edit)} works, then it comes to rest.`:s.motion==='always'?`Livelier while ${who(edit)} works.`:'Holds still, same colours.'}</small></span>
+      <div class="seg sm">${M.map(([v,n])=>`<button data-m="${v}" class="${s.motion===v?'on':''}">${n}</button>`).join('')}</div></div>
+    <div class="srow"><span>Warn at limits<small>Warm near ${edit==='session'?'this session’s':'a'} limit, red at it. Even when still or None.</small></span><i class="stog ${s.limits?'on':''}" data-t="limits"></i></div>`;
+  $('pg').querySelectorAll('.tile').forEach(t=>{const b=t.querySelector('.bg'),[x,y,z]=hues(edit);b.style.cssText=`--h1:${x};--h2:${y};--h3:${z}`;
+    b.className='bg working'+(edit==='session'?' insession':'')+(t.dataset.k==='paper'?' paperbg':'');b.innerHTML=t.dataset.k==='none'?'':html(t.dataset.k)+'<span class="f grain"></span>'});
+}
+// editing Home or Sessions shows that place; editing the sidebar leaves the main view where it is
+const show=p=>{if(p!=='side')place=p};
+const mq=matchMedia('(prefers-color-scheme: dark)');
+function applyTheme(){const t=theme==='auto'?(mq.matches?'dark':'light'):theme,r=document.documentElement;r.dataset.theme=t;r.style.colorScheme=t}
+mq.addEventListener('change',()=>{if(theme==='auto')applyTheme()});
+$('pg').onclick=e=>{
+  const t=e.target.closest('[data-k]'),sg=e.target.closest('[data-e]'),m=e.target.closest('[data-m]'),tg=e.target.closest('[data-t]'),th=e.target.closest('[data-th]');
+  if(th){theme=th.dataset.th;applyTheme()}
+  else if(t){S[edit].kind=t.dataset.k;show(edit)}
+  else if(sg){edit=sg.dataset.e;show(edit)}
+  else if(m){S[edit].motion=m.dataset.m;show(edit)}
+  else if(tg){S[edit].limits=!S[edit].limits;show(edit)}
+  else return;renderPg();renderWin();
+};
+document.querySelector('.side').onclick=e=>{const b=e.target.closest('.sit');if(!b)return;
+  if(b.dataset.go==='home'){place='home'}else{place='session';hue=+b.dataset.h}if(edit!=='side')edit=place;$('body').innerHTML='';renderPg();renderWin()};
+$('tWork').onclick=e=>{const b=e.target.closest('[data-w]');if(!b)return;working=b.dataset.w==='1';$('tWork').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));renderWin()};
+$('tLim').onclick=e=>{const b=e.target.closest('[data-l]');if(!b)return;limit=b.dataset.l;$('tLim').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));renderWin()};
+applyTheme();renderPg();renderWin();
+</script>
+</body></html>

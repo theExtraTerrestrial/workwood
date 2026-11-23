@@ -255,7 +255,7 @@ const OS={
   linux:['Linux','Terminal','Workwood is now in your <b>app launcher</b>.','Needs Node 22 or newer, git, build-essential and Claude Code.'],
   win:['Windows','PowerShell','Workwood is now in the <b>Start menu</b>.','Needs Node 22 or newer, git and Claude Code for Windows.'],
   wsl:['Windows + WSL','WSL terminal','Workwood is now in the <b>Start menu</b>, and your sessions run in WSL.','Run it inside WSL. Needs Node 22 or newer, git and Claude Code there.']};
-const lines=[`git clone ${repo}`,'cd workwood','npm install','npm run install-app'];
+const lines=[`git clone ${repo}`,'cd workwood','npm ci','npm run install-app'];
 let os=/Mac/.test(navigator.platform)?'mac':/Win/.test(navigator.platform)?'win':'linux';
 function tab(k){os=k;$('#tabs').innerHTML=Object.entries(OS).map(([id,o])=>`<button class="${id==k?'on':''}" data-k="${id}">${o[0]}</button>`).join('');
   $('#sh').textContent=OS[k][1];$('#pre').innerHTML=lines.map(l=>`<s>$ </s>${l}`).join('\n');$('#after').innerHTML=`${OS[k][2]} <span style="color:var(--faint)">${OS[k][3]}</span>`}

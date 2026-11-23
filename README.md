@@ -11,12 +11,12 @@ machine, so there is no installer to download:
 ```bash
 git clone https://github.com/theExtraTerrestrial/workwood
 cd workwood
-npm install
+npm ci
 npm run install-app
 ```
 
 - **macOS**: makes `~/Applications/Workwood.app`. Not yet tried on a Mac.
-- **Linux**: adds Workwood to the app launcher. `npm install` builds one part
+- **Linux**: adds Workwood to the app launcher. `npm ci` builds one part
   here, so it also needs `build-essential` and `python3`.
 - **Windows**: run it in PowerShell. Workwood goes into the Start menu; sessions
   run on Windows itself. Not yet tried on Windows without WSL.
@@ -28,7 +28,8 @@ it is. Workwood checks GitHub for updates when it starts and every three hours
 (or under Settings, About), and offers a restart that pulls them, runs
 `npm install` when the dependencies changed, and starts again. In the Windows
 window (with WSL) the restart also makes the Windows copy again. It will not
-update over uncommitted changes in this folder. The Windows window from before
+update over uncommitted changes in this folder, except a `package-lock.json`
+that only npm rewrote. The Windows window from before
 this feature has no restart: run `npm run install-app` once more after pulling. `npm run install-app -- --remove`
 takes the app away again; your sessions and settings stay.
 

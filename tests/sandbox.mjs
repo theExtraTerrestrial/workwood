@@ -58,7 +58,7 @@ export function makeSandbox() {
   const origin = path.join(root, 'origin.git'), app = path.join(root, 'app');
   execFileSync('git', ['init', '-q', '--bare', '-b', 'main', origin], { stdio: 'ignore' });
   const ag = (...args) => execFileSync('git', ['-C', app, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', ...args], { env: { ...process.env, HOME: home, GIT_CONFIG_NOSYSTEM: '1' }, stdio: 'ignore' });
-  fs.mkdirSync(app); w(path.join(app, 'README.md'), '# app\n'); w(path.join(app, 'package.json'), '{}\n');
+  fs.mkdirSync(app); w(path.join(app, 'README.md'), '# app\n'); w(path.join(app, 'package.json'), '{}\n'); w(path.join(app, 'package-lock.json'), '{}\n');
   ag('init', '-q', '-b', 'main'); ag('add', '-A'); ag('commit', '-q', '-m', 'first'); ag('remote', 'add', 'origin', origin); ag('push', '-q', '-u', 'origin', 'main');
   const sb = { root, home, bin, projects, app, origin, log: path.join(root, 'claude.log'), agents: path.join(root, 'agents.json'), sessions: {},
     usage: Object.fromEntries(Object.entries(usage).map(([k, v]) => [k, [...v]])), usageReads: [], usageMost: 0, renewals: [] };

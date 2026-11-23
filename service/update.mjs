@@ -21,11 +21,16 @@ let changed = () => {};
 const set = patch => { Object.assign(st, patch); changed(); };
 export const status = () => ({ ...st });
 
-/** Local edits that would be lost or block the pull; files git does not track are left alone and do not count. */
-async function dirty() {
+const LOCK = 'package-lock.json';
+/** Local edits that would be lost or block the pull; files git does not track are left alone and do not count.
+ *  Neither does package-lock.json on its own: an npm other than the one that wrote it rewrites it on every install
+ *  (npm 10 drops the "libc" fields npm 11 writes), so with package.json untouched it is npm's change, not yours. */
+async function changes() {
   const out = await git('status', '--porcelain', '--untracked-files=no');
   return out ? out.split('\n').map(l => l.slice(3).replace(/^.* -> /, '')) : [];
 }
+const npmsOwn = files => files.includes(LOCK) && !files.includes('package.json');
+const dirty = async () => { const files = await changes(); return npmsOwn(files) ? files.filter(f => f !== LOCK) : files; };
 
 let checking = null;
 export function check() { return checking ||= doCheck().finally(() => { checking = null; }); }
@@ -61,6 +66,7 @@ export async function apply() {
   set({ updating: true });
   try {
     const before = await git('rev-parse', 'HEAD');
+    if (npmsOwn(await changes())) await git('checkout', '--', LOCK);   // npm's rewrite would stop the pull
     await run('git', ['pull', '--ff-only', '--quiet'], 120000);
     const touched = (await git('diff', '--name-only', before, 'HEAD')).split('\n');
     if (touched.includes('package.json') || touched.includes('package-lock.json'))

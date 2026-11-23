@@ -207,7 +207,25 @@ test('question card: answers reach the agent', async () => {
   assert.equal(p.kind, 'question'); assert.equal(p.input.questions.length, 2);
   assert.equal((await state()).sessions.find(x => x.id === id).line, '2 questions for you');
   await svc.call(`sessions/${id}/answer`, { requestId: p.id, action: 'answer', answers: { 'Which direction should I take?': 'Dark', 'What else should it include?': 'Tests, Docs' } });
-  assert.equal(lastText(await idle(id)), 'ANSWERS {"Which direction should I take?":"Dark","What else should it include?":"Tests, Docs"}');
+  const s = await idle(id);
+  assert.equal(lastText(s), 'ANSWERS {"Which direction should I take?":"Dark","What else should it include?":"Tests, Docs"}');
+  // and the thread keeps what you answered, live and read back from the history
+  const want = [['Direction', 'Dark'], ['Scope', 'Tests, Docs']], of = items => items.filter(x => x.kind === 'answers').map(x => x.answers.map(a => [a.head, a.a]));
+  assert.deepEqual(of(s.items), [want]);
+  const { readTranscript } = await import('../service/transcript.mjs');
+  assert.deepEqual(of((await readTranscript(fileOf(id))).items), [want]);
+});
+
+test('question card: words written instead of answering stay in the thread; declining with none leaves nothing', async () => {
+  let id = await newSession('ASK but I say');
+  let p = await pending(id);
+  await svc.call(`sessions/${id}/answer`, { requestId: p.id, action: 'deny', text: 'neither, make it grey' });
+  let s = await idle(id);
+  assert.deepEqual(s.items.filter(x => x.kind === 'answers').map(x => x.said), ['neither, make it grey']);
+  id = await newSession('ASK and I decline'); p = await pending(id);
+  await svc.call(`sessions/${id}/answer`, { requestId: p.id, action: 'deny' });
+  s = await idle(id);
+  assert.equal(s.items.filter(x => x.kind === 'answers').length, 0);
 });
 
 test('permission card: allow once, allow for the session, always in the project, deny with a note', async () => {
@@ -255,6 +273,31 @@ test('a limit stops the turn, and it continues on another profile under the same
   assert.equal(lastText(t), 'Echo: Continue where you left off.');
   assert.ok(readLog(sb).slice(before).some(l => l.includes(`config=other resume=${id}`)));
   await until(async () => (await state()).sessions.find(x => x.id === id)?.profile === 'other', 'the session to move to the other profile');
+});
+
+test('a /compact stopped by a limit holds the session like any limit, and continuing on another profile compacts again', async () => {
+  const id = await newSession('set up a COMPACT_FAILS');
+  await idle(id);
+  assert.equal((await svc.call(`sessions/${id}/send`, { text: '/compact' })).status, 200);
+  const s = await until(async () => { const x = await session(id); return x.run?.status === 'stopped' && x; }, 'the compact to stop');
+  assert.equal(s.run.stopped.reason, 'limit'); assert.equal(s.run.stopped.redo, '/compact');
+  assert.match(s.run.stopped.text, /Error during compaction: You've hit your 5-hour limit/);
+  const last = s.items.at(-1); assert.deepEqual([last.kind, last.stop, last.redo], ['note', 'limit', '/compact']);
+  // read back from the history, it is the same stop, with the command to run again
+  const { readTranscript } = await import('../service/transcript.mjs');
+  const back = await readTranscript(fileOf(id));
+  assert.deepEqual(back.items.filter(x => x.kind === 'note').map(x => [x.stop, x.redo]), [['limit', '/compact']]);
+  // continuing by itself runs the compact again on the other profile, not "continue"
+  assert.equal((await svc.call('settings', { autoContinue: true })).body.autoContinue, true);
+  try {
+    const id2 = await newSession('another COMPACT_FAILS');
+    await idle(id2);
+    const before = readLog(sb).length;
+    await svc.call(`sessions/${id2}/send`, { text: '/compact' });
+    await until(async () => (await state()).sessions.find(x => x.id === id2 && x.auto), 'the planned continue');
+    const t = await until(async () => { const x = await session(id2); return x.run?.status === 'idle' && readLog(sb).slice(before).some(l => l.includes(`config=other resume=${id2}`)) && x; }, 'the compact again on other', 8000);
+    assert.equal(t.items.filter(x => x.kind === 'user' && /Continue where you left off/.test(x.text || '')).length, 0);
+  } finally { await svc.call('settings', { autoContinue: false }); }
 });
 
 test('with the setting on, a limit continues by itself on the profile with most room after the wait, unless cancelled', async () => {
@@ -1420,6 +1463,8 @@ ui('window: question card, two steps, by clicking', async () => {
   await page.waitForSelector('.ai:has-text("ANSWERS")');
   assert.match(await page.locator('.ai').last().innerText(), /"Dark".*"Tests, Mobile"/);
   assert.equal(await page.locator('#qcard').isHidden(), true);
+  const ans = await page.locator('.ans').last().innerText();                // what you answered stays, on your side
+  assert.match(ans, /Direction\s+Dark\s+Scope\s+Tests, Mobile/);
 });
 
 ui('window: a typed answer replaces the options', async () => {
@@ -2210,6 +2255,16 @@ ui('window: small things on the cards: skip a question, approve a plan but be as
   await page.waitForSelector('.sys:has-text("limit reached on live")');           // and the thread says where it stopped
   await page.click('#qcard button:has-text("Wait for the limit to clear")');
   await page.waitForSelector('#qcard', { state: 'hidden' });
+});
+
+ui('window: a /compact stopped by a limit offers another profile, and continuing there compacts at once', async () => {
+  await startNew('ready a COMPACT_FAILS'); await page.waitForSelector('.ai:has-text("Echo: ready a COMPACT_FAILS")');
+  await send('/compact');
+  await page.waitForSelector('#qcard:has-text("Limit reached on live")');
+  assert.match(await page.locator('#qcard .why').innerText(), /Error during compaction/);
+  await page.click('#qcard [data-go="other"]');
+  await page.waitForSelector('.me:has(.chip:has-text("compact")) >> nth=1');                   // the compact again, not "continue"
+  assert.equal(await page.locator('.me:has-text("Continue where you left off")').count(), 0);
 });
 
 ui('window: the setting to continue at a limit by itself, and the card counts down with a way to cancel', async () => {

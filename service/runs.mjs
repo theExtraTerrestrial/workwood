@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { Builder, ERRORS, describeTool, learnWindow, parseNotification, previewKind } from './transcript.mjs';
+import { Builder, ERRORS, describeTool, failedCommand, learnWindow, parseNotification, previewKind } from './transcript.mjs';
 import { lastCwd } from './sources.mjs';
 
 export const runs = new Map(); // sessionId -> run
@@ -270,7 +270,11 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
             // a background failure needs you even after the turn: the session shows as unread
             if (e && (m.status === 'failed' || (code != null && +code !== 0))) emit('bg-failed', { sessionId: run.sessionId });
             endBg(m.task_id); readNotes().catch(() => {}); sayState();
+          } else if (m.type === 'system' && m.subtype === 'local_command') {
+            const f = failedCommand(m); if (f && !run.stopped) run.stopped = f;
           } else if (m.type === 'user' && !m.parent_tool_use_id) {
+            // a command that failed (a /compact stopped by a limit) holds the session like a turn that did
+            const f = failedCommand(m); if (f && !run.stopped) run.stopped = f;
             run.builder.closeText(); run.builder.toolsDone();
             sayItems(run.builder.results(m.message?.content, null, { result: m.tool_use_result }));
             handOver();
@@ -313,7 +317,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
         sayItems(run.builder.flushWork());
         sayItems(run.builder.endOpen(true));   // what still ran in the background ends with the session
         if (run.interrupted) sayItems([run.builder.push({ kind: 'note', text: 'Interrupted' })]);
-        else if (run.stopped) sayItems([run.builder.push({ kind: 'note', stop: run.stopped.reason, profile: run.profile, ts: new Date().toISOString(), ...(run.stopped.reason === 'error' && run.stopped.text ? { text: run.stopped.text } : {}) })]);
+        else if (run.stopped) sayItems([run.builder.push({ kind: 'note', stop: run.stopped.reason, profile: run.profile, ts: new Date().toISOString(), ...(run.stopped.redo ? { redo: run.stopped.redo } : {}), ...(run.stopped.reason === 'error' && run.stopped.text ? { text: run.stopped.text } : {}) })]);
         sayState();
         turnOver();
         // "Send now": the step was cut short for a waiting message, which starts the next turn straight away.

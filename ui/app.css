@@ -651,6 +651,8 @@
   .ai pre code{background:none;padding:0}
   .ai table{border-collapse:collapse;margin:0 0 10px;font-size:13px}.ai th,.ai td{border-bottom:1px solid var(--line);padding:4px 12px 4px 0;text-align:left;vertical-align:top}
   .me{white-space:pre-wrap;overflow-wrap:anywhere}
+  .ans{margin:0 0 22px auto;width:fit-content;max-width:82%;font-size:14px;line-height:1.6;background:var(--surface);border-radius:14px 14px 4px 14px;padding:10px 14px;white-space:pre-wrap;overflow-wrap:anywhere}
+  .ans .aq{font-size:11.5px;color:var(--faint);line-height:1.4}.ans .aa:not(:last-child){margin-bottom:8px}
   .acts{margin:-12px 0 16px}
   .acts .act{margin-top:0;cursor:pointer;background:none;border:0;font:inherit;font-size:12px}
   .acts .act:hover{color:var(--dim)}
@@ -1027,7 +1029,7 @@
 
 /* dark mode, picked in design/round33.html: macOS draws light-on-dark text at full weight (antialiased thins it), and reading text gets a touch more body */
 :root:not([data-theme=light]) body{-webkit-font-smoothing:auto}
-:root:not([data-theme=light]) .ai,:root:not([data-theme=light]) .me{font-weight:450}
+:root:not([data-theme=light]) .ai,:root:not([data-theme=light]) .me,:root:not([data-theme=light]) .ans .aa{font-weight:450}
 :root:not([data-theme=light]) .l1 b{font-weight:550}
 :root:not([data-theme=light]) .sess.unread .l1 b{font-weight:700}
 

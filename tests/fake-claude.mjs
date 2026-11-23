@@ -98,7 +98,16 @@ const inbox = []; let hear = null;   // messages that arrive while a turn runs: 
 const ask = (toolName, input, suggestions = []) => new Promise(resolve => {
   const toolUseId = 'toolu_' + randomUUID().slice(0, 8), requestId = randomUUID();
   say([{ type: 'tool_use', id: toolUseId, name: toolName, input }]);
-  waiting.set(requestId, resolve);
+  // a question's answer comes back as its tool result, as Claude Code sends and saves it: the answers in toolUseResult,
+  // and said in the text; declined, an error with the reason
+  waiting.set(requestId, toolName !== 'AskUserQuestion' ? resolve : r => {
+    const answers = r.behavior === 'allow' ? r.updatedInput?.answers || {} : null;
+    const content = answers ? `User has answered your questions: ${Object.entries(answers).map(([q, a]) => `"${q}"="${a}"`).join(', ')}. You can now continue with the user's answers in mind.` : r.message;
+    const message = { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUseId, content, ...(answers ? {} : { is_error: true }) }] };
+    out({ type: 'user', message, parent_tool_use_id: null, session_id: sessionId, uuid: randomUUID(), ...(answers ? { tool_use_result: { questions: input.questions, answers } } : {}) });
+    record({ type: 'user', uuid: randomUUID(), message, ...(answers ? { toolUseResult: { questions: input.questions, answers } } : {}) });
+    resolve(r);
+  });
   out({ type: 'control_request', request_id: requestId, request: { subtype: 'can_use_tool', tool_name: toolName, input, tool_use_id: toolUseId, permission_suggestions: suggestions } });
 });
 
@@ -211,6 +220,17 @@ async function turn(prompt, said = prompt, uuid) {
     await new Promise(r => setTimeout(r, 900));
     text('First part done.');
     return finish('ok');
+  }
+  // /compact on a session set up to fail it, on any profile but "other": Claude Code says the command failed, in the
+  // stream and in the history, and the turn ends as if it went well — the limit is only in what the command said.
+  if (prompt.trim() === '/compact' && (configDir ? path.basename(configDir) : '') !== 'other' && fs.existsSync(transcript) && fs.readFileSync(transcript, 'utf8').includes('COMPACT_FAILS')) {
+    const err = '<local-command-stderr>Error during compaction: You\'ve hit your 5-hour limit · resets 2:40pm</local-command-stderr>';
+    record({ type: 'system', subtype: 'local_command', content: err, level: 'info', isMeta: false, uuid: randomUUID(), commandRun: { command: 'compact', args: '' }, commandOutcome: { kind: 'failed' } });
+    out({ type: 'user', message: { role: 'user', content: err }, parent_tool_use_id: null, session_id: sessionId, uuid: randomUUID() });
+    out({ type: 'result', subtype: 'success', is_error: false, duration_ms: 300, duration_api_ms: 0, num_turns: 0, result: '', session_id: sessionId, total_cost_usd: 0,
+      usage: {}, modelUsage: {}, permission_denials: [], uuid: randomUUID(), queued_turn_count: 0 });
+    idle = setTimeout(() => process.exit(0), 400);
+    return;
   }
   if (prompt.trim() === '/compact') {  // a while summarising; its closing frames come once the next message has already left the queue
     await new Promise(r => setTimeout(r, 900));

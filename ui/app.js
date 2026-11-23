@@ -403,6 +403,8 @@ function renderThread(){
     else if(it.kind==='tools'){const live=ix>since,open=V.openTools.has(it.n)||live&&!V.shutTools.has(it.n);
       h=`<div class="acts ${open?'open':''}"><button class="act" data-tools="${it.n}" data-on="${open?1:''}">${svg('chev-r')}${esc(toolSummary(it.tools))}${stepsTime(it.tools,live)}</button>${open?`<div class="steps">${it.tools.map(x=>stepHtml(x,live)).join('')}</div>`:''}</div>`}
     else if(it.kind==='bg')h=`<div class="bgn ${esc(it.of||'')} ${it.bad?'bad':''}"><i></i>${it.event?`<b>${esc(it.name||'Monitor')}</b><span class="mono">${esc(it.event)}</span>`:`<span>${esc(it.text||'')}</span>`}<time>${clock(it.ts)}</time></div>`;
+    // a question card you answered: each answer under its question, on your side of the thread
+    else if(it.kind==='answers')h=`<div class="ans">${it.said?esc(it.said):it.answers.map(x=>`<div class="aq" ${x.head?`data-tip="${esc(x.q)}"`:''}>${esc(x.head||x.q)}</div><div class="aa">${esc(x.a)}</div>`).join('')}</div>`;
     else if(it.kind==='skill')h=`<div class="sknote">${svg('zap')}Loaded skill <b>${esc(it.name)}</b></div>`;
     else if(it.kind==='note')h=`<div class="sys">${esc(it.stop?`${it.stop==='auth'?'Paused':'Stopped'} at ${clock(it.ts)} · ${it.stop==='auth'?it.profile+' was signed out':it.stop==='limit'?'limit reached on '+it.profile:(it.text||'something went wrong')}`:it.text)}</div>`;
     else if(it.kind==='done')h=`<div class="tfoot">Worked for ${dur(it.ms)}${it.ts?' · '+clock(it.ts):''}</div>`;
@@ -1321,7 +1323,7 @@ function heldStop(){
   if(V.run?.status==='stopped')return {...V.run.stopped,profile:V.run.profile};
   if(V.run&&(V.run.status!=='idle'||V.run.stopped)||selSession()?.done)return null;
   const last=V.items[V.items.length-1];
-  return last?.kind==='note'&&(last.stop==='auth'||last.stop==='limit')?{reason:last.stop,profile:last.profile}:null;
+  return last?.kind==='note'&&(last.stop==='auth'||last.stop==='limit')?{reason:last.stop,profile:last.profile,redo:last.redo}:null;
 }
 const stopKey=()=>V.run?.status==='stopped'?V.run.startedAt:'n'+V.items[V.items.length-1]?.n;
 function stoppedCard(st){
@@ -1370,7 +1372,7 @@ document.addEventListener('keydown',cardKey);
 $('qcard').onclick=async e=>{
   const p=V.run?.pending,o=e.target.closest('[data-opt]'),a=e.target.closest('[data-act]'),go=e.target.closest('[data-go]');
   const si=e.target.closest('[data-signin]');if(si){openSettings(1,si.dataset.signin);startLogin(si.dataset.signin);return}
-  if(go){sendText('Continue where you left off.',go.dataset.go);return}
+  if(go){sendText(heldStop()?.redo||'Continue where you left off.',go.dataset.go);return}   // a stopped /compact runs again, at once
   if(a?.dataset.act==='stay'||a?.dataset.act==='dismiss'&&selSession()?.auto){const id=V.sel,s=selSession();if(s)s.auto=null;api(`sessions/${id}/stay`,{}).catch(err=>oops(err.message));if(a.dataset.act==='stay'){renderCard();return}}
   if(a?.dataset.act==='dismiss'){V.dismissed=stopKey();render();return}
   if(a?.dataset.act==='term'){api(`sessions/${V.sel}/stop`,{}).catch(err=>oops(err.message));setView(V.sel,'term');return}

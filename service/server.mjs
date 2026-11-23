@@ -114,7 +114,7 @@ async function goAuto(id, run) {
   try {
     const env = await src.envForProfile(to, state.profiles);
     touch(id); keep();
-    await startTurn({ sessionId: id, cwd: s.cwd, profile: to, env, text: CONTINUE, readable: [src.ATTACH_ROOT], model: run.model, effort: run.effort, mode: modeOf(run.mode) || undefined, claude: state.claude, emit, transcript: fileOf(s.cwd) });
+    await startTurn({ sessionId: id, cwd: s.cwd, profile: to, env, text: run.stopped?.redo || CONTINUE, readable: [src.ATTACH_ROOT], model: run.model, effort: run.effort, mode: modeOf(run.mode) || undefined, claude: state.claude, emit, transcript: fileOf(s.cwd) });
   } catch (e) { console.error('[workwood] continuing on another profile:', e.message); }
   pushState();
 }

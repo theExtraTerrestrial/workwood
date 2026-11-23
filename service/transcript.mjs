@@ -169,6 +169,7 @@ export class Builder {
     this.items = []; this.context = null; this.lastTool = null; this.seq = seq; this.fresh = new Map(); this.groups = []; this.cwd = cwd; this.named = [];
     this.cmdFrom = null;                        // when the turn's first command started
     this.steps = new Map();                     // tool_use id -> the step and the item it is drawn in
+    this.asks = new Map();                      // tool_use id -> the questions of a card, until it is answered
     this.output = keepOutput ? new Map() : null; // a live turn keeps whole outputs, for "Show all output"
   }
   /**
@@ -181,6 +182,12 @@ export class Builder {
     const changed = new Set(), at = ts ? Date.parse(ts) : Date.now();
     for (const r of content) {
       if (r?.type !== 'tool_result') continue;
+      if (this.asks.has(r.tool_use_id)) {   // the card answered: what you picked or wrote stays in the thread, as yours
+        const qs = this.asks.get(r.tool_use_id); this.asks.delete(r.tool_use_id);
+        const it = answersOf(qs, r, meta.result);
+        if (it) changed.add(this.push({ kind: 'answers', ...it, ...(ts ? { ts } : {}) }));
+        continue;
+      }
       const hit = this.steps.get(r.tool_use_id);
       if (!hit) continue;
       const { step } = hit, text = resultText(r.content), extra = meta.result && typeof meta.result === 'object' ? meta.result : {};
@@ -339,6 +346,7 @@ export class Builder {
         if (d.group === 'skill') { out.push(this.push({ kind: 'skill', name: d.what })); continue; }
         if (d.group === 'ask' || d.group === 'plan') {         // shown as a card, not as a step; the turn remembers it stopped for you
           if (this.turn) { this.turn.asked = (this.turn.asked || 0) + 1; out.push(this.turn); }
+          if (b.name === 'AskUserQuestion' && b.id) this.asks.set(b.id, Array.isArray(b.input?.questions) ? b.input.questions : []);
           continue;
         }
         let last = this.items[this.items.length - 1];
@@ -457,6 +465,31 @@ export const ERRORS = {
   invalid_request: 'error', server_error: 'error', unknown: 'error', max_output_tokens: 'error',
 };
 
+// What a question card was answered with, from its tool result: each question with its answer, or the words you
+// wrote instead of answering. Claude Code keeps the answers in the result (and its text says them as "question"="answer").
+// Declined or cancelled with nothing said: nothing to show.
+function answersOf(questions, r, result) {
+  const text = resultText(r.content);
+  if (r.is_error) { const said = /and said: ([\s\S]+)$/.exec(text)?.[1]?.trim(); return said ? { said } : null; }
+  const given = result && typeof result.answers === 'object' && result.answers ? result.answers : {};
+  if (!Object.keys(given).length) for (const [, q, a] of text.matchAll(/"((?:[^"\\]|\\.)*)"="((?:[^"\\]|\\.)*)"/g)) given[q] = a;
+  const qs = questions.length ? questions : (result?.questions || []);
+  const list = qs.map(q => ({ q: q.question, head: q.header || null, a: given[q.question] })).filter(x => x.a);
+  for (const [q, a] of Object.entries(given)) if (!list.some(x => x.q === q) && a) list.push({ q, head: null, a: String(a) });
+  return list.length ? { answers: list.map(x => ({ ...x, a: String(x.a) })) } : null;
+}
+
+// A slash command Claude Code ran by itself that failed — a /compact cut off by a limit, say — as the stop it is, with
+// the command to run again to go on (not "continue": the command never ran). Streamed as a user message, saved as a system one.
+export function failedCommand(m) {
+  const t = m?.type === 'system' && m.subtype === 'local_command' ? m.content : m?.type === 'user' && typeof m.message?.content === 'string' ? m.message.content : null;
+  const err = typeof t === 'string' ? /<local-command-stderr>([\s\S]*?)<\/local-command-stderr>/.exec(t)?.[1]?.trim() : null;
+  if (!err) return null;
+  const limit = /\blimit\b|rate.?limit|\b429\b/i.test(err) && !/context limit|size limit/i.test(err);
+  const cmd = m.commandRun?.command || (/compact/i.test(err) ? 'compact' : null);
+  return { reason: limit ? 'limit' : 'error', text: err, ...(cmd ? { redo: `/${cmd}${m.commandRun?.args ? ' ' + m.commandRun.args : ''}` } : {}) };
+}
+
 const textOfError = msg => (msg?.content || []).filter(b => b.type === 'text').map(b => b.text).join(' ').split('\n')[0] || 'something went wrong';
 
 /** Reads a transcript file into items. Returns only the newest `limit` items. */
@@ -472,7 +505,7 @@ export async function readTranscript(file, limit = 400, cwd = null) {
   for await (const line of rl) {
     if (skip) { skip = false; continue; }
     // Most lines are bookkeeping and can be large; only parse the three kinds we draw.
-    if (!line.includes('"type":"user"') && !line.includes('"type":"assistant"') && !line.includes('"turn_duration"')) continue;
+    if (!line.includes('"type":"user"') && !line.includes('"type":"assistant"') && !line.includes('"turn_duration"') && !line.includes('"local_command"')) continue;
     let m; try { m = JSON.parse(line); } catch { continue; }
     if (m.isSidechain || m.isMeta) continue;
     if (m.type === 'user' && typeof m.permissionMode === 'string') mode = m.permissionMode;
@@ -481,6 +514,7 @@ export async function readTranscript(file, limit = 400, cwd = null) {
     else if (m.type === 'assistant' && m.error && m.isApiErrorMessage) { b.closeText(); b.flushWork(); b.push({ kind: 'note', stop: ERRORS[m.error] || 'error', ts: m.timestamp, ...(ERRORS[m.error] === 'auth' || ERRORS[m.error] === 'limit' ? {} : { text: textOfError(m.message) }) }); }
     else if (m.type === 'assistant' && m.message) b.assistant(m.message, m.timestamp, typeof m.effort === 'string' ? m.effort : null, m.cwd);
     else if (m.type === 'system' && m.subtype === 'turn_duration') b.done(m.durationMs, m.timestamp);
+    else if (m.type === 'system' && m.subtype === 'local_command') { const f = failedCommand(m); if (f) { b.closeText(); b.flushWork(); b.push({ kind: 'note', stop: f.reason, ts: m.timestamp, ...(f.redo ? { redo: f.redo } : {}), ...(f.reason === 'error' ? { text: f.text } : {}) }); } }
   }
   b.flushWork();
   let work = b.work();

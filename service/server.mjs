@@ -396,8 +396,10 @@ async function api(req, res, url) {
     for (const f of t.work) previewDirs(s.id).add(path.dirname(f.path));
     for (const f of t.work) knownWork(s.id).add(f.path);
     if (pl.worktree) previewDirs(s.id).add(pl.top);   // a page in the worktree may load its neighbours, as in the project folder
-    return send(res, 200, { ...t, place, context: run?.context || t.context, model: run?.builder.model || t.model, effort: run?.effort || t.effort, mode: run?.mode || t.mode || null,
-      defaults: await src.defaultsFor(s.cwd, run?.profile || s.profile, state.profiles), run: publicRun(run) });
+    // The turn's state goes with the items taken above, as it was then: a turn ending while the defaults are read must not
+    // come back as idle beside items from before it ended (the next read, or the event stream, brings the rest).
+    const now = { context: run?.context || t.context, model: run?.builder.model || t.model, effort: run?.effort || t.effort, mode: run?.mode || t.mode || null, run: publicRun(run) };
+    return send(res, 200, { ...t, place, ...now, defaults: await src.defaultsFor(s.cwd, run?.profile || s.profile, state.profiles) });
   }
   if (parts[0] === 'voice') {
     if (req.method === 'GET') { if (url.searchParams.has('warm')) voice.warm(); return send(res, 200, voice.status); }

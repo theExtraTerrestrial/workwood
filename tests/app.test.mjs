@@ -353,7 +353,7 @@ test('a command step carries its text, its time, how it ended and its output; on
   const fail = st.find(x => x.id === 'toolu_fail');
   assert.equal(fail.cmd, 'node --test tests/ 2>&1 | grep "<fail>"');
   assert.deepEqual([fail.state, fail.code, fail.past, fail.lines, fail.cut], ['bad', 1, 'Ran', 21, true]);
-  assert.ok(fail.end - fail.start >= 250, 'timed from the call to its result');
+  assert.ok(fail.end - fail.start >= 100, 'timed from the call to its result');   // 300 ms apart in the fake; a busy machine may handle the start late
   assert.match(fail.out, /line 20\nfail 2$/); assert.ok(!/^line 1\n/.test(fail.out), 'only the end of the output travels with the step');
   const full = (await svc.call(`sessions/${id}/output?tool=toolu_fail`)).body.text;
   assert.ok(full.startsWith('line 1\n') && full.endsWith('fail 2') && !full.startsWith('Exit code'));

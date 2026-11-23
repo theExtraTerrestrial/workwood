@@ -203,8 +203,13 @@ const snapshot = () => ({
 let lastSent = '';
 function pushState() { const s = JSON.stringify(snapshot()); if (s !== lastSent) { lastSent = s; emit('state', JSON.parse(s)); } }
 
-let refreshing = null;
-function refreshAll() { return refreshing ||= doRefresh().finally(() => { refreshing = null; }); }
+// A refresh asked for while one is under way waits for it and then reads again, once for all who asked meanwhile: the one
+// under way may have read the folders before the change its caller just made (a profile renamed, added or removed).
+let refreshing = null, following = null;
+function refreshAll() {
+  if (!refreshing) return refreshing = doRefresh().finally(() => { refreshing = null; });
+  return following ||= refreshing.catch(() => {}).then(() => { following = null; return refreshAll(); });
+}
 async function doRefresh() {
   const began = Date.now();
   // Profiles first: the sessions are tagged with the account that ran them.
@@ -479,6 +484,8 @@ async function api(req, res, url) {
   if (parts[0] === 'profiles' && (parts[2] === 'rename' || parts[2] === 'remove')) {
     const p = state.profiles.find(x => x.name === parts[1]);
     if (!p) return send(res, 404, { error: 'No such profile.' });
+    // The account ~/.claude is signed in to can never be removed, busy or not: say that first, not "try again later".
+    if (parts[2] === 'remove' && p.global) return send(res, 409, { error: `${p.name} is the account ~/.claude is signed in to. Switch to another one with Claudius first.` });
     if (inUse(p.name)) return send(res, 409, { error: `${p.name} is in use: a session is working on it, or it is open in a terminal or a sign-in. Try again when it is idle.` });
     try {
       if (parts[2] === 'remove') {

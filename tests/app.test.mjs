@@ -384,6 +384,25 @@ test('handoff: Auto picks the writer by how much went on; the facts are kept wor
   assert.match(t, /## Your messages, word for word\n- 2026-11-20 10:00 — Make the parser faster\n- 2026-11-20 10:00 — no, drop the cache/);
   assert.match(t, /## Your answers\n- Keep the cache\?: No/); assert.match(t, /## Commands that failed\n- `npm test`\n  expected 3, got 4/);
   assert.equal(await ho.countMessages(f), 2);
+  // files a command wrote and files a commit took count as changed; an error is told by its message, not its stack;
+  // a lookup that found nothing, a failure the same command later got past, and a repeated error are left out or folded
+  assert.deepEqual(ho.writtenBy("python3 - <<'EOF'\np='ui/a.js';s=open(p).read()\nopen(p,'w').write(s)\nEOF\nsed -i 's/x y/z/' b.js && echo hi > c.log 2>/dev/null"), ['ui/a.js', 'b.js', 'c.log']);
+  assert.equal(ho.errorOf("/x.cjs:2\n    throw err;\n    ^\n\nError: Executable doesn't exist at /chrome\n    at run (/x.cjs:2:35)\n    at Object.<anonymous> (/x.cjs:6:45) {\n  log: [],\n}\nNode.js v26.1.0"), "Error: Executable doesn't exist at /chrome");
+  execFileSync('git', ['init', '-q', dir]); fs.mkdirSync(path.join(dir, 'ui'));
+  for (const n of ['ui/a.js', 'b.js', 'd.md']) fs.writeFileSync(path.join(dir, n), 'x');
+  execFileSync('git', ['-C', dir, 'add', 'd.md']); execFileSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'd']);
+  const hash = execFileSync('git', ['-C', dir, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+  const h = path.join(dir, 'h.jsonl'), B = (id, command) => ({ type: 'tool_use', id, name: 'Bash', input: { command } }), R = (id, content, is_error) => ({ type: 'tool_result', tool_use_id: id, content, is_error });
+  fs.writeFileSync(h, [
+    L({ type: 'assistant', message: { model: 'm', content: [B('a', "python3 - <<'EOF'\np='ui/a.js'\nopen(p,'w').write('y')\nEOF"), B('b', "sed -i 's/a/b/' b.js /tmp/elsewhere.js"), B('c', 'which chromium'), B('d', 'node build.mjs'), B('e', 'npm run lint'), B('f', 'npm run lint --fix'), B('g', 'npm run lint --fix')] } }),
+    L({ type: 'user', message: { role: 'user', content: [R('a', 'ok'), R('b', 'ok'), R('c', 'Exit code 1\n', true), R('d', 'Exit code 1\nError: no input', true), R('e', 'Exit code 2\n3 problems', true), R('f', 'Exit code 2\n3 problems', true), R('g', 'Exit code 2\n3 problems', true)] } }),
+    L({ type: 'assistant', message: { model: 'm', content: [B('h', 'git commit -am d'), B('i', 'node build.mjs')] } }),
+    L({ type: 'user', message: { role: 'user', content: [R('h', `[main ${hash}] d\n 1 file changed`), R('i', 'built')] } }),
+  ].join('\n') + '\n');
+  const hc = await ho.collect(h, dir);
+  assert.deepEqual(hc.facts.files, ['ui/a.js', 'b.js', 'd.md']);
+  assert.deepEqual(hc.facts.failed.map(x => [x.cmd, x.err, x.times]), [['npm run lint --fix', '3 problems', 3]]);
+  assert.match(ho.factsText(hc.facts), /- `npm run lint --fix` \(3 times\)\n  3 problems/);
   // recall: newest session first, a few short excerpts with who and when; nothing found says so
   const g = path.join(dir, 'older.jsonl');
   fs.writeFileSync(g, L({ type: 'user', message: { role: 'user', content: 'The cache must go, it breaks on port 4519' } }) + '\n');
@@ -392,6 +411,13 @@ test('handoff: Auto picks the writer by how much went on; the facts are kept wor
   assert.ok(r.hits.length <= 5 && r.hits[0].session.label === 'Session 2', JSON.stringify(r.hits.map(h => h.session.label)));
   const p = await ho.search([{ file: f, label: 'Session 2' }, { file: g, label: 'Session 1' }], 'port 4519');
   assert.match(p.text, /\[Session 1 · 2026-11-20 10:00 · you\]\nThe cache must go, it breaks on port 4519/);
+  // what people wrote ranks above a command with the same words, and a command is quoted short
+  const k = path.join(dir, 'k.jsonl');
+  fs.writeFileSync(k, [L({ type: 'assistant', message: { model: 'm', content: [B('z', 'cat > x.html <<EOF\n' + 'filler '.repeat(300) + 'the split button goes\n' + 'filler '.repeat(300) + '\nEOF')] } }),
+    L({ type: 'user', message: { role: 'user', content: 'I do not like the split button' } })].join('\n') + '\n');
+  const sb2 = await ho.search([{ file: k, label: 'Session 1' }], 'split button');
+  assert.deepEqual(sb2.hits.map(x => x.who), ['you', 'agent ran']);
+  assert.ok(sb2.text.split('agent ran]\n')[1].length <= 302, sb2.text);
   assert.match((await ho.search([{ file: f, label: 'Session 2' }], 'zebra')).text, /^Nothing in the earlier sessions of this thread mentions "zebra"/);
 });
 

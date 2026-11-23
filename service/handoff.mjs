@@ -7,6 +7,8 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import readline from 'node:readline';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { query, createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
@@ -30,6 +32,49 @@ const typed = t => {
   if (/^\s*</.test(t)) return null;
   return t.replace(/(?:^|\n+)Attached files:\n(?:- .+\n?)+$/, '').trim() || null;
 };
+// Files a shell command writes: Python's open(…, 'w') (also through a variable), writeFileSync, sed -i, tee and
+// redirects. A guess from the words; the caller keeps only files that exist in the project.
+const PATHISH = /^[\w.~/@+-]+$/;
+export function writtenBy(cmd) {
+  const out = new Set(), add = p => { if (p && PATHISH.test(p) && p !== '/dev/null' && !/^-/.test(p)) out.add(p); };
+  const vals = new Map();
+  for (const m of cmd.matchAll(/\b(\w+)\s*=\s*['"]([^'"\s]+)['"]/g)) vals.set(m[1], [...(vals.get(m[1]) || []), m[2]]);
+  for (const m of cmd.matchAll(/\bopen\(\s*(?:['"]([^'"\s]+)['"]|(\w+))\s*,\s*['"][wax]/g)) m[1] ? add(m[1]) : (vals.get(m[2]) || []).forEach(add);
+  for (const m of cmd.matchAll(/\b(?:writeFileSync|writeFile|appendFileSync)\(\s*['"]([^'"\s]+)['"]/g)) add(m[1]);
+  for (const m of cmd.matchAll(/\bPath\(\s*['"]([^'"\s]+)['"]\s*\)\.write_(?:text|bytes)/g)) add(m[1]);
+  // outside heredoc bodies: what the shell itself writes
+  const sh = cmd.replace(/<<-?\s*['"]?(\w+)['"]?[^\n]*\n[\s\S]*?\n\s*\1\b/g, '');
+  for (const seg of sh.split(/;|&&|\|\||\n/)) {
+    const w = seg.trim().split(/\s+/);
+    if (w[0] === 'sed' && w.some(x => /^-[a-zA-Z]*i/.test(x) || x === '--in-place')) {
+      let i = 1, script = false;
+      for (; i < w.length; i++) {
+        if (w[i] === '-e' || w[i] === '-f') { i++; script = true; continue; }
+        if (w[i].startsWith('-')) continue;
+        if (!script) { script = true; if (/^'/.test(w[i]) && !/'$/.test(w[i].slice(1))) while (i + 1 < w.length && !/'$/.test(w[i])) i++; continue; }
+        if (/^[|>]/.test(w[i])) break; add(w[i].replace(/^['"]|['"]$/g, ''));
+      }
+    }
+    const tee = /\btee\s+(?:-a\s+)?(\S+)/.exec(seg); if (tee) add(tee[1]);
+    for (const m of seg.matchAll(/(?:^|[\s;])(?:\d?>>?|&>)\s*(?!&)(['"]?)([^\s;&|<>()'"]+)\1/g)) add(m[2]);
+  }
+  return [...out];
+}
+const NOISE = /^\s*(at\s|\^+\s*$|[{}[\]),]+\s*$|(log|name|code|errno|syscall|path|cause|stack):|Node\.js v\d|throw\s|node:internal|triggerUncaught|[╔║╚═╗╝]+)/;
+const ERRISH = /error|fail|cannot|can't|not found|no such|denied|refused|invalid|unexpected|missing|n't exist|not exist|timed out|assert/i;
+// What a failed command said, shortened to the part that tells why: the first line that reads like an error and a few
+// after it, without stack frames; else the last few lines.
+export function errorOf(out, n = 4) {
+  const ls = String(out || '').split('\n').map(l => l.trimEnd()).filter(l => l.trim() && !NOISE.test(l));
+  const i = ls.findIndex(l => ERRISH.test(l));
+  return (i < 0 ? ls.slice(-n) : ls.slice(i, i + n)).join('\n');
+}
+// A command whose last step only looks for something (which, grep, test…) exits 1 when it found nothing: not a failure.
+const PROBE = /^(?:\S+=\S+\s+)*(which|grep|egrep|fgrep|rg|test|\[|diff|cmp|command\s+-v|type|pgrep)\b/;
+const probing = cmd => { const segs = String(cmd).split(/;|&&|\|\||\||\n/).map(x => x.trim()).filter(Boolean); return PROBE.test(segs.at(-1) || ''); };
+const COMMIT = /^\[[^\]\s]+(?: \([^)]*\))? ([0-9a-f]{7,40})\]/m;
+const sh = promisify(execFile);
+
 // A message that turns the agent around: worth a bigger model to follow.
 const CORRECTION = /^(no\b|nope|not\b|don'?t|do not|stop|instead|actually|wrong|revert|undo|that'?s not|wait\b|rather\b)/i;
 
@@ -39,7 +84,10 @@ const CORRECTION = /^(no\b|nope|not\b|don'?t|do not|stop|instead|actually|wrong|
  */
 export async function collect(file, cwd = null) {
   const facts = { messages: [], answers: [], files: [], failed: [] }, lines = [], files = new Set();
-  const asks = new Map(), cmds = new Map();
+  const asks = new Map(), cmds = new Map(), commits = [], fails = [], wins = new Map(); let step = 0;
+  // a path a command wrote, kept when it is a file of the project that exists
+  const shellFile = p => { if (!cwd) return; const abs = path.resolve(cwd, p.replace(/^~(?=\/)/, os.homedir())), r = path.relative(cwd, abs);
+    if (r && !r.startsWith('..') && !path.isAbsolute(r) && fs.existsSync(abs) && fs.statSync(abs).isFile()) files.add(r); };
   const stats = { messages: 0, failed: 0, corrections: 0, chars: 0 };
   if (!file || !fs.existsSync(file)) return { facts, digest: '', stats };
   const rel = p => { if (!p) return ''; const r = cwd ? path.relative(cwd, p) : p; return r && !r.startsWith('..') ? r : p; };
@@ -60,12 +108,15 @@ export async function collect(file, cwd = null) {
             continue;
           }
           const cmd = cmds.get(r.tool_use_id);
-          if (r.is_error && cmd != null) {
-            const err = textOf(r.content).replace(/^Exit code \d+\n?/, '').trim();
-            if (/^The user (doesn't want|denied|did not approve)|^\[Request interrupted/i.test(err)) continue;
-            stats.failed++; facts.failed.push({ ts, cmd: clip(one(cmd), 300), err: clip(err.split('\n').filter(Boolean).slice(-6).join('\n'), 600) });
-            lines.push(`Failed: ${clip(one(cmd), 300)}\n  ${clip(err.split('\n').filter(Boolean).slice(-4).join(' / '), 500)}`);
-          }
+          if (cmd == null) continue;
+          const said = textOf(r.content), sig = one(cmd).slice(0, 80); step++;
+          if (!r.is_error) { wins.set(sig, step); if (/\bgit\b[^\n]*\bcommit\b/.test(cmd)) { const h = COMMIT.exec(said)?.[1]; if (h) commits.push(h); } continue; }
+          const code = +(/^Exit code (\d+)/.exec(said)?.[1] ?? -1), out = said.replace(/^Exit code \d+\n?/, '').trim();
+          if (/^The user (doesn't want|denied|did not approve)|^\[Request interrupted/i.test(out)) continue;
+          if (code === 1 && probing(cmd)) continue;
+          const err = clip(errorOf(out), 600);
+          stats.failed++; fails.push({ ts, cmd: clip(one(cmd), 300), err, sig, step });
+          lines.push(`Failed: ${clip(one(cmd), 300)}\n  ${clip(err.replace(/\n/g, ' / '), 500)}`);
         }
         continue;
       }
@@ -83,14 +134,24 @@ export async function collect(file, cwd = null) {
           if (b.name === 'AskUserQuestion') { asks.set(b.id, Array.isArray(i.questions) ? i.questions : []); lines.push(`Agent asked: ${(i.questions || []).map(q => one(q.question)).join(' / ')}`); }
           else if (b.name === 'ExitPlanMode') lines.push(`Agent proposed a plan: ${clip(one(i.plan), 1500)}`);
           else if (/^(Edit|MultiEdit|Write|NotebookEdit)$/.test(b.name)) { const f = rel(i.file_path || i.notebook_path); if (f) { files.add(f); lines.push(`${b.name === 'Write' ? 'Wrote' : 'Edited'} ${f}`); } }
-          else if (b.name === 'Bash' || b.name === 'PowerShell') { cmds.set(b.id, i.command || ''); lines.push(`Ran: ${clip(one(i.description ? `${i.description} (${i.command})` : i.command), 300)}`); }
+          else if (b.name === 'Bash' || b.name === 'PowerShell') { cmds.set(b.id, i.command || ''); writtenBy(i.command || '').forEach(shellFile); lines.push(`Ran: ${clip(one(i.description ? `${i.description} (${i.command})` : i.command), 300)}`); }
           else if (b.name === RECALL) lines.push(`Looked back for: ${one(i.query)}`);
           else if (b.name === 'Agent' || b.name === 'Task') lines.push(`Ran an agent: ${one(i.description)}`);
         }
       }
     }
   }
+  // what the session committed, file by file (catches what the guesses above miss)
+  if (cwd) for (const h of commits) { try { const { stdout } = await sh('git', ['-C', cwd, 'show', '--name-only', '--format=', h]); stdout.split('\n').filter(Boolean).forEach(f => files.add(f)); } catch {} }
   facts.files = [...files];
+  // failures: not those the same command later got past; the same error over and over once, with how often
+  const byErr = new Map();
+  for (const f of fails) {
+    if ((wins.get(f.sig) || 0) > f.step) continue;
+    const k = f.err || f.cmd, was = byErr.get(k);
+    byErr.delete(k); byErr.set(k, { ts: f.ts, cmd: f.cmd, err: f.err, times: (was?.times || 0) + 1 });
+  }
+  facts.failed = [...byErr.values()];
   const digest = lines.join('\n');
   stats.chars = digest.length;
   return { facts, digest, stats };
@@ -160,7 +221,7 @@ export function factsText(facts) {
   if (msgs.length) out.push('## Your messages, word for word\n' + (dropped ? `(${dropped} earlier ones left out for length; recall finds them)\n` : '') + msgs.join('\n'));
   if (facts.answers.length) out.push('## Your answers\n' + facts.answers.map(a => `- ${one(a.q)}: ${one(a.a)}`).join('\n'));
   if (facts.files.length) out.push('## Files changed\n' + facts.files.slice(0, 200).map(f => `- ${f}`).join('\n'));
-  if (facts.failed.length) out.push('## Commands that failed\n' + facts.failed.slice(-30).map(f => `- \`${f.cmd}\`\n  ${f.err.replace(/\n/g, '\n  ')}`).join('\n'));
+  if (facts.failed.length) out.push('## Commands that failed\n' + facts.failed.slice(-30).map(f => `- \`${f.cmd}\`${f.times > 1 ? ` (${f.times} times)` : ''}\n  ${f.err.replace(/\n/g, '\n  ')}`).join('\n'));
   return out.join('\n\n');
 }
 
@@ -195,6 +256,9 @@ export async function countMessages(file) {
 
 /* ---------- recall: the earlier sessions, searched word for word ---------- */
 const WORD = /[\p{L}\p{N}_.:/-]{2,}/gu;
+// What people wrote ranks above the commands that happened to contain the words (scripts, mockup data), and a
+// command is quoted short, around the match.
+const WEIGHT = { you: 1, agent: 1, 'command failed': 0.8, 'agent ran': 0.5 }, CMD_CHARS = 300;
 /**
  * Searches the given transcripts (newest session first) for the words of `q`: what you wrote, what the agent said,
  * the commands it ran and the errors they ended with. At most `max` excerpts, short, with who said them and when.
@@ -225,8 +289,8 @@ export async function search(sessions, q, { max = 5, chars = 6000 } = {}) {
       for (const [who, text] of found) {
         const lt = text.toLowerCase(), got = terms.filter(t => lt.includes(t));
         if (!got.length) continue;
-        const score = got.length / terms.length + (phrase.length > 3 && lt.includes(phrase) ? 1 : 0);
-        hits.push({ session: s, si, who, ts: m.timestamp || null, text, at: lt.indexOf(got[0]), score });
+        const score = (got.length / terms.length + (phrase.length > 3 && lt.includes(phrase) ? 1 : 0)) * WEIGHT[who];
+        hits.push({ session: s, si, who, ts: m.timestamp || null, text, term: got[0], score });
       }
     }
   }
@@ -234,7 +298,11 @@ export async function search(sessions, q, { max = 5, chars = 6000 } = {}) {
   hits.sort((a, b) => b.score - a.score || a.si - b.si || String(b.ts).localeCompare(String(a.ts)));
   const top = hits.filter(h => h.score >= Math.min(1, (hits[0]?.score || 0))).slice(0, max);
   const per = Math.max(300, Math.floor(chars / Math.max(1, top.length)) - 80);
-  const ex = h => { const t = h.text.replace(/\s+/g, ' ').trim(), a = Math.max(0, h.at - Math.floor(per / 3)); return (a > 0 ? '…' : '') + t.slice(a, a + per) + (a + per < t.length ? '…' : ''); };
+  const ex = h => {
+    const n = h.who === 'you' || h.who === 'agent' ? per : Math.min(per, CMD_CHARS), t = h.text.replace(/\s+/g, ' ').trim();
+    const at = Math.max(0, t.toLowerCase().indexOf(h.term)), a = Math.max(0, at - Math.floor(n / 3));
+    return (a > 0 ? '…' : '') + t.slice(a, a + n) + (a + n < t.length ? '…' : '');
+  };
   const text = top.length
     ? `${top.length} of ${hits.length} match${hits.length === 1 ? '' : 'es'} in the earlier sessions of this thread:\n\n` + top.map(h => `[${h.session.label}${h.ts ? ' · ' + when(h.ts) : ''} · ${h.who}]\n${ex(h)}`).join('\n\n')
     : `Nothing in the earlier sessions of this thread mentions ${terms.map(t => `"${t}"`).join(', ')}.`;

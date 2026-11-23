@@ -169,7 +169,21 @@ On a fresh WSL install the Electron window needs GTK once:
   turn; the list button in the header opens an outline of the turns that you
   can search.
 - Context: the figure under the message box opens what fills the agent's
-  context, as Claude Code counts it, and "Compact the conversation now".
+  context, as Claude Code counts it, with two ways on: "Continue in a new
+  session" (a handoff) and "Summarise to make room" (Compact).
+- Handoff: a separate model reads the whole history and writes where the work
+  is, what was decided, what was tried and failed, and what is open; every
+  message you wrote, your answers, the files changed and the failed commands go
+  along word for word. A new session starts from it, and the agent can search
+  the earlier sessions with a `recall` tool. Auto (in Settings, General) picks
+  Haiku for short sessions, Sonnet for most and Opus for long or intricate ones;
+  the model under the action changes it for one handoff. From 400k tokens (or ¾
+  of a smaller window) a strip above the message box offers it; `/handoff`
+  works any time, and words after it become the new session's first message.
+- Threads: the sessions of a handoff read as one conversation. The one before
+  shows above, dimmed; older ones wait behind a line. The outline groups the
+  turns by session and searches all of them; picking an old turn shows its
+  session on its own, with "Back to now".
 - Files a shell command made (a screenshot, a page written by a script) get
   preview cards too, when the command names them.
 - New session: the project menu also takes a typed folder or "Browse…".

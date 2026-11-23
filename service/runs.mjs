@@ -45,7 +45,7 @@ export function publicRun(r) {
  * Starts a turn. Resolves with the session id as soon as the session exists
  * (immediately for an existing session, after start-up for a new one).
  */
-export function startTurn({ sessionId, cwd, profile, env, text, content = text, model, effort, mode, claude, emit, readable = [], held = [], transcript = null }) {
+export function startTurn({ sessionId, cwd, profile, env, text, content = text, model, effort, mode, claude, emit, readable = [], held = [], transcript = null, thread = null }) {
   const existing = sessionId && runs.get(sessionId);
   // The session is still open for its background work: the message goes to the same Claude Code, as a new turn.
   if (existing?.lingering && existing.q) {
@@ -199,7 +199,9 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
           permissionMode: run.mode || process.env.WORKWOOD_PERMISSION_MODE || undefined,
           ...(run.mode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
           pathToClaudeCodeExecutable: claude,
-          systemPrompt: { type: 'preset', preset: 'claude_code', append: SHOW_NOTE },
+          // a session that continues others (a thread): its handoff, and the tool that searches the earlier sessions
+          systemPrompt: { type: 'preset', preset: 'claude_code', append: thread?.note ? SHOW_NOTE + '\n\n' + thread.note : SHOW_NOTE },
+          ...(thread?.mcp ? { mcpServers: { workwood: thread.mcp }, allowedTools: [thread.tool] } : {}),
           settingSources: ['user', 'project', 'local'],
           stderr: d => { if (process.env.WORKWOOD_DEBUG) process.stderr.write(d); },
         } });
@@ -323,7 +325,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
         // "Send now": the step was cut short for a waiting message, which starts the next turn straight away.
         if (run.sendNow && run.held.length && run.sessionId && runs.get(run.sessionId) === run) {
           const [first, ...rest] = run.held; run.held = [];
-          try { startTurn({ sessionId: run.sessionId, cwd, profile, env, text: first.text, content: first.content, model, effort: run.effort, mode: run.mode, claude, emit, readable, held: rest, transcript }); }
+          try { startTurn({ sessionId: run.sessionId, cwd, profile, env, text: first.text, content: first.content, model, effort: run.effort, mode: run.mode, claude, emit, readable, held: rest, transcript, thread }); }
           catch { run.held = [first, ...rest]; sayState(); }
         }
       }

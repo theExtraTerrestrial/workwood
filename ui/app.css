@@ -1324,3 +1324,86 @@
   .hbgt .blob{filter:blur(16px)}.hbgt .caustic{filter:blur(9px)}.hbgt .tone{filter:blur(14px)}
   .hbgt .edges{box-shadow:inset 0 0 22px 2px hsl(var(--h1) var(--sat) var(--lum)/.4)}.hbgt .lines{background-size:100% 9px}
   .hbgt .hbg::after{display:none}
+
+/* ---------- threads and handoffs (round 42) ---------- */
+/* the context menu: one big figure, a bar, a legend in a line, two actions */
+#mCtx{width:318px;padding:10px 8px 6px}
+#mCtx .big{display:flex;align-items:baseline;gap:6px;padding:0 6px 2px;font-size:21px}
+#mCtx .big b{font-weight:700;letter-spacing:-.01em}#mCtx .big small{margin:0;font-size:12px}
+#mCtx .big em{margin-left:auto;font-style:normal;font-size:12px;font-weight:500;color:var(--faint)}
+#mCtx .cbar{margin:8px 6px 7px;gap:2px;background:none}#mCtx .cbar i{border-radius:3px}
+#mCtx .cbar::after{content:"";flex:1;border-radius:3px;background:var(--surface2)}
+.clg{display:flex;flex-wrap:wrap;gap:2px 12px;padding:0 6px 6px}
+.clg .crow{padding:0;gap:5px;font-size:11px;color:var(--faint)}.clg .crow i{width:6px;height:6px}.clg .crow span{margin-left:2px}
+.item.act2{gap:10px;padding:7px 6px;margin-top:2px}
+.item.act2 .ic{width:26px;height:26px;flex:none;border-radius:8px;display:grid;place-items:center;background:var(--surface2);color:var(--dim)}
+.item.act2.pri .ic{background:var(--accent-soft);color:var(--accent)}
+.item.act2 .ic svg{width:14px;height:14px}
+.item.act2 .nm b{font-weight:650;font-size:12.5px}
+.item.act2 .nm span{display:flex;align-items:center;gap:0;overflow:visible}
+.item.act2 .nm u,.hstrip u{color:var(--dim);text-decoration:underline;text-decoration-color:var(--line2);text-underline-offset:2px;cursor:pointer;margin-left:4px}
+.item.act2 .nm u:hover,.hstrip u:hover{color:var(--accent);text-decoration-color:currentColor}
+.item.act2 .nm .cv,.hstrip .cv{width:11px;height:11px;margin-left:2px;color:var(--faint)}
+/* who writes the handoff */
+.pop.hpick{width:232px;bottom:auto;z-index:12}
+.hpick .item{padding:6px 8px}.hpick .item b{font-weight:500}.hpick .item small{color:var(--faint);font-size:11px}
+.hpick .item.on b{color:var(--accent);font-weight:650}
+.hef{display:flex;gap:2px;margin:4px 6px 6px;padding:2px;border-radius:8px;background:var(--surface2)}
+.hef button{flex:1;padding:3px 0;border-radius:6px;font-size:11.5px;color:var(--dim)}.hef button.on{background:var(--pop);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.hpick .cap2{border-top:1px solid var(--line);padding:6px 8px 2px;margin-top:2px}
+/* the offer above the message box: a suggestion, not a warning */
+.hstrip{display:flex;align-items:center;gap:10px;margin:0 0 8px;padding:6px 6px 6px 12px;border-radius:11px;background:var(--accent-soft);box-shadow:inset 0 0 0 1px hsl(var(--hue) 62% 60%/.22);font-size:12px;animation:hsin .35s ease-out both}
+.hstrip[hidden]{display:none}
+.hstrip .t{flex:1;min-width:0;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hstrip .t b{color:var(--text);font-weight:650}
+.hstrip .by{display:flex;align-items:center;color:var(--faint);font-size:11.5px;white-space:nowrap}
+.hstrip .hgo{padding:4px 11px;border-radius:8px;background:var(--accent);color:var(--btn-ink);font-weight:700}
+.hstrip .hc2{padding:4px 10px;border-radius:8px;background:var(--surface2);font-weight:600}
+.hstrip .hx{width:24px;height:24px}.hstrip .hx svg{width:13px;height:13px}
+@container (max-width:560px){.hstrip .t span,.hstrip .by{display:none}}
+@keyframes hsin{from{opacity:0;transform:translateY(4px)}}
+/* seams between the sessions of a thread */
+.seam{display:flex;align-items:center;gap:12px;margin:26px 0 12px;color:var(--dim);font-size:12px}
+.seam::before,.seam::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--line2),transparent)}
+.seam>span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.seam b{color:var(--text);font-weight:650}
+.seam .tag{margin-left:4px;padding:2px 8px;border-radius:7px;background:var(--surface2);color:var(--dim);font-size:11.5px}
+.seam .tag:hover,.seam .tag.on{color:var(--text);background:var(--accent-soft)}
+.seam.writing>span{color:var(--accent)}
+.seam.writing::before,.seam.writing::after{background:linear-gradient(90deg,transparent,var(--accent),transparent);background-size:50% 100%;background-repeat:no-repeat;animation:hsweep 1.1s linear infinite}
+@keyframes hsweep{from{background-position:-50% 0}to{background-position:150% 0}}
+.past{opacity:.45;transition:opacity .2s}.past:hover{opacity:.8}
+.hoff{border:1px solid var(--line2);background:var(--surface);border-radius:12px;padding:10px 14px;margin:4px 0 14px;font-size:12.5px}
+.hoff .ai{font-size:12.5px}.hoff .ai h2{font-size:12px;margin:10px 0 4px;color:var(--faint);text-transform:none}
+.hoff details{margin-top:8px;color:var(--faint)}.hoff summary{cursor:pointer;font-size:11.5px}
+.hmeta{margin-top:8px;font-size:11px;color:var(--faint)}
+.tstub{display:flex;align-items:center;gap:10px;margin:4px 0 10px;padding:8px 8px 8px 12px;border-radius:11px;background:var(--surface);font-size:12px;color:var(--dim)}
+.tstub b{color:var(--text);font-weight:650}.tstub .gap{flex:1}
+.tstub button{padding:3px 10px;border-radius:7px;color:var(--accent);font-weight:600}.tstub button:hover{background:var(--accent-soft)}
+.tback{position:absolute;left:50%;transform:translateX(-50%);top:-40px;z-index:3;display:inline-flex;align-items:center;gap:7px;padding:6px 13px 6px 10px;border-radius:16px;background:var(--pop);border:1px solid var(--line2);box-shadow:var(--shadow);font-size:12px;font-weight:600;color:var(--text)}
+.tback[hidden]{display:none}.tback svg{width:13px;height:13px}
+/* how a thread shows in the sidebar and the header */
+.thr{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;color:var(--dim);flex:none}
+.thr i{width:5px;height:5px;border-radius:50%;background:var(--faint)}.thr i:last-child{background:var(--accent)}
+.sess .thr:not(:has(i)){padding:0 5px;border-radius:6px;background:var(--surface2);line-height:15px}
+.tile.stack{box-shadow:3px 3px 0 -1px var(--side,var(--bg)),3px 3px 0 0 hsl(var(--h) 45% 55%/.5)}
+.chain{display:inline-flex;align-items:center;gap:5px;padding:1px 8px 1px 6px;border-radius:7px;background:var(--surface2);color:var(--dim);font-weight:600;font-size:11.5px}
+.chain:hover{color:var(--text)}
+/* the rail: a dot where a session starts, and how many are not loaded */
+.rail .brk{height:14px;width:26px;display:flex;align-items:center;justify-content:flex-end}
+.rail .brk::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--faint);margin-right:2px}
+.rail .more{height:auto;font-size:10px;font-weight:700;color:var(--faint);margin-bottom:4px}.rail .more:hover{color:var(--text)}
+/* the outline of a thread: a group per session */
+.sg{margin:1px 0}
+.sgh{display:flex;width:100%;gap:6px;align-items:flex-start;padding:7px 10px 7px 6px;border-radius:9px;text-align:left}
+.sgh:hover{background:var(--surface)}
+.sgh .cv{width:16px;height:18px;flex:none;display:grid;place-items:center;color:var(--faint);transition:transform .15s}.sgh .cv svg{width:12px;height:12px}
+.sg.open .sgh .cv{transform:rotate(90deg)}
+.sgh .tx{flex:1;min-width:0}
+.sgh b{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650}.sgh b time{margin-left:auto;font-weight:500;font-size:11.5px;color:var(--faint)}
+.sgh .nowdot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);order:2}
+.sgh small{display:block;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sgh small em{font-style:normal;color:var(--accent)}
+.sgr{margin:0 0 6px 13px;padding-left:4px;border-left:1px solid var(--line2)}
+.sg.look>.sgh{background:var(--accent-soft)}
+.olrow mark{background:var(--accent-soft);color:inherit;border-radius:3px;padding:0 1px}
+/* a step that looked back: what it found, quoted */
+.rcl{margin:4px 0 2px 22px;border-left:2px solid var(--accent);padding:4px 0 4px 12px;font-size:12px;color:var(--dim);white-space:pre-wrap;max-height:9.5em;overflow:hidden;position:relative}
+.rcl.all{max-height:none}

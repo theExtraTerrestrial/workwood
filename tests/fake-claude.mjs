@@ -55,14 +55,16 @@ if (process.stdin.isTTY && !args.some(a => a.startsWith('--input-format'))) {
   }
   process.exit(0);
 }
-log(`session account=${identity.emailAddress} config=${configDir ? path.basename(configDir) : 'global'} resume=${arg('--resume') || 'no'} model=${arg('--model') || 'default'} effort=${arg('--effort') || 'default'} mode=${arg('--permission-mode') || 'default'}`);
+const persist = !args.includes('--no-session-persistence');   // a one-off run (the handoff writer) is saved nowhere
+let mcp = []; try { mcp = Object.keys(JSON.parse(arg('--mcp-config') || '{}').mcpServers || {}); } catch {}
+log(`session account=${identity.emailAddress} config=${configDir ? path.basename(configDir) : 'global'} resume=${arg('--resume') || 'no'} model=${arg('--model') || 'default'} effort=${arg('--effort') || 'default'} mode=${arg('--permission-mode') || 'default'}${persist ? '' : ' persist=no'}${mcp.length ? ' mcp=' + mcp.join(',') : ''}`);
 let mode = arg('--permission-mode') || 'default';   // changed mid-session by set_permission_mode
 
 const out = o => process.stdout.write(JSON.stringify(o) + '\n');
 // The shared history lives under ~/.claude whichever account is in use, as Claudius arranges.
 const transcript = path.join(home, '.claude', 'projects', cwd.replace(/[^A-Za-z0-9]/g, '-'), sessionId + '.jsonl');
 // what you write is saved with the mode it was written in, as Claude Code does
-const record = o => { fs.mkdirSync(path.dirname(transcript), { recursive: true }); fs.appendFileSync(transcript, JSON.stringify({ cwd, sessionId, timestamp: new Date().toISOString(), gitBranch: 'main', isSidechain: false, ...(o.type === 'user' && typeof o.message?.content === 'string' ? { permissionMode: mode } : {}), ...o }) + '\n'); };
+const record = o => { if (!persist) return; fs.mkdirSync(path.dirname(transcript), { recursive: true }); fs.appendFileSync(transcript, JSON.stringify({ cwd, sessionId, timestamp: new Date().toISOString(), gitBranch: 'main', isSidechain: false, ...(o.type === 'user' && typeof o.message?.content === 'string' ? { permissionMode: mode } : {}), ...o }) + '\n'); };
 const say = content => {
   const message = { id: 'msg_' + randomUUID(), type: 'message', role: 'assistant', model: 'claude-test', content, usage: { input_tokens: 50000, output_tokens: 1000 } };
   out({ type: 'assistant', message, parent_tool_use_id: null, session_id: sessionId, uuid: randomUUID() });
@@ -245,6 +247,14 @@ async function turn(prompt, said = prompt, uuid) {
     return;
   }
   record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: said } });
+  // the handoff writer: reads the session it was given and answers with the four sections (HANDOFF_FAILS: a limit instead)
+  if (prompt.includes('<session>') && /Write the handoff\.$/.test(prompt.trim())) {
+    log('writer ' + (prompt.includes('<previous-handoff>') ? 'with previous ' : '') + 'saw ' + JSON.stringify((prompt.match(/You: [^\n]*/g) || []).map(l => l.slice(5))));
+    if (prompt.includes('HANDOFF_FAILS')) { out({ type: 'assistant', error: 'rate_limit', message: { id: 'm', type: 'message', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: "You've hit your 5-hour limit" }] }, parent_tool_use_id: null, session_id: sessionId }); return finish("You've hit your 5-hour limit", { is_error: true }); }
+    await new Promise(r => setTimeout(r, /HANDOFF_SLOW/.test(prompt) ? 1500 : 100));
+    text('## Where it is\n- The parser is split in two.\n## Decided\n- Keep the old API.\n## Tried\n- Caching the tokens: slower, dropped.\n## Open\n- Tests for the new half.');
+    return finish('ok');
+  }
   if (/\bLIMIT\b/.test(prompt)) {
     out({ type: 'assistant', error: 'rate_limit', message: { id: 'm', type: 'message', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: 'You have reached your 5-hour limit.' }] }, parent_tool_use_id: null, session_id: sessionId });
     return finish('You have reached your 5-hour limit.', { is_error: true });
@@ -365,6 +375,7 @@ readline.createInterface({ input: process.stdin }).on('close', () => setTimeout(
   if (m.type === 'control_request') {
     const ok = (response = {}) => out({ type: 'control_response', response: { subtype: 'success', request_id: m.request_id, response } });
     if (m.request.subtype === 'initialize' && m.request.appendSystemPrompt) log('appended ' + m.request.appendSystemPrompt);
+    if (m.request.subtype === 'initialize' && m.request.sdkMcpServers?.length) log(`mcp ${[].concat(m.request.sdkMcpServers).join(',')} allowed=${arg('--allowedTools') || ''}`);
     if (m.request.subtype === 'initialize') return ok({ commands: [
       { name: 'mockup', description: 'Build standalone mockups to compare side by side (project)', argumentHint: '' },
       { name: 'teach', description: 'Teach a new skill or concept. (user)', argumentHint: '' },

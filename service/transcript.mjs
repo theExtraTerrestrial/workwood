@@ -26,13 +26,15 @@ export function describeTool(name, input = {}) {
     case 'AskUserQuestion': return { group: 'ask', verb: 'Asking you', what: '' };
     case 'ExitPlanMode': return { group: 'plan', verb: 'Presenting a plan', what: '' };
     case 'TodoWrite': return { group: 'todo', verb: 'Updating its task list', what: '' };
+    // Workwood's own tool for a session that continues others: the earlier sessions searched word for word
+    case 'mcp__workwood__recall': return { group: 'recall', verb: 'Looking back', what: clip(input.query, 60) };
     default: return { group: 'other', verb: 'Using ' + name.replace(/^mcp__/, '').replace(/__/g, ' · '), what: '' };
   }
 }
 
 // What a finished step is called, e.g. 'Ran' for 'Running'.
 const PAST = { Reading: 'Read', Editing: 'Edited', Writing: 'Wrote', Running: 'Ran', Searching: 'Searched', 'Looking up': 'Looked up', 'Running an agent': 'Ran an agent', 'Updating its task list': 'Updated its task list',
-  Watching: 'Watched', 'Stopping a background task': 'Stopped a background task', 'Checking background output': 'Checked background output' };
+  Watching: 'Watched', 'Looking back': 'Looked back', 'Stopping a background task': 'Stopped a background task', 'Checking background output': 'Checked background output' };
 const REPORT_CHARS = 1200, SUB_KEEP = 30, EVENTS_KEEP = 20;
 // What an agent said back, without the bookkeeping Claude Code appends for the main agent.
 const cleanReport = t => String(t || '').replace(/<usage>[\s\S]*?<\/usage>/g, '').replace(/^agentId:.*$/gm, '').trim();
@@ -209,6 +211,7 @@ export class Builder {
         if (extra.totalTokens) step.tokens = extra.totalTokens;
         if (extra.totalToolUseCount) step.count = extra.totalToolUseCount;
       }
+      if (step.group === 'recall' && step.state === 'ok') { step.report = text.length > 2400 ? text.slice(0, 2399) + '…' : text; step.hits = +(/^(\d+) of \d+ match/.exec(text)?.[1] || 0); }
       if (step.state !== 'bg') step.end = at;
       if (step.group === 'run' && step.state !== 'no' && step.state !== 'bg') this.keepOutput(r.tool_use_id, step, text.replace(/^Exit code \d+\n?/, ''));
       changed.add(hit.item);

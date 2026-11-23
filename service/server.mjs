@@ -18,6 +18,7 @@ import * as voice from './voice.mjs';
 import * as usage from './usage.mjs';
 import * as prof from './profiles.mjs';
 import * as update from './update.mjs';
+import * as ho from './handoff.mjs';
 import { createRequire } from 'node:module';
 
 const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui');
@@ -45,11 +46,30 @@ let own = Array.isArray(kept.own) ? new Set(kept.own) : null;   // null until th
 const unread = new Set(kept.unread || []);
 const prefs = { defaultProfile: kept.defaultProfile || null, language: kept.language || null, folders: Array.isArray(kept.folders) ? kept.folders : [],
   doneDays: Number.isInteger(kept.doneDays) ? kept.doneDays : 7, bypass: kept.bypass === true, autoContinue: kept.autoContinue === true,
-  speech: kept.speech === 'turbo' ? 'turbo' : 'small' };   // your choices in the settings dialog
+  speech: kept.speech === 'turbo' ? 'turbo' : 'small',
+  // handing off: who writes the handoff (Auto picks by how much went on), and from how many tokens of context it is offered
+  handoff: { model: ho.MODELS.includes(kept.handoff?.model) ? kept.handoff.model : 'auto', effort: ho.EFFORTS.includes(kept.handoff?.effort) ? kept.handoff.effort : 'medium',
+    offer: ho.OFFERS.includes(kept.handoff?.offer) ? kept.handoff.offer : 400000 } };   // your choices in the settings dialog
 const folders = () => prefs.folders.length ? prefs.folders : [src.WORKSPACE];   // where the project menu looks
 // A mode you may pick: any Workwood offers, but Bypass only once it is turned on in Settings. Null for none.
 const modeOf = m => !m ? null : src.MODES.includes(m) && (m !== 'bypassPermissions' || prefs.bypass) ? m : undefined;
-const keep = () => src.writeKept({ done: Object.fromEntries(done), own: [...(own || [])], unread: [...unread], ...prefs });
+// Threads: a session handed off goes on in a new one. Each new session points at the one it continues.
+const prevOf = new Map(Object.entries(kept.chains || {}));
+const keep = () => src.writeKept({ done: Object.fromEntries(done), own: [...(own || [])], unread: [...unread], chains: Object.fromEntries(prevOf), ...prefs });
+/** The sessions of a thread, oldest first, ending with `id`. */
+function chainOf(id) { const out = [id], seen = new Set(out); for (let p = prevOf.get(id); p && !seen.has(p); p = prevOf.get(p)) { seen.add(p); out.unshift(p); } return out; }
+const handing = new Map();   // session -> { model, effort, at }: its handoff is being written
+const titleLater = new Map(); // a new session of a thread takes the thread's name once its history exists
+/**
+ * What a session that continues others is started with on every turn: the handoff it began from, and the recall tool
+ * over the earlier sessions (newest first). Null for a session that continues nothing.
+ */
+function threadFor(id, h = ho.readHandoff(id), upTo = prevOf.get(id)) {
+  if (!upTo) return null;
+  const earlier = chainOf(upTo);
+  const sessionsOf = async () => earlier.map((sid, i) => ({ file: state.sessions.find(x => x.id === sid)?.file || null, label: 'Session ' + (i + 1) })).reverse();
+  return { note: h ? ho.noteFor(h, earlier.length + 1) : null, mcp: ho.recallServer(sessionsOf), tool: ho.RECALL };
+}
 const touch = id => { (own ||= new Set()).add(id); done.delete(id); };   // new work here brings a session back into the inbox
 const renamed = new Map();   // session -> [when, name], for a list that was being read while you renamed
 const deleted = new Set();   // gone, but a list read a moment earlier may still name them
@@ -66,7 +86,7 @@ const emit = (type, data) => {
   if (type === 'bg-failed') { unread.add(data.sessionId); keep(); pushState(); }   // something left running failed after the turn
   if (type === 'turn-end') setTimeout(() => { refreshAll(); refreshLive(); }, 800); // titles, owners and usage may have changed
   if (type === 'turn-end') { const p = state.profiles.find(x => x.name === runs.get(data.sessionId)?.profile); if (p) setTimeout(() => readings.add([p]), 1500); }   // what the turn cost
-  if (type === 'turn-end') { noteStop(runs.get(data.sessionId)); planAuto(runs.get(data.sessionId)); }
+  if (type === 'turn-end') { noteStop(runs.get(data.sessionId)); planAuto(runs.get(data.sessionId)); nameLater(data.sessionId); }
   if (type === 'run' && data.run?.status !== 'stopped') dropAuto(data.sessionId);   // a new turn, however it began, answers the wait
 };
 
@@ -114,9 +134,15 @@ async function goAuto(id, run) {
   try {
     const env = await src.envForProfile(to, state.profiles);
     touch(id); keep();
-    await startTurn({ sessionId: id, cwd: s.cwd, profile: to, env, text: run.stopped?.redo || CONTINUE, readable: [src.ATTACH_ROOT], model: run.model, effort: run.effort, mode: modeOf(run.mode) || undefined, claude: state.claude, emit, transcript: fileOf(s.cwd) });
+    await startTurn({ sessionId: id, cwd: s.cwd, profile: to, env, text: run.stopped?.redo || CONTINUE, readable: [src.ATTACH_ROOT], model: run.model, effort: run.effort, mode: modeOf(run.mode) || undefined, claude: state.claude, emit, transcript: fileOf(s.cwd), thread: threadFor(id) });
   } catch (e) { console.error('[workwood] continuing on another profile:', e.message); }
   pushState();
+}
+// A new session of a thread is named as the thread once Claude Code has saved its history.
+async function nameLater(id) {
+  const title = titleLater.get(id), s = state.sessions.find(x => x.id === id);
+  if (!title || !s?.file) return;
+  try { await src.renameSession(s.file, id, title); titleLater.delete(id); s.title = title; renamed.set(id, [Date.now(), title]); pushState(); } catch {}
 }
 const readings = usage.makeQueue((name, ev) => {
   if (ev.queued || ev.reading) reading.add(name); else reading.delete(name);
@@ -170,10 +196,11 @@ function decorate(s) {
   } else if (run?.status === 'stopped') {
     status = 'wait'; line = { auth: 'Paused · sign-in needed', limit: autos.has(s.id) ? `Limit reached · continuing on ${autos.get(s.id).to} soon` : 'Stopped · limit reached' }[run.stopped.reason] || 'Stopped · something went wrong';
   } else if (outside) elsewhere('In a terminal');
+  if (handing.has(s.id)) { status = 'work'; line = 'Writing the handoff'; }
   return { id: s.id, title: s.title, project: s.project, cwd: s.cwd, branch: s.branch, mts: s.mts,
     root: s.root || s.cwd, profile: run?.profile || s.profile, status, line, outside, term, locked: (outside || term) && !!live && live.status !== 'idle',
     unread: status === 'idle' && unread.has(s.id), done: isDone(s, status), bg: run?.bg?.size || 0,
-    auto: autos.has(s.id) ? { to: autos.get(s.id).to, at: autos.get(s.id).at, wait: AUTO_WAIT } : null };
+    auto: autos.has(s.id) ? { to: autos.get(s.id).to, at: autos.get(s.id).at, wait: AUTO_WAIT } : null, ...(prevOf.has(s.id) ? { thread: chainOf(s.id).length } : {}) };
 }
 // Out of the inbox: marked done with nothing new since, never worked on here and not running anywhere, or left
 // untouched for longer than the setting allows. Anything working, waiting or unread is always in.
@@ -284,6 +311,59 @@ async function homeNow() {
   const seenPath = new Set();
   return { words, uncommitted: uncommitted.list || [], made: made.filter(f => !seenPath.has(f.path) && seenPath.add(f.path)).slice(0, 10),
     trends: await home.trends(state.profiles.map(p => p.name)) };
+}
+
+// A session started here, listed straight away: the pool shows it only a moment later.
+async function listNew(id, cwd, title, profile) {
+  runs.get(id).title = title;
+  touch(id); keep();
+  const pl = await src.placeOf(cwd);
+  state.sessions.unshift({ id, title, cwd, project: path.basename(pl.root), root: pl.root, branch: null, mts: Math.floor(Date.now() / 1000), profile, file: transcriptFile(cwd, id) });
+  pushState();
+}
+
+/**
+ * Hands a session off: its handoff is written (by the model picked, or by Auto), and a new session starts from it, in
+ * the same folder and on the same profile, continuing the thread. Answers at once; events tell how it goes.
+ */
+async function handOff(s, b) {
+  const pref = ho.MODELS.includes(b.model) ? b.model : prefs.handoff.model, effort = ho.EFFORTS.includes(b.effort) ? b.effort : prefs.handoff.effort;
+  const run = runs.get(s.id), profile = run?.profile || s.profile, use = b.use || {};
+  handing.set(s.id, { model: pref, effort, at: Date.now() });
+  emit('handoff', { sessionId: s.id, state: 'writing', model: pref, effort }); pushState();
+  try {
+    const env = await src.envForProfile(profile, state.profiles);
+    const c = await ho.collect(s.file, s.cwd), model = ho.pickModel(pref, c.stats);
+    if (handing.get(s.id)) handing.get(s.id).model = model;
+    emit('handoff', { sessionId: s.id, state: 'writing', model, effort, auto: pref === 'auto' });
+    const sections = await ho.writeSections({ digest: c.digest, previous: ho.readHandoff(s.id)?.sections || null, model, effort, cwd: s.cwd, env, claude: state.claude });
+    const first = String(b.text || '').trim() || ho.FIRST;
+    const h = { from: s.id, model, effort, auto: pref === 'auto', at: Date.now(), sections, facts: ho.factsText(c.facts), first, own: !!String(b.text || '').trim() };
+    const id = await startTurn({ cwd: s.cwd, profile, env, text: first, readable: [src.ATTACH_ROOT], model: use.model || run?.model || undefined, effort: use.effort || run?.effort || undefined,
+      mode: modeOf(use.mode) || undefined, claude: state.claude, emit, transcript: fileOf(s.cwd), thread: threadFor(null, h, s.id) });
+    prevOf.set(id, s.id); await ho.saveHandoff(id, h);
+    titleLater.set(id, s.title);
+    await listNew(id, s.cwd, s.title, profile);
+    done.set(s.id, Math.max(nowS(), s.mts)); unread.delete(s.id); await keep();   // the thread goes on in the new session: the old one leaves the inbox
+    handing.delete(s.id);
+    emit('handoff', { sessionId: s.id, state: 'done', to: id }); pushState();
+  } catch (e) {
+    handing.delete(s.id);
+    emit('handoff', { sessionId: s.id, state: 'failed', error: String(e.message).split('\n')[0] }); pushState();
+  }
+}
+// What the window needs to show a session as part of its thread: the sessions before it, each with its date, how many
+// messages it holds and what it was about, and the handoff this one started from.
+async function threadInfo(id) {
+  const ids = chainOf(id); if (ids.length < 2) return null;
+  const hs = ids.map(x => ho.readHandoff(x));
+  const sessions = await Promise.all(ids.slice(0, -1).map(async (sid, i) => {
+    const s = state.sessions.find(x => x.id === sid);
+    const n = s?.file ? await ho.countMessages(s.file) : 0;   // the message a session started with when you said nothing is not one of yours
+    return { id: sid, n: i + 1, title: s?.title || null, mts: s?.mts || null, turns: Math.max(0, n - (hs[i] && !hs[i].own ? 1 : 0)), topic: ho.topicOf(hs[i + 1]), here: !!s };
+  }));
+  const h = hs.at(-1);
+  return { sessions, n: ids.length, handoff: h && { model: h.model, effort: h.effort, auto: !!h.auto, at: h.at, sections: h.sections, facts: h.facts, first: h.own ? null : h.first } };
 }
 
 const body = req => new Promise((res, rej) => { let s = ''; req.on('data', d => { s += d; if (s.length > 3e8) req.destroy(); }); req.on('end', () => { try { res(s ? JSON.parse(s) : {}); } catch (e) { rej(e); } }); });
@@ -404,7 +484,8 @@ async function api(req, res, url) {
     // The turn's state goes with the items taken above, as it was then: a turn ending while the defaults are read must not
     // come back as idle beside items from before it ended (the next read, or the event stream, brings the rest).
     const now = { context: run?.context || t.context, model: run?.builder.model || t.model, effort: run?.effort || t.effort, mode: run?.mode || t.mode || null, run: publicRun(run) };
-    return send(res, 200, { ...t, place, ...now, defaults: await src.defaultsFor(s.cwd, run?.profile || s.profile, state.profiles) });
+    const next = [...prevOf].find(([, p]) => p === s.id)?.[0], cont = next && state.sessions.find(x => x.id === next);   // handed off: where the thread goes on
+    return send(res, 200, { ...t, place, ...now, thread: await threadInfo(s.id), handing: handing.get(s.id) || null, continued: cont ? { id: cont.id, n: chainOf(cont.id).length } : null, defaults: await src.defaultsFor(s.cwd, run?.profile || s.profile, state.profiles) });
   }
   if (parts[0] === 'voice') {
     if (req.method === 'GET') { if (url.searchParams.has('warm')) voice.warm(); return send(res, 200, voice.status); }
@@ -432,6 +513,12 @@ async function api(req, res, url) {
     if ('doneDays' in b) prefs.doneDays = [0, 1, 3, 7, 14, 30].includes(+b.doneDays) ? +b.doneDays : 7;
     if ('bypass' in b) prefs.bypass = b.bypass === true;
     if ('autoContinue' in b) { prefs.autoContinue = b.autoContinue === true; if (!prefs.autoContinue) for (const id of [...autos.keys()]) dropAuto(id); }
+    if (b.handoff && typeof b.handoff === 'object') {
+      const h = b.handoff;
+      if ('model' in h) prefs.handoff.model = ho.MODELS.includes(h.model) ? h.model : 'auto';
+      if ('effort' in h) prefs.handoff.effort = ho.EFFORTS.includes(h.effort) ? h.effort : 'medium';
+      if ('offer' in h) prefs.handoff.offer = ho.OFFERS.includes(+h.offer) ? +h.offer : 400000;
+    }
     if ('speech' in b) { prefs.speech = b.speech === 'turbo' ? 'turbo' : 'small'; voice.choose(prefs.speech); }
     if ('language' in b) prefs.language = /^[a-z]{3,20}$/.test(b.language || '') ? b.language : null;
     if ('folders' in b) {
@@ -527,11 +614,7 @@ async function api(req, res, url) {
     const env = await src.envForProfile(profile, state.profiles);
     let content; try { content = await src.takeAttachments(b.text, b.attachments); } catch (e) { return send(res, 400, { error: e.message }); }
     const id = await startTurn({ cwd: proj.cwd, profile, env, text: b.text || '', content, readable: [src.ATTACH_ROOT], model: b.model, effort: b.effort, mode: modeOf(b.mode), claude: state.claude, emit, transcript: fileOf(proj.cwd) });
-    runs.get(id).title = (b.text || '').trim().split('\n')[0].slice(0, 80) || 'Attached files';
-    touch(id); keep();
-    const pl = await src.placeOf(proj.cwd);
-    state.sessions.unshift({ id, title: runs.get(id).title, cwd: proj.cwd, project: path.basename(pl.root), root: pl.root, branch: null, mts: Math.floor(Date.now() / 1000), profile, file: transcriptFile(proj.cwd, id) });
-    pushState();
+    await listNew(id, proj.cwd, (b.text || '').trim().split('\n')[0].slice(0, 80) || 'Attached files', profile);
     return send(res, 200, { sessionId: id });
   }
   if (parts[0] === 'sessions' && parts[2] === 'send') {
@@ -556,8 +639,20 @@ async function api(req, res, url) {
     const env = await src.envForProfile(profile, state.profiles);
     let content; try { content = await src.takeAttachments(b.text, b.attachments); } catch (e) { return send(res, 400, { error: e.message }); }
     touch(s.id); unread.delete(s.id); keep();
-    await startTurn({ sessionId: s.id, cwd: s.cwd, profile, env, text: b.text || '', content, readable: [src.ATTACH_ROOT], model: b.model, effort: b.effort, mode: modeOf(b.mode), claude: state.claude, emit, transcript: fileOf(s.cwd) });
+    await startTurn({ sessionId: s.id, cwd: s.cwd, profile, env, text: b.text || '', content, readable: [src.ATTACH_ROOT], model: b.model, effort: b.effort, mode: modeOf(b.mode), claude: state.claude, emit, transcript: fileOf(s.cwd), thread: threadFor(s.id) });
     pushState();
+    return send(res, 200, { ok: true });
+  }
+  if (parts[0] === 'sessions' && parts[2] === 'handoff') {   // go on in a new session, from a handoff
+    const s = state.sessions.find(x => x.id === parts[1]);
+    if (!s) return send(res, 404, { error: 'No such session.' });
+    const run = runs.get(s.id);
+    if (handing.has(s.id)) return send(res, 409, { error: 'The handoff is already being written.' });
+    if (run && (run.status === 'working' || run.status === 'waiting')) return send(res, 409, { error: 'This session is still working. Hand off once the turn is over.' });
+    if (terms.has(s.id) || (state.live.get(s.id) && state.live.get(s.id).status !== 'idle')) return send(res, 409, { error: 'This session is open in a terminal.' });
+    if (!s.file || !fss.existsSync(s.file)) return send(res, 409, { error: 'This session has no saved history yet.' });
+    if ('use' in b && b.use?.mode && modeOf(b.use.mode) === undefined) return send(res, 400, { error: 'No such mode.' });
+    handOff(s, b);
     return send(res, 200, { ok: true });
   }
   if (parts[0] === 'sessions' && parts[2] === 'answer') { answer(parts[1], b); pushState(); return send(res, 200, { ok: true }); }
@@ -616,6 +711,8 @@ async function api(req, res, url) {
         await closeTerm(s.id);
       } else if (live) return send(res, 409, { error: 'This session is open in a terminal. Close it there before deleting it.' });
       await src.deleteSession(s.file, s.id);
+      for (const [c, p] of prevOf) if (p === s.id) { if (prevOf.has(s.id)) prevOf.set(c, prevOf.get(s.id)); else prevOf.delete(c); }   // the thread closes over the gap
+      prevOf.delete(s.id);
       deleted.add(s.id); runs.delete(s.id); dropAuto(s.id); workPaths.delete(s.id); dirsBySession.delete(s.id);
       done.delete(s.id); own?.delete(s.id); unread.delete(s.id); await keep();
       state.sessions = state.sessions.filter(x => x.id !== s.id);

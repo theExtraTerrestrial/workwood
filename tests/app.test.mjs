@@ -300,6 +300,108 @@ test('a /compact stopped by a limit holds the session like any limit, and contin
   } finally { await svc.call('settings', { autoContinue: false }); }
 });
 
+test('handoff: a separate model writes it from the history, a new session goes on from it with recall, and the old one leaves the inbox', async () => {
+  const ho = await import('../service/handoff.mjs');
+  const id = await newSession('first we split the parser');
+  await idle(id);
+  await svc.call(`sessions/${id}/send`, { text: 'no, keep the old API' }); await idle(id);
+  const dir = path.dirname(fileOf(id)), files = () => fs.readdirSync(dir).filter(f => f.endsWith('.jsonl')).length, had = files();
+  let before = readLog(sb).length;
+  assert.equal((await svc.call(`sessions/${id}/handoff`, { model: 'haiku', effort: 'low' })).status, 200);
+  const st = await until(async () => { const x = await state(); return x.sessions.find(s => s.thread === 2) && x; }, 'the new session of the thread');
+  const next = st.sessions.find(s => s.thread === 2).id;
+  assert.notEqual(next, id);
+  assert.equal(st.sessions.find(s => s.id === id).done, true);               // the thread goes on in the new one
+  const log = readLog(sb).slice(before);
+  assert.ok(log.some(l => /model=haiku effort=low .*persist=no/.test(l)), log.join('|'));   // the writer: the model picked, saved nowhere
+  assert.ok(log.includes('writer saw ["first we split the parser","no, keep the old API"]'), log.join('|'));
+  assert.ok(log.includes('mcp workwood allowed=mcp__workwood__recall'), log.join('|'));    // the new session has the recall tool, allowed without asking
+  const all = log.join('\n'), note = all.slice(all.indexOf('<handoff>'), all.indexOf('</handoff>'));
+  assert.match(note, /## Decided\n- Keep the old API\./); assert.match(note, /## Your messages, word for word\n.*first we split the parser\n.*no, keep the old API/);
+  assert.match(all, /This session continues an earlier session of the same work[^\n]*mcp__workwood__recall/);
+  const s2 = await idle(next);
+  assert.deepEqual(s2.thread.sessions.map(x => [x.id, x.n, x.turns]), [[id, 1, 2]]);
+  assert.equal(s2.thread.n, 2); assert.equal(s2.thread.handoff.model, 'haiku'); assert.equal(s2.thread.handoff.first, ho.FIRST);
+  assert.ok(s2.items.some(i => i.kind === 'user' && i.text === ho.FIRST));
+  assert.equal(files(), had + 1);                                              // only the new session was saved, not the writer's run
+  await until(async () => (await state()).sessions.find(s => s.id === next)?.title === 'first we split the parser', 'the thread\'s name on the new session');
+  // every later turn of the new session starts with the handoff and the tool too
+  before = readLog(sb).length;
+  await svc.call(`sessions/${next}/send`, { text: 'and now?' }); await idle(next);
+  assert.ok(readLog(sb).slice(before).some(l => l.includes(`resume=${next}`)) && readLog(sb).slice(before).includes('mcp workwood allowed=mcp__workwood__recall'), readLog(sb).slice(before).join('|'));
+  assert.ok(readLog(sb).slice(before).includes('<handoff>'));
+  // handed off again: the writer reads the handoff the session began from; the thread holds three
+  before = readLog(sb).length;
+  assert.equal((await svc.call(`sessions/${next}/handoff`, { model: 'sonnet', effort: 'medium', text: 'carry on with the tests' })).status, 200);
+  const third = await until(async () => (await state()).sessions.find(s => s.thread === 3)?.id, 'the third session');
+  assert.ok(readLog(sb).slice(before).some(l => l.startsWith('writer with previous')));
+  const s3 = await idle(third);
+  assert.deepEqual(s3.thread.sessions.map(x => [x.id, x.topic, x.turns]), [[id, 'The parser is split in two.', 2], [next, 'The parser is split in two.', 1]]);   // each said by the handoff written from it; the message it began with is not yours   // each said by the handoff written from it
+  assert.equal(s3.thread.handoff.first, null);                                 // what you wrote yourself stays your message
+  assert.ok(s3.items.some(i => i.kind === 'user' && i.text === 'carry on with the tests'));
+  assert.equal((await svc.call(`sessions/${third}/handoff`, {})).status, 200);  // settled before another test runs
+  await until(async () => (await state()).sessions.find(s => s.thread === 4), 'a fourth');
+});
+
+test('handoff: refused while the session works; a writer that fails leaves the session as it was', async () => {
+  const id = await newSession('this one is SLOW');
+  await until(async () => (await session(id)).run?.status === 'working', 'the turn to start');
+  assert.equal((await svc.call(`sessions/${id}/handoff`, {})).status, 409);
+  await svc.call(`sessions/${id}/stop`, {}); await idle(id);
+  const id2 = await newSession('HANDOFF_FAILS here');
+  await idle(id2);
+  assert.equal((await svc.call(`sessions/${id2}/handoff`, {})).status, 200);
+  await until(async () => (await session(id2)).handing === null && (await state()).sessions.find(s => s.id === id2).status === 'idle', 'the writer to give up');
+  const st = await state();
+  assert.equal(st.sessions.find(s => s.id === id2).done, false);
+  assert.ok(!st.sessions.some(s => s.thread && s.title === 'HANDOFF_FAILS here'));
+});
+
+test('handoff: Auto picks the writer by how much went on; the facts are kept word for word', async () => {
+  const ho = await import('../service/handoff.mjs');
+  assert.equal(ho.pickModel('auto', { messages: 3, failed: 0, corrections: 0, chars: 9000 }), 'haiku');
+  assert.equal(ho.pickModel('auto', { messages: 20, failed: 4, corrections: 2, chars: 300000 }), 'sonnet');
+  assert.equal(ho.pickModel('auto', { messages: 22, failed: 16, corrections: 1, chars: 90000 }), 'opus');   // many failures: intricate
+  assert.equal(ho.pickModel('auto', { messages: 12, failed: 1, corrections: 9, chars: 90000 }), 'opus');   // turned around often
+  assert.equal(ho.pickModel('sonnet', { messages: 99, failed: 99, corrections: 99, chars: 1 }), 'sonnet');
+  const dir = fs.mkdtempSync(path.join(sb.root, 'facts-')), f = path.join(dir, 's.jsonl'), L = o => JSON.stringify({ timestamp: '2026-11-20T10:00:00Z', ...o });
+  fs.writeFileSync(f, [
+    L({ type: 'user', message: { role: 'user', content: 'Make the parser faster' } }),
+    L({ type: 'user', isMeta: true, message: { role: 'user', content: 'a reminder nobody typed' } }),
+    L({ type: 'assistant', message: { model: 'm', content: [{ type: 'text', text: 'Trying a cache.' }, { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'npm test' } }, { type: 'tool_use', id: 't2', name: 'Edit', input: { file_path: path.join(dir, 'src', 'p.js') } }] } }),
+    L({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: 'Exit code 1\nexpected 3, got 4' }, { type: 'tool_result', tool_use_id: 't2', content: 'ok' }] } }),
+    L({ type: 'assistant', message: { model: 'm', content: [{ type: 'tool_use', id: 'q1', name: 'AskUserQuestion', input: { questions: [{ question: 'Keep the cache?', options: [] }] } }] } }),
+    L({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'q1', content: 'answered' }] }, toolUseResult: { answers: { 'Keep the cache?': 'No' } } }),
+    L({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'no, drop the cache' }] } }),
+  ].join('\n') + '\n');
+  const c = await ho.collect(f, dir);
+  assert.deepEqual(c.facts.messages.map(m => m.text), ['Make the parser faster', 'no, drop the cache']);
+  assert.deepEqual(c.facts.answers.map(a => [a.q, a.a]), [['Keep the cache?', 'No']]);
+  assert.deepEqual(c.facts.files, [path.join('src', 'p.js')]);
+  assert.deepEqual(c.facts.failed.map(x => [x.cmd, x.err]), [['npm test', 'expected 3, got 4']]);
+  assert.deepEqual(c.stats, { messages: 2, failed: 1, corrections: 1, chars: c.digest.length });
+  const t = ho.factsText(c.facts);
+  assert.match(t, /## Your messages, word for word\n- 2026-11-20 10:00 — Make the parser faster\n- 2026-11-20 10:00 — no, drop the cache/);
+  assert.match(t, /## Your answers\n- Keep the cache\?: No/); assert.match(t, /## Commands that failed\n- `npm test`\n  expected 3, got 4/);
+  assert.equal(await ho.countMessages(f), 2);
+  // recall: newest session first, a few short excerpts with who and when; nothing found says so
+  const g = path.join(dir, 'older.jsonl');
+  fs.writeFileSync(g, L({ type: 'user', message: { role: 'user', content: 'The cache must go, it breaks on port 4519' } }) + '\n');
+  const r = await ho.search([{ file: f, label: 'Session 2' }, { file: g, label: 'Session 1' }], 'cache');
+  assert.match(r.text, /^\d+ of \d+ matches in the earlier sessions of this thread:/);
+  assert.ok(r.hits.length <= 5 && r.hits[0].session.label === 'Session 2', JSON.stringify(r.hits.map(h => h.session.label)));
+  const p = await ho.search([{ file: f, label: 'Session 2' }, { file: g, label: 'Session 1' }], 'port 4519');
+  assert.match(p.text, /\[Session 1 · 2026-11-20 10:00 · you\]\nThe cache must go, it breaks on port 4519/);
+  assert.match((await ho.search([{ file: f, label: 'Session 2' }], 'zebra')).text, /^Nothing in the earlier sessions of this thread mentions "zebra"/);
+});
+
+test('settings: who writes a handoff and when it is offered are kept, and odd values refused', async () => {
+  assert.deepEqual((await state()).prefs.handoff, { model: 'auto', effort: 'medium', offer: 400000 });
+  assert.deepEqual((await svc.call('settings', { handoff: { model: 'opus', effort: 'high', offer: 200000 } })).body.handoff, { model: 'opus', effort: 'high', offer: 200000 });
+  assert.deepEqual((await svc.call('settings', { handoff: { model: 'gpt', offer: 7 } })).body.handoff, { model: 'auto', effort: 'high', offer: 400000 });
+  await svc.call('settings', { handoff: { model: 'auto', effort: 'medium', offer: 400000 } });
+});
+
 test('with the setting on, a limit continues by itself on the profile with most room after the wait, unless cancelled', async () => {
   assert.equal((await svc.call('settings', { autoContinue: true })).body.autoContinue, true);
   try {
@@ -734,11 +836,12 @@ test('done: takes a session out of the inbox in Workwood only, remembers it, and
   assert.equal((await listed(id)).done, false);
   assert.equal((await svc.call(`sessions/${id}/done`, {})).status, 200);
   assert.equal((await listed(id)).done, true);
-  assert.deepEqual(Object.keys(kept().done), [id]);
+  const handedOff = () => Object.values(kept().chains || {});   // sessions handed off leave the inbox as done too
+  assert.deepEqual(Object.keys(kept().done).filter(x => !handedOff().includes(x)), [id]);
   assert.equal((await session(id)).items[0].text, 'Add a beta changelog'); // still readable
   await svc.call(`sessions/${id}/done`, { on: false });
   assert.equal((await listed(id)).done, false);
-  assert.deepEqual(kept().done, {});
+  assert.deepEqual(Object.keys(kept().done).filter(x => !handedOff().includes(x)), []);
   await svc.call(`sessions/${id}/done`, {});                              // a message in a done session reopens it
   await svc.call(`sessions/${id}/send`, { text: 'one more thing' }); await idle(id);
   assert.equal((await listed(id)).done, false);
@@ -1048,11 +1151,12 @@ test('dictation: the GPU model is downloaded only when asked, then used, and can
 });
 
 test('settings: default profile and dictation language are kept; sign-in again runs Claudius in a terminal', async () => {
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small' });
-  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small' });
+  const handoff = { model: 'auto', effort: 'medium', offer: 400000 };
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', handoff });
+  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', handoff });
   const kept = JSON.parse(fs.readFileSync(path.join(sb.home, '.config', 'workwood', 'state.json'), 'utf8'));
   assert.deepEqual([kept.defaultProfile, kept.language, typeof kept.done], ['other', 'latvian', 'object']);
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small' });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', handoff });
   const a = (await svc.call('about')).body;
   assert.deepEqual([a.version, a.claude, typeof a.speech.model], ['0.1.0', '2.1.322', 'string']);
   assert.equal((await svc.call('profiles/nobody/login', {})).status, 404);
@@ -2248,6 +2352,48 @@ ui('window: the context figure opens what fills it, and can compact the conversa
   await page.waitForSelector('#mCtx', { state: 'hidden' });
 });
 
+ui('window: hand off from the context menu or with /handoff; the thread reads as one, its outline grouped by session', async () => {
+  await startNew('a HANDOFF_SLOW test');
+  await page.waitForSelector('.ai:has-text("Echo: a HANDOFF_SLOW test")');
+  const first = await page.locator('.sess.sel').getAttribute('data-id'); await idle(first);
+  await page.click('#pCtx'); await page.waitForSelector('#mCtx [data-handoff]');
+  assert.deepEqual(await page.locator('#mCtx .item.act2 b').allInnerTexts(), ['Continue in a new session', 'Summarise to make room']);
+  await page.click('#mCtx [data-hpick]'); await page.click('#mHand [data-hm="haiku"]');   // for this handoff only
+  assert.match(await page.locator('#mCtx [data-hpick]').innerText(), /^Haiku · medium$/);
+  const before = readLog(sb).length;
+  await page.click('#mCtx [data-handoff]');
+  await page.waitForSelector('.seam.writing:has-text("Writing the handoff · Haiku · medium")');
+  await page.waitForSelector('.chain:has-text("2 sessions")', { timeout: 12000 });          // the new session opens, as part of the thread
+  assert.ok(readLog(sb).slice(before).some(l => /model=haiku effort=medium .*persist=no/.test(l)));
+  await page.waitForSelector('.seam:has-text("Session 1")'); await page.waitForSelector('.past.me:has-text("a HANDOFF_SLOW test")');
+  assert.equal(await page.locator('.me:has-text("Continue from the handoff")').count(), 0);  // the handoff stands in for the message it started with
+  assert.equal(await page.locator('.sess.sel .thr i').count(), 2);
+  await page.click('.seam:has-text("Session 2") .tag'); await page.waitForSelector('.hoff:has-text("Keep the old API")');
+  // the outline: a group per session, and Find looks through all of them
+  await page.click('.chain'); await page.waitForFunction(() => /^Thread · 2 sessions · \d+ turns?$/.test(document.getElementById('olT').textContent));
+  await page.waitForSelector('.sgh:has-text("Session 1")'); await page.fill('#olQ', 'slow');
+  await page.waitForSelector('.sg:has-text("Session 1") .olrow mark:has-text("SLOW")');
+  await page.fill('#olQ', '');
+  // past the offer, a strip above the message box; dismissed, it stays away for this session
+  await page.evaluate(() => { V.context = { used: 160000, window: 200000 }; renderComposer(); });
+  await page.waitForSelector('#hstrip:has-text("Context 160k")'); await page.click('#hstrip [data-hx]');
+  await page.waitForSelector('#hstrip', { state: 'hidden' });
+  await page.evaluate(() => { renderComposer(); }); assert.equal(await page.locator('#hstrip').isVisible(), false);
+  // /handoff is offered first, and what follows it is the new session's first message
+  await page.fill('#input', '/hand'); await page.waitForSelector('#slash .skr:has-text("/handoff")'); await page.fill('#input', '');
+  await page.evaluate(() => { V.sk = { key: null, list: null, err: null }; });   // later tests type commands before the list is read
+  const second = await page.locator('.sess.sel').getAttribute('data-id'); await idle(second);
+  await send('/handoff go on with the docs');
+  await page.waitForSelector('.chain:has-text("3 sessions")', { timeout: 12000 });
+  await page.waitForSelector('.me:not(.past):has-text("go on with the docs")');
+  await page.waitForSelector('.tstub:has-text("Session 1")');                               // the oldest waits behind a line
+  // an old session says where its thread goes on
+  await page.evaluate(id => openSession(id), first);
+  await page.waitForSelector('.tstub:has-text("continues in Session 2")'); await page.click('.tstub [data-tgo]');
+  await page.waitForSelector('.chain:has-text("2 sessions")');
+  const third = await page.evaluate(() => A.sessions.find(s => s.thread === 3).id); await idle(third);
+});
+
 ui('window: small things on the cards: skip a question, approve a plan but be asked, see a whole edit, wait out a limit', async () => {
   await startNew('just ASK me');
   await page.waitForSelector('#qcard:has-text("Which direction")');
@@ -2272,6 +2418,8 @@ ui('window: small things on the cards: skip a question, approve a plan but be as
 ui('window: a /compact stopped by a limit offers another profile, and continuing there compacts at once', async () => {
   await startNew('ready a COMPACT_FAILS'); await page.waitForSelector('.ai:has-text("Echo: ready a COMPACT_FAILS")');
   await send('/compact');
+  // with the skills already read, the first Enter picks /compact from the list and the second sends it
+  if ((await page.inputValue('#input')).trim() === '/compact') await page.press('#input', 'Enter');
   await page.waitForSelector('#qcard:has-text("Limit reached on live")');
   assert.match(await page.locator('#qcard .why').innerText(), /Error during compaction/);
   await page.click('#qcard [data-go="other"]');

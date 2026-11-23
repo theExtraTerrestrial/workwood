@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 42: handoff, nothing lost</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root{color-scheme:dark;--accent:hsl(168 62% 62%);--warn:#ffb955;--go:#4fd6a4;--hot:#f0706a}
+  *{box-sizing:border-box}
+  body{margin:0;background:#0b0c0e;color:#e8e9ec;font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;padding-bottom:80px}
+  [data-theme=light] body{background:#e9eaee;color:#1d1e22}
+  button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:14px;padding:24px 0 2px}.top h1{font-size:17px;margin:0;flex:1}
+  .intro{color:#b9bcc3;max-width:760px;margin:6px 0 16px;font-size:14px}[data-theme=light] .intro{color:#555}
+  h3{font-size:15px;margin:38px 0 6px}
+  .notes{color:#b9bcc3;max-width:800px;font-size:13.5px;padding-left:18px}.notes li{margin:6px 0}.notes b{color:#fff}
+  [data-theme=light] .notes{color:#444}[data-theme=light] .notes b{color:#000}
+  details{margin-top:26px;color:#b9bcc3;max-width:900px}[data-theme=light] details{color:#444}
+  summary{cursor:pointer;font-weight:650}
+  code{font-family:"JetBrains Mono",monospace;font-size:11.5px}
+
+  .try{display:flex;align-items:center;gap:10px;margin:0 0 10px;font-size:12px;color:#8f939b;flex-wrap:wrap}
+  .seg{display:flex;background:rgba(128,128,128,.16);border-radius:9px;padding:2px}
+  .seg button{padding:3px 11px;border-radius:7px;font-size:12px;color:#a6aab2}.seg button.on{background:#2a2c31;color:#fff}
+  [data-theme=light] .seg button.on{background:#fff;color:#111}
+  .btn{padding:4px 11px;border-radius:8px;font-size:12px;background:rgba(128,128,128,.16);color:#c9ccd2}[data-theme=light] .btn{color:#333}
+  .btn:hover{background:rgba(128,128,128,.26)}
+  .cap0{font-size:12.5px;color:#8f939b;margin:10px 2px 0;min-height:20px}
+
+  /* ===== the app ===== */
+  .app{--bg:#18191c;--side:#121315;--surface:#222428;--raise:#2a2c31;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.14);--text:#f0f1f3;--dim:#a6aab2;--faint:#6d717a;color:var(--text)}
+  [data-theme=light] .app{--bg:#fbfbfc;--side:#f0f1f4;--surface:#fff;--raise:#f4f5f7;--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.14);--text:#1b1c1f;--dim:#5b5f68;--faint:#8d919a}
+  .stage{display:flex;height:620px;border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:0 30px 90px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.1)}
+  [data-theme=light] .stage{box-shadow:0 30px 90px rgba(0,0,0,.16),0 0 0 1px rgba(0,0,0,.1)}
+
+  .side{width:230px;flex:none;background:var(--side);padding:14px 8px;border-right:1px solid var(--line);position:relative}
+  .side h6{margin:4px 10px 8px;font-size:11px;color:var(--faint);font-weight:600;letter-spacing:.04em}
+  .sess{display:flex;gap:10px;align-items:center;padding:7px 8px 7px 10px;border-radius:11px;margin-bottom:1px}
+  .sess.sel{background:var(--bg);box-shadow:0 0 0 1px var(--line)}
+  .tile{width:28px;height:28px;border-radius:8px;flex:none;background:hsl(var(--h) 45% 40%/.35);position:relative}
+  .tile.stack{box-shadow:3px 3px 0 -1px var(--side),3px 3px 0 0 hsl(var(--h) 45% 55%/.45)}
+  .sess .txt{flex:1;min-width:0}
+  .sess .l1{display:flex;gap:6px;align-items:center}.sess .l1 b{flex:1;font-size:12.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sess .l1 time{font-size:11px;color:var(--faint)}
+  .sess .l2{font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dots{display:inline-flex;gap:3px}.dots i{width:5px;height:5px;border-radius:50%;background:var(--faint)}.dots i:last-child{background:var(--accent)}
+
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+  .head{padding:11px 16px 11px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .head .hd{flex:1;min-width:0}.head b{font-size:13.5px;display:block}
+  .where{color:var(--faint);font-size:11.5px;display:flex;gap:6px;align-items:center}
+  .chain{display:inline-flex;align-items:center;gap:5px;padding:1px 7px 1px 6px;border-radius:7px;background:rgba(128,128,128,.13);color:var(--dim);font-weight:600;cursor:pointer}
+  .chain:hover{background:rgba(128,128,128,.22)}
+  .ib{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--dim)}
+  .ib:hover,.ib.on{background:rgba(128,128,128,.15);color:var(--text)}
+  .ib svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  .body{flex:1;display:flex;min-height:0}
+  .thread{flex:1;overflow:auto;padding:18px 0 10px;scroll-behavior:smooth}
+  .col{max-width:600px;margin:0 auto;padding:0 22px}
+  .you{margin:14px 0 14px auto;max-width:78%;width:fit-content;background:var(--surface);border:1px solid var(--line);padding:8px 12px;border-radius:14px 14px 4px 14px}
+  .ag{margin:10px 0}.ag p{margin:0 0 6px}
+  .step{display:flex;align-items:center;gap:8px;color:var(--faint);font-size:12px;margin:4px 0}
+  .step::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--faint);opacity:.6}
+  .past{opacity:.4;transition:opacity .4s}.past:hover{opacity:.75}
+
+  /* seams between sessions of one thread */
+  .seam{display:flex;align-items:center;gap:12px;margin:24px 0 10px;color:var(--dim);font-size:12px}
+  .seam::before,.seam::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--line2),transparent)}
+  .seam span{display:inline-flex;gap:8px;align-items:center}
+  .seam b{color:var(--text);font-weight:650}
+  .seam .tag{padding:2px 8px;border-radius:7px;background:rgba(128,128,128,.13);color:var(--dim);cursor:pointer}
+  .seam .tag:hover{background:rgba(128,128,128,.22)}
+  .seam.load{margin-top:0}
+  .seam.writing .w{color:var(--accent)}
+  .seam.writing::after,.seam.writing::before{background:linear-gradient(90deg,transparent,var(--accent),transparent);background-size:50% 100%;background-repeat:no-repeat;animation:sweep 1.1s linear infinite}
+  @keyframes sweep{from{background-position:-50% 0}to{background-position:150% 0}}
+  .in{animation:in .5s ease-out both}
+  @keyframes in{from{opacity:0;transform:translateY(6px)}}
+
+  .hand{border:1px solid var(--line2);background:var(--surface);border-radius:12px;padding:12px 14px;margin:6px 0 12px;font-size:12.5px}
+  .hand .sec{display:grid;grid-template-columns:70px 1fr;gap:10px;margin:3px 0}
+  .hand em{font-style:normal;color:var(--faint);font-weight:600;font-size:11.5px;padding-top:1px}
+
+  .look{margin:8px 0;border-left:2px solid var(--accent);padding:5px 0 5px 12px;font-size:12.5px}
+  .look .q{color:var(--dim);font-size:12px;margin-bottom:5px}.look .q b{color:var(--text);font-weight:600}
+  .look blockquote{margin:0;opacity:.88}
+  .look blockquote small{display:block;color:var(--faint);font-size:11px;margin-bottom:1px}
+
+  /* the existing turn browser (outline panel), now grouped by session */
+  .panel{width:0;overflow:hidden;border-left:1px solid transparent;transition:width .25s;flex:none;display:flex;flex-direction:column}
+  .panel.on{width:300px;border-left-color:var(--line)}
+  .panel>.phead,.panel>.ol{width:300px}.panel>.find{width:280px;flex:none}
+  .phead{display:flex;align-items:center;gap:8px;padding:12px 10px 4px 16px}
+  .ctitle{font-weight:650;font-size:12.5px;flex:1}.ctitle span{color:var(--faint);font-weight:500}
+  .px{width:26px;height:26px;border-radius:7px;color:var(--faint);display:grid;place-items:center}.px:hover{background:rgba(128,128,128,.14);color:var(--text)}
+  .find{display:flex;align-items:center;gap:8px;margin:8px 10px 4px;padding:6px 10px;border-radius:9px;background:var(--surface);color:var(--faint)}
+  .find svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;flex:none}
+  .find input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--text);font:inherit;font-size:12.5px}.find input::placeholder{color:var(--faint)}
+  .ol{flex:1;overflow:auto;padding:4px 6px 10px;scroll-behavior:smooth}
+  .sg{margin:2px 0}
+  .sgh{display:flex;width:100%;gap:8px;align-items:flex-start;padding:7px 10px 7px 8px;border-radius:9px;text-align:left}
+  .sgh:hover{background:rgba(128,128,128,.08)}
+  .sgh .cv{width:14px;height:18px;flex:none;display:grid;place-items:center;color:var(--faint);transition:transform .15s}
+  .sgh .cv::before{content:"";width:5px;height:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg)}
+  .sg.open .sgh .cv{transform:rotate(90deg)}
+  .sgh .tx{flex:1;min-width:0}
+  .sgh b{display:flex;gap:6px;font-size:12.5px;font-weight:650}.sgh b time{margin-left:auto;font-weight:500;font-size:11.5px;color:var(--faint)}
+  .sgh small{display:block;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sgh small em{font-style:normal;color:var(--accent)}
+  .sg.now .sgh b::after{content:"";order:1;width:6px;height:6px;border-radius:50%;background:var(--accent);align-self:center;box-shadow:0 0 0 3px hsl(168 62% 62%/.18)}
+  .sg .rows{display:none;margin:0 0 6px 15px;border-left:1px solid var(--line2);padding-left:4px}.sg.open .rows{display:block}
+  .olrow{display:flex;width:100%;gap:10px;padding:6px 8px;border-radius:9px;align-items:baseline;text-align:left;font-size:12.5px}
+  .olrow:hover{background:rgba(128,128,128,.08)}.olrow.cur{background:hsl(168 62% 62%/.12)}
+  .olrow time{font-size:11.5px;color:var(--faint);width:36px;flex:none;font-variant-numeric:tabular-nums}
+  .olrow .t2{flex:1;min-width:0}.olrow .t2 b{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .olrow .t2 span{font-size:11.5px;color:var(--faint)}
+  .olrow mark{background:hsl(168 62% 62%/.25);color:inherit;border-radius:3px;padding:0 1px}
+
+  /* the rail of turns beside the thread: a gap and a dot where a session starts */
+  .tw{flex:1;position:relative;display:flex;min-width:0}
+  .rail{position:absolute;right:8px;top:24px;bottom:24px;width:26px;display:flex;flex-direction:column;align-items:flex-end;justify-content:center}
+  .rail button{height:9px;width:26px;display:flex;align-items:center;justify-content:flex-end}
+  .rail i{display:block;height:3px;width:10px;border-radius:2px;background:var(--line2)}
+  .rail button:hover i{width:22px;background:var(--text)}.rail .cur i{width:22px;background:var(--accent)}
+  .rail .brk{height:14px;width:26px;display:flex;align-items:center;justify-content:flex-end}
+  .rail .brk::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--faint);margin-right:2px}
+  .rail .more{font-size:10px;color:var(--faint);font-weight:600;margin-bottom:4px;cursor:pointer}
+
+  .stub{display:flex;align-items:center;gap:10px;margin:2px 0 8px;padding:9px 12px;border-radius:11px;background:rgba(128,128,128,.07);font-size:12px;color:var(--dim)}
+  .stub b{color:var(--text);font-weight:650}.stub .gap{flex:1}
+  .stub .lk2{color:var(--accent);font-weight:600;cursor:pointer}
+  .back{position:absolute;left:calc(50% - 150px);transform:translateX(-50%);bottom:122px;z-index:3;display:none;align-items:center;gap:7px;padding:6px 13px 6px 11px;border-radius:16px;background:var(--surface);border:1px solid var(--line2);font-size:12px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.35);color:var(--text)}
+  .back.on{display:inline-flex;animation:in .3s ease-out both}
+  .back::before{content:"";width:6px;height:6px;border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:rotate(45deg) translateY(-2px)}
+  .focus .past{opacity:1}
+  #hDots:empty{display:none}
+  .cnt{font-size:10.5px;font-weight:700;color:var(--dim);background:rgba(128,128,128,.16);padding:0 6px;border-radius:6px;line-height:16px}
+
+  /* the offer strip above the message box: a suggestion, not a warning */
+  .comp{padding:6px 22px 14px}.comp .col{padding:0}
+  .strip{display:none;align-items:center;gap:10px;margin:0 6px 8px;padding:7px 8px 7px 12px;border-radius:11px;background:hsl(168 62% 62%/.06);box-shadow:inset 0 0 0 1px hsl(168 62% 62%/.2);font-size:12px}
+  .strip.on{display:flex;animation:in .35s ease-out both}
+  .strip .t{flex:1;color:var(--text);font-weight:600}.strip .t span{color:var(--dim);font-weight:500}
+  .strip .x{color:var(--faint);padding:2px 6px}
+  .box{height:58px;border-radius:16px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);position:relative;padding:11px 14px;color:var(--text);font-size:13px}
+  .box::after{content:"";position:absolute;right:12px;bottom:10px;width:28px;height:28px;border-radius:50%;background:var(--text);opacity:.9}
+  .sup{display:flex;align-items:center;gap:12px;margin-top:8px;padding:0 6px;font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .sup .gap{flex:1}.sup .p{color:var(--dim);font-weight:600}
+  .ctx{display:inline-flex;align-items:center;gap:6px;padding:2px 7px;border-radius:7px;cursor:pointer}
+  .ctx:hover,.ctx.open{background:rgba(128,128,128,.14)}
+  .ring{width:14px;height:14px;border-radius:50%;background:conic-gradient(var(--rc,var(--faint)) calc(var(--p)*1%),rgba(128,128,128,.25) 0);
+    -webkit-mask:radial-gradient(circle,transparent 4px,#000 4.5px);mask:radial-gradient(circle,transparent 4px,#000 4.5px)}
+  .ctx.mid{color:var(--warn);--rc:var(--warn)}
+
+  /* the split button: hand off + model */
+  .split{display:inline-flex;border-radius:8px;overflow:hidden;background:var(--accent);color:#0b1714;font-weight:700;font-size:12px}
+  .split button{padding:5px 11px}.split .m{padding:5px 9px;border-left:1px solid rgba(0,0,0,.18);font-weight:600;display:inline-flex;gap:5px;align-items:center}
+  .split .m::after,.chip::after{content:"";width:5px;height:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translateY(-2px);opacity:.7}
+  .lk{color:var(--dim);text-decoration:underline;text-decoration-color:rgba(128,128,128,.45);text-underline-offset:2px;cursor:pointer;display:inline-flex;align-items:center}.lk:hover{color:var(--accent);text-decoration-color:currentColor}
+  .lk::after{content:"";width:5px;height:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translateY(-2px);margin-left:6px;opacity:.7}
+  .strip .by{color:var(--faint);font-size:11.5px}.hb{padding:5px 11px;border-radius:8px;background:var(--accent);color:#0b1714;font-weight:700;font-size:12px}
+  .ghost{padding:5px 11px;border-radius:8px;background:rgba(128,128,128,.16);font-size:12px;font-weight:600}
+
+  /* context menu, touched up */
+  .pop{position:absolute;right:16px;bottom:64px;width:320px;background:var(--surface);border:1px solid var(--line2);border-radius:14px;padding:14px 12px 8px;box-shadow:0 18px 50px rgba(0,0,0,.45);display:none;z-index:5}
+  [data-theme=light] .pop{box-shadow:0 18px 50px rgba(0,0,0,.14)}
+  .pop.on{display:block;animation:in .2s ease-out both}
+  .pop .big{display:flex;align-items:baseline;gap:6px;padding:0 4px}
+  .pop .big b{font-size:22px;font-weight:750;letter-spacing:-.01em}.pop .big span{color:var(--faint);font-size:12px}
+  .pop .big em{margin-left:auto;font-style:normal;color:var(--faint);font-size:12px}
+  .pop .bar{display:flex;gap:2px;height:6px;margin:9px 4px 7px}
+  .pop .bar i{border-radius:3px}.pop .bar i:last-child{flex:1;background:rgba(128,128,128,.18)}
+  .pop .lg{display:flex;gap:12px;padding:0 4px 10px;font-size:11px;color:var(--faint);border-bottom:1px solid var(--line)}
+  .pop .lg span{display:inline-flex;align-items:center;gap:5px}.pop .lg span::before{content:"";width:6px;height:6px;border-radius:2px;background:var(--c)}
+  .act{display:flex;align-items:center;gap:10px;width:100%;padding:8px 6px;border-radius:9px;margin-top:4px;font-size:12.5px;font-weight:650;text-align:left}
+  .act:hover{background:rgba(128,128,128,.1)}
+  .act .ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:rgba(128,128,128,.13);color:var(--dim)}
+  .act.pri .ic{background:hsl(168 62% 62%/.16);color:var(--accent)}
+  .act .ic svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .act .nm{flex:1;min-width:0;white-space:nowrap}.act .nm small{display:block;font-weight:500;font-size:11.5px;color:var(--faint);margin-top:1px}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:7px;background:rgba(128,128,128,.14);color:var(--dim);font-size:11.5px;font-weight:600}
+  .act small{color:var(--faint);font-weight:500;font-size:11.5px}
+
+  /* model picker for the handoff */
+  .mpick{position:absolute;width:206px;background:var(--surface);border:1px solid var(--line2);border-radius:12px;padding:6px;box-shadow:0 18px 50px rgba(0,0,0,.45);display:none;z-index:6;font-size:12.5px}
+  [data-theme=light] .mpick{box-shadow:0 18px 50px rgba(0,0,0,.14)}
+  .mpick.on{display:block;animation:in .18s ease-out both}
+  .mpick h6{margin:4px 8px 4px;font-size:10.5px;color:var(--faint);letter-spacing:.04em;font-weight:600}
+  .mpick button{display:flex;width:100%;padding:6px 8px;border-radius:8px;gap:8px;align-items:center}
+  .mpick button:hover{background:rgba(128,128,128,.1)}
+  .mpick button.on{color:var(--accent);font-weight:650}
+  .mpick button span{margin-left:auto;color:var(--faint);font-size:11px;font-weight:500}
+  .mpick .eff{display:flex;gap:2px;margin:2px 6px 6px;background:rgba(128,128,128,.13);border-radius:8px;padding:2px}
+  .mpick .eff button{justify-content:center;padding:3px 0;font-size:11.5px}
+  .mpick .eff button.on{background:var(--raise);color:var(--text)}
+  .mpick hr{border:0;border-top:1px solid var(--line);margin:6px 2px}
+  .mpick .foot{font-size:11px;color:var(--faint);padding:2px 8px 4px}
+
+  /* slash list */
+  .slash{position:absolute;left:50%;transform:translateX(-50%);bottom:94px;width:min(556px,calc(100% - 44px));background:var(--surface);border:1px solid var(--line2);border-radius:13px;padding:6px;box-shadow:0 18px 50px rgba(0,0,0,.45);display:none;z-index:5}
+  [data-theme=light] .slash{box-shadow:0 18px 50px rgba(0,0,0,.14)}
+  .slash.on{display:block;animation:in .2s ease-out both}
+  .slash div{display:flex;gap:12px;padding:7px 10px;border-radius:8px;font-size:12.5px;align-items:center}
+  .slash div.hi{background:rgba(128,128,128,.12)}
+  .slash code{font-size:12px;color:var(--text);width:92px}
+  .slash span{color:var(--faint);flex:1}.slash span.chip{flex:none}
+  .slash h6{margin:6px 10px 4px;font-size:10.5px;color:var(--faint);letter-spacing:.04em;font-weight:600}
+
+  /* settings snippet */
+  .set{margin-top:18px;display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+  .card{width:420px;background:var(--surface);border-radius:14px;padding:14px 16px;box-shadow:0 0 0 1px var(--line2)}
+  .card h5{margin:0 0 10px;font-size:13px}
+  .row{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:12.5px}
+  .row:first-of-type{border-top:0}
+  .row .l{flex:1}.row .l small{display:block;color:var(--faint);font-size:11.5px}
+  .sel2{padding:4px 10px;border-radius:8px;background:rgba(128,128,128,.14);font-weight:600;font-size:12px;display:inline-flex;gap:6px;align-items:center}
+  .sel2::after{content:"";width:5px;height:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translateY(-2px);opacity:.6}
+  .setcap{font-size:12px;color:#8f939b;max-width:300px;padding-top:6px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head>
+<body><div class="wrap">
+<div class="top"><h1>Round 42 — handoff, nothing lost <span style="color:#8f939b;font-weight:500;font-size:13px">· redrawn</span></h1></div>
+<p class="intro">You can hand off anytime, like compacting. The handoff is written at once by a model you choose, the earlier sessions stay in the thread to browse, and the agent looks back by itself when it needs to.</p>
+
+<div class="try">
+  <div class="seg" id="steps">
+    <button data-s="0" class="on">1 · Menu</button><button data-s="1">2 · Type /</button><button data-s="2">3 · At 400k</button><button data-s="3">4 · Handing off</button><button data-s="4">5 · Looks back</button><button data-s="5">6 · 12 sessions</button><button data-s="6">7 · Jump back</button>
+  </div>
+  <button class="btn" id="bTheme">Light</button>
+</div>
+
+<div class="stage app" id="app">
+  <aside class="side">
+    <h6>WORKWOOD</h6>
+    <div class="sess sel"><span class="tile stack" style="--h:168"></span><span class="txt"><span class="l1"><b>Session chains</b><span class="dots" id="sDots"><i></i><i></i></span><time>now</time></span><span class="l2" id="sLine">Wiring the handoff writer</span></span></div>
+    <div class="sess"><span class="tile" style="--h:28"></span><span class="txt"><span class="l1"><b>Dictation memory</b><time>2h</time></span><span class="l2">Unload after five minutes</span></span></div>
+    <div class="sess"><span class="tile" style="--h:262"></span><span class="txt"><span class="l1"><b>Reset times on hover</b><time>5h</time></span><span class="l2">Done</span></span></div>
+    <div class="sess"><span class="tile" style="--h:210"></span><span class="txt"><span class="l1"><b>Look and backgrounds</b><time>1d</time></span><span class="l2">Done</span></span></div>
+  </aside>
+
+  <section class="main">
+    <div class="head">
+      <div class="hd"><b>Session chains</b><div class="where">workwood · <span class="chain" id="chain"><span class="dots" id="hDots"><i></i><i></i></span><span id="chainN">2 sessions</span></span></div></div>
+      <button class="ib" id="bOutline" title="Conversation outline"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
+    </div>
+    <div class="body">
+      <div class="tw"><div class="thread" id="thread"><div class="col" id="col"></div></div><div class="rail" id="rail"></div></div>
+      <aside class="panel" id="outline">
+        <div class="phead"><span class="ctitle" id="olT">Conversation</span><button class="px" id="olX">✕</button></div>
+        <label class="find"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg><input id="olQ" placeholder="Find in this thread" autocomplete="off" spellcheck="false"></label>
+        <div class="ol" id="oll"></div>
+      </aside>
+    </div>
+
+    <div class="comp"><div class="col">
+      <div class="strip" id="strip"><span class="t">Context 412k <span>· earlier turns start to blur</span></span>
+        <span class="by">by <span class="lk" data-pick>Sonnet · medium</span></span><button class="go hb">Hand off</button><button class="ghost">Compact</button><button class="x">✕</button></div>
+      <div class="box" id="box"></div>
+      <div class="sup"><span class="p">axius</span><span>Opus 5.5 · high</span><span>Auto</span><span class="gap"></span>
+        <span class="ctx" id="ctx"><i class="ring" id="ring" style="--p:46"></i><span id="pct">46%</span></span></div>
+    </div></div>
+
+    <div class="slash" id="slash">
+      <h6>THIS SESSION</h6>
+      <div class="hi"><code>/handoff</code><span>New session, history kept</span><span class="chip" style="cursor:default">Sonnet · medium</span></div>
+      <div><code>/compact</code><span>Summarise in place</span></div>
+      <h6>SKILLS</h6>
+      <div><code>/code-review</code><span>Review the current diff</span></div>
+      <div><code>/simplify</code><span>Clean up the changed code</span></div>
+    </div>
+
+    <button class="back" id="back">Back to now · Session 12</button>
+    <div class="pop" id="pop">
+      <div class="big"><b id="popN">312k</b><span>of 1M</span><em id="popP">31%</em></div>
+      <div class="bar" id="popBar"><i style="width:26%;background:var(--accent)"></i><i style="width:13%;background:var(--warn)"></i><i style="width:7%;background:var(--dim)"></i><i></i></div>
+      <div class="lg"><span style="--c:var(--accent)">Tool results</span><span style="--c:var(--warn)">Talk</span><span style="--c:var(--dim)">Files</span></div>
+      <button class="act pri"><span class="ic"><svg viewBox="0 0 24 24"><path d="M5 12h12M13 6l6 6-6 6"/></svg></span><span class="nm">Continue in a new session<small>Handoff by <span class="lk" data-pick>Sonnet · medium</span></small></span></button>
+      <button class="act"><span class="ic"><svg viewBox="0 0 24 24"><path d="M8 4v5H3M16 20v-5h5M4 9l5-5M20 15l-5 5"/></svg></span><span class="nm">Summarise to make room<small>Compact · earlier detail fades</small></span></button>
+    </div>
+
+    <div class="mpick" id="mpick">
+      <h6>HANDOFF WRITTEN BY</h6>
+      <button>Haiku<span>short sessions</span></button>
+      <button class="on">Sonnet<span>most threads</span></button>
+      <button>Opus<span>intricate ones</span></button>
+      <div class="eff"><button>low</button><button class="on">medium</button><button>high</button></div>
+      <hr><div class="foot">Default in Settings · Sessions</div>
+    </div>
+  </section>
+</div>
+<div class="cap0" id="cap"></div>
+
+<div class="set app">
+  <div class="card">
+    <h5>Handoff</h5>
+    <div class="row"><span class="l">Handoff model</span><span class="sel2">Auto</span></div>
+    <div class="row"><span class="l">Effort</span><span class="sel2">medium</span></div>
+    <div class="row"><span class="l">Offer at<small>Or at ¾ of a smaller window</small></span><span class="sel2">400k tokens</span></div>
+  </div>
+  <div class="setcap"><b style="color:inherit">Auto</b> picks by how much went on, not length: Haiku for short, mechanical sessions, Sonnet for most, Opus when there were many messages from you, failed commands or reversed decisions. The chevron on any Hand off overrides it once.</div>
+</div>
+
+<h3>What changed</h3>
+<ul class="notes">
+  <li><b>Always there, easy to find:</b> in the context menu, as <code>/handoff</code> next to <code>/compact</code> when you type /, and in a strip above the message box from 400k tokens, or ¾ of the window if it is smaller (150k on a 200k model): how sharp earlier turns stay depends on how much there is, not on what share of the window it fills. It is an offer, not a warning; the figure still turns amber at 80%.</li>
+  <li><b>No review step:</b> Hand off starts at once. The seam shows the handoff being written, then folds it so you can open it later. The model and effort come from Settings; the chevron changes them for one handoff.</li>
+  <li><b>The handoff adds “Tried”:</b> what failed and why, so the next session doesn't repeat it. A larger model writes this part better on long threads.</li>
+  <li><b>Browse, in the turn browser you have:</b> a session without a thread keeps today's flat list. Once there is a thread, it becomes “Thread · 12 sessions”, its turns grouped by session under a one-line topic, the current one open. Find searches the whole thread; matching sessions open with their hits.</li>
+  <li><b>10+ sessions:</b> the thread holds the current session and the one before; the rest wait behind one line (“Sessions 1–10 · Browse”), and scrolling up loads one more at a time. The rail shows a dot where each session starts and “+10” for those not loaded. Past four, the sidebar and header show a count instead of dots.</li>
+  <li><b>Jump back:</b> picking an old turn shows its session with the rest folded on both sides, and “Back to now” returns.</li>
+  <li><b>Looking back is the agent's:</b> it searches the earlier sessions when it is about to retry something or isn't sure what was decided. You just ask in plain words; there is nothing to learn.</li>
+  <li><b>Context menu:</b> one big number, a bar, three words of legend, two actions on one line each.</li>
+</ul>
+
+<details><summary>Under the hood</summary><ul class="notes">
+  <li><b>Writer, in two parts:</b> without a model, the service pulls from the <code>.jsonl</code> every message you wrote and your answers on question cards (word for word), the files changed, and the failed commands with their errors. The model gets the history stripped of bulky tool output and writes only the judgement: where it is, decided, tried and why it failed, open. It runs as <code>claude -p --model … --effort …</code>.</li>
+  <li><b>New session:</b> started with the handoff in <code>--append-system-prompt</code> (it survives later compactions) and an MCP server with one tool, <code>recall(query)</code>, whose description tells the agent when to use it.</li>
+  <li><b>Search scope costs nothing in context:</b> recall returns at most ~5 short quoted excerpts, about 1.5k tokens, whether it searches one session or ten. So it searches the whole chain, newest first.</li>
+  <li><b>Chain:</b> <code>{prev, next}</code> per session in the service's own metadata. The thread loads earlier sessions when you scroll up or pick one in the outline. Claude Code's own files stay untouched.</li>
+  <li><code>/handoff</code> is Workwood's own command; the service handles it instead of sending it to Claude Code.</li>
+</ul></details>
+
+<h3>Decided</h3>
+<ul class="notes">
+  <li>The strip stays an offer; nothing hands off by itself.</li>
+  <li>The menu says what each choice does; Handoff and Compact are only named underneath.</li>
+</ul>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const col=$('col'),th=$('thread');
+const P1=`<div class="seam load" id="p1"><span><b>Session 1</b> · Nov 20 · 52 turns <span class="tag" data-load>Show</span></span></div>`;
+const P1open=`<div class="seam load" id="p1"><span><b>Session 1</b> · Nov 20 · 52 turns</span></div>
+ <div class="past"><div class="you">Long sessions either get compacted or need a handoff. Options?</div>
+ <div class="ag"><p>Make the old history searchable, have a separate model write the handoff, and show the sessions as one thread.</p></div></div>`;
+const hand=(m)=>`<div class="hand in"><div class="sec"><em>Where</em><span>Handoff writer done; recall tool next.</span></div>
+ <div class="sec"><em>Decided</em><span>Cancel stays · Compact stays in the menu</span></div>
+ <div class="sec"><em>Tried</em><span>Killing port 4519 before tests — the old server respawns; use a free port instead.</span></div>
+ <div class="sec"><em>Open</em><span>Recall tool · writer tests</span></div></div>`;
+const P2=`<div class="seam" id="p2"><span><b>Session 2</b> · Nov 22 <span class="tag">Handoff</span></span></div>
+ <div class="old">
+ <div class="you">Cancel must stay — sometimes I want to compact after all.</div>
+ <div class="ag"><p>Agreed. Cancel keeps the session as it is.</p><div class="step">Edited ui/app.js</div></div>
+ <div class="you">Tests fail on the port again.</div>
+ <div class="ag"><p>Killing whatever holds 4519 doesn't help, the old server respawns. Switched the tests to a free port.</p><div class="step">Edited tests/helpers.js</div><div class="step">Ran tests · 212 passed</div></div>
+ <div class="you">Now the writer: read the transcript, not the live session.</div>
+ <div class="ag"><p>The service reads the history file and hands it to the chosen model. The session itself never sees it.</p><div class="step">Edited service/handoff.js</div></div></div>`;
+const P3w=`<div class="seam writing in" id="p3"><span class="w">Writing handoff · Sonnet · medium…</span></div>`;
+const P3=(open)=>`<div class="seam in" id="p3"><span><b>Session 3</b> · now <span class="tag" data-hand>${open?'Hide handoff':'Handoff'}</span></span></div>${open?hand():''}`;
+const A3=`<div class="you in">Next: the recall tool. Run the tests when it's in.</div>`;
+const A4=`<div class="ag in"><div class="step">Edited service/recall.js</div><div class="step">Tests failed · EADDRINUSE :4519</div>
+ <div class="look"><div class="q">Looked back · <b>“4519”</b> · Session 2</div><blockquote><small>Agent, Nov 22</small>Killing whatever holds 4519 doesn't help, the old server respawns. Switched the tests to a free port.</blockquote></div>
+ <p>Same clash as before. The new recall test hard-coded 4519; it now takes a free port like the others.</p><div class="step">Ran tests · 219 passed</div></div>`;
+
+// a long thread: twelve sessions
+const LONG=[
+ ['Nov 2',52,'Why compaction loses things',[['09:12','Long sessions get compacted or need a handoff. Options?','4 files'],['10:40','Mock it up in design/','1 file']]],
+ ['Nov 3',38,'Handoff writer',[['14:02','Read the transcript, not the live session','3 files · 2 commands'],['15:30','Keep my messages word for word','1 file']]],
+ ['Nov 5',41,'Recall tool',[['11:20','Recall searches the whole chain','2 files'],['13:05','Cap excerpts at ~1.5k tokens','1 file']]],
+ ['Nov 8',31,'Chains in the thread',[['09:45','Show the sessions as one item','2 files'],['10:30','Seams between sessions','1 file · 1 question'],['12:10','Dots in the sidebar','1 file']]],
+ ['Nov 10',27,'Turn browser groups',[['16:00','Group the outline by session','2 files']]],
+ ['Nov 12',22,'Model picker',[['10:15','Drop the split button','1 file']]],
+ ['Nov 14',35,'Offer strip',[['13:40','Offer at 400k, not a percentage','2 files']]],
+ ['Nov 16',19,'Light theme pass',[['09:30','Seams in the light theme','1 file']]],
+ ['Nov 18',24,'Writer tests',[['15:10','Test the handoff writer on a 1M thread','3 files · 4 commands']]],
+ ['Nov 20',30,'Port clash',[['11:00','Tests fail on the port again','1 file · 3 commands'],['11:45','Use a free port everywhere','2 files']]],
+ ['Nov 22',14,'Release notes',[['10:05','Write the release notes','1 file'],['10:40','Shorter, one line per change','1 file']]],
+ ['now',8,'Settings copy',[['14:20','Settings: say what Auto does','1 file'],['14:31','Run the tests','2 commands']]],
+];
+const total=LONG.reduce((a,x)=>a+x[1],0);
+let st=0,p1open=false,handOpen=false,tm=[],open12=new Set([11]),curRow=null;
+const CAPS=['The context menu says what each choice does. Continuing in a new session is always there, its model one click away.','Typing / lists /handoff beside /compact, above the skills.','From 400k tokens (150k on a 200k model), a quiet strip above the message box offers both. Click the chevron to pick the model.','No review step: the handoff is written and the new session starts. It folds into the seam.','The agent hits the port clash from session 2, looks back by itself, and doesn\'t retry what failed.',
+ 'Twelve sessions: the thread holds the last two; older ones wait behind one line. The turn browser groups turns by session, the current one open. Try Find in this thread.',
+ 'Picked a turn in session 4: the thread shows that session, the rest fold away, and one button brings you back.'];
+const dots=n=>n<=4?'<span class="dots">'+'<i></i>'.repeat(n)+'</span>':`<span class="cnt">${n}</span>`;
+const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const turnHtml=(x,me)=>`<div class="you">${esc(x[1])}</div><div class="ag"><p>${me||'Done.'}</p><div class="step">${x[2]}</div></div>`;
+function threadLong(){
+  if(st===6){const S=LONG[3];
+    return `<div class="stub"><span><b>Sessions 1–3</b> · Nov 2 – Nov 5</span><span class="gap"></span><span class="lk2" data-ol>Browse</span></div>
+     <div class="seam" id="s4"><span><b>Session 4</b> · Nov 8 · 31 turns <span class="tag">Handoff</span></span></div>
+     <div class="past">${S[3].map((x,i)=>`<div data-row="3-${i}">${turnHtml(x,i===1?'A thin line with the date and a Handoff button; earlier turns dimmed above it.':'')}</div>`).join('')}</div>
+     <div class="stub"><span><b>Sessions 5–12</b> · Nov 10 – now</span><span class="gap"></span><span class="lk2" data-back>Show</span></div>`}
+  const s11=LONG[10],s12=LONG[11];
+  return `<div class="stub"><span><b>Sessions 1–10</b> · Nov 2 – Nov 20 · ${total-s11[1]-s12[1]} turns</span><span class="gap"></span><span class="lk2" data-ol>Browse</span></div>
+   <div class="seam"><span><b>Session 11</b> · Nov 22 <span class="tag">Handoff</span></span></div>
+   <div class="past">${s11[3].map(x=>turnHtml(x)).join('')}</div>
+   <div class="seam"><span><b>Session 12</b> · now <span class="tag">Handoff</span></span></div>
+   ${s12[3].map(x=>turnHtml(x,'Done; 219 tests pass.')).join('')}`}
+function renderOl(){
+  const long=st>=5,q=$('olQ').value.trim().toLowerCase(),L=long?LONG:[LONG[0],LONG[1],['now',1,'Recall tool',[['14:20','Next: the recall tool','2 files']]]].slice(0,st>=3?3:2);
+  $('olT').innerHTML=L.length>1?`Thread <span>· ${L.length} sessions · ${L.reduce((a,x)=>a+x[1],0)} turns</span>`:'Conversation';
+  if(L.length===1){$('oll').innerHTML=L[0][3].filter(x=>!q||x[1].toLowerCase().includes(q)).map(x=>`<button class="olrow"><time>${x[0]}</time><span class="t2"><b>${esc(x[1])}</b><span>${x[2]}</span></span></button>`).join('');return}
+  $('oll').innerHTML=L.map((S,i)=>{const hits=q?S[3].map((x,j)=>[x,j]).filter(([x])=>x[1].toLowerCase().includes(q)):S[3].map((x,j)=>[x,j]);
+    if(q&&!hits.length)return'';const op=q||open12.has(i)||(!long&&i===L.length-1);
+    return `<div class="sg ${op?'open':''} ${i===L.length-1?'now':''}" data-g="${i}"><button class="sgh"><span class="cv"></span><span class="tx"><b>Session ${i+1}<time>${S[0]}</time></b><small>${q?`<em>${hits.length} match${hits.length>1?'es':''}</em> · `:''}${esc(S[2])} · ${S[1]} turns</small></span></button>
+     <div class="rows">${hits.map(([x,j])=>`<button class="olrow ${curRow===i+'-'+j?'cur':''}" data-r="${i}-${j}"><time>${x[0]}</time><span class="t2"><b>${q?esc(x[1]).replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig'),'<mark>$1</mark>'):esc(x[1])}</b><span>${x[2]}</span></span></button>`).join('')}</div></div>`}).join('')||'<div style="padding:14px 10px;color:var(--faint)">Nothing in this thread matches.</div>'}
+function renderRail(){const r=$('rail');let h='';
+  if(st>=5)h+=`<span class="more" data-ol title="Sessions 1–${st===6?3:10} in the browser">+${st===6?3:10}</span>`;
+  for(const el of col.querySelectorAll('.you,.seam'))h+=el.classList.contains('you')?'<button><i></i></button>':'<span class="brk"></span>';
+  r.innerHTML=h;const b=r.querySelectorAll('button');if(b.length)b[st===6?1:b.length-1].classList.add('cur')}
+function render(){
+  const fresh=st>=3,long=st>=5;
+  let h;
+  if(long)h=threadLong();
+  else{h=(p1open?P1open:P1)+P2.replace('class="old"',fresh?'class="past"':'class="old"');
+    if(st===3&&tm.writing)h+=P3w;else if(fresh)h+=P3(handOpen)+A3;
+    if(st>=4)h+=A4}
+  col.innerHTML=h;col.classList.toggle('focus',st===6);
+  $('cap').textContent=CAPS[st];
+  document.querySelectorAll('#steps button').forEach(b=>b.classList.toggle('on',+b.dataset.s===st));
+  $('pop').classList.toggle('on',st===0);$('ctx').classList.toggle('open',st===0);
+  $('slash').classList.toggle('on',st===1);$('box').textContent=st===1?'/':'';
+  $('strip').classList.toggle('on',st===2);
+  const p=long?12:fresh?(st===3?4:9):(st===2?41:31);
+  $('ring').style.setProperty('--p',p);$('pct').textContent=p+'%';$('ctx').classList.toggle('mid',p>=80);
+  const ol=$('outline').classList.contains('on');$('bOutline').classList.toggle('on',ol);
+  const n=long?12:fresh?3:2;$('chainN').textContent=n+' sessions';
+  $('sDots').outerHTML=dots(n).replace('<span class="','<span id="sDots" class="');$('hDots').outerHTML=n<=4?dots(n).replace('<span class="','<span id="hDots" class="'):'<span id="hDots"></span>';
+  $('sLine').textContent=long?'Settings: say what Auto does':st>=4?'Tests pass on a free port':fresh?'Starting on the recall tool':'Wiring the handoff writer';
+  $('back').classList.toggle('on',st===6);
+  renderOl();renderRail();
+  requestAnimationFrame(()=>{th.scrollTop=st===6?$('s4').offsetTop-60:th.scrollHeight;const o=$('oll');o.scrollTop=st===6?0:o.scrollHeight});
+}
+function show(s){tm.forEach?.(clearTimeout);tm=[];st=s;handOpen=false;p1open=false;$('mpick').classList.remove('on');$('olQ').value='';
+  open12=new Set(s===6?[3,11]:[11]);curRow=s===6?'3-1':null;
+  $('outline').classList.toggle('on',s>=5);
+  if(s===3){tm.writing=true;tm.push(setTimeout(()=>{tm.writing=false;render()},1800))}
+  render()}
+$('steps').onclick=e=>{const b=e.target.closest('button');if(b)show(+b.dataset.s)};
+$('ctx').onclick=()=>{$('pop').classList.toggle('on');$('ctx').classList.toggle('open')};
+const toggleOl=()=>{$('outline').classList.toggle('on');render()};
+$('chain').onclick=$('bOutline').onclick=toggleOl;$('olX').onclick=toggleOl;
+col.onclick=e=>{if(e.target.closest('[data-load]')){p1open=true;render()}else if(e.target.closest('[data-hand]')){handOpen=!handOpen;render()}
+  else if(e.target.closest('[data-back]'))show(5);else if(e.target.closest('[data-ol]')&&!$('outline').classList.contains('on'))toggleOl()};
+$('rail').onclick=e=>{if(e.target.closest('[data-ol]')&&!$('outline').classList.contains('on'))toggleOl()};
+$('back').onclick=()=>show(5);
+$('olQ').oninput=renderOl;
+$('oll').onclick=e=>{const r=e.target.closest('[data-r]');if(r){if(st>=5&&r.dataset.r.startsWith('3-'))show(6);return}
+  const g=e.target.closest('.sgh');if(g){const i=+g.parentElement.dataset.g;open12.has(i)?open12.delete(i):open12.add(i);renderOl()}};
+document.querySelectorAll('.go,.act.pri').forEach(b=>b.onclick=e=>{if(!e.target.closest('[data-pick]'))show(3)});
+$('app').addEventListener('click',e=>{const k=e.target.closest('[data-pick]'),m=$('mpick');
+  if(k){const r=k.getBoundingClientRect(),a=$('app').querySelector('.main').getBoundingClientRect();m.style.left=Math.min(r.left-a.left,a.width-216)+'px';m.style.top='auto';m.style.bottom=(a.bottom-r.top+6)+'px';m.classList.add('on');e.stopPropagation();return}
+  if(!e.target.closest('#mpick'))m.classList.remove('on');
+  const o=e.target.closest('#mpick button');if(o){o.parentElement.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===o));
+    const mm=[...m.querySelectorAll(':scope>button')].find(x=>x.classList.contains('on')).firstChild.textContent,ef=m.querySelector('.eff .on').textContent;
+    document.querySelectorAll('[data-pick]').forEach(x=>x.textContent=mm+' · '+ef);document.querySelector('.slash .chip').textContent=mm+' · '+ef}},true);
+$('bTheme').onclick=e=>{const l=document.documentElement.dataset.theme==='dark';document.documentElement.dataset.theme=l?'light':'dark';e.target.textContent=l?'Dark':'Light'};
+show(0);
+</script>
+</body></html>

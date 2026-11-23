@@ -22,6 +22,7 @@ const P={
   cog:'<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
   gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
   'chev-d':'<path d="m6 9 6 6 6-6"/>',
+  'arrow-r':'<path d="M5 12h13M13 6l6 6-6 6"/>',compress:'<path d="M8 3v5H3M16 21v-5h5M3 8l6-6M21 16l-6 6"/>',
   'chev-r':'<path d="m9 6 6 6-6 6"/>',
   'chev-l':'<path d="m15 6-6 6 6 6"/>',
   play:'<path d="M6 4l14 8-14 8z"/>',
@@ -77,7 +78,9 @@ const V={sel:null,isNew:false,items:[],run:null,context:null,loading:false,     
   att:[],                                                                          // files waiting to go with the next message
   ch:null,side:null,sk:{key:null,list:null,err:null},chFile:null,chDiff:null,                                    // changed files in the project; the changes panel
   views:{},                                                                        // session -> 'chat' or 'term'
-  place:null,ans:null,skOpen:false,limBase:null,menuFor:null,renaming:null,renameText:'',caret:0};  // session actions                                                    // files the agent made; the one shown in the side panel
+  place:null,ans:null,skOpen:false,limBase:null,menuFor:null,renaming:null,renameText:'',caret:0,
+  // a thread: the sessions this one continues, those of them loaded, how many show above it, one looked at on its own, open handoffs
+  thread:null,handing:null,older:new Map(),shown:0,focus:null,hopen:new Set(),olOpen:new Set(),hpick:{}};  // session actions                                                    // files the agent made; the one shown in the side panel
 const MODELS=[['','Default','Whatever Claude Code picks'],['claude-fable-5-2','Fable 5.2','Most capable'],['claude-opus-5-5','Opus 5.5','Strong, lighter on your limit'],['claude-sonnet-5-5','Sonnet 5.5','Fast, for everyday work'],['claude-haiku-5-5','Haiku 5.5','Fastest']];
 // Permission modes, in the order Shift+Tab goes through them. Bypass only once it is turned on in Settings.
 const MODES=[['default','Ask','Asks before edits and commands'],['acceptEdits','Accept edits','Edits files without asking; asks before commands'],['plan','Plan','Reads and plans; changes nothing until you approve'],['auto','Auto','Approves what is safe, asks about the rest'],['bypassPermissions','Bypass','Never asks. Turned on in Settings']];
@@ -179,7 +182,7 @@ function drawList(){
     return `<div class="grp ${shut?'shut':''}" data-grp="${esc(k)}" data-tip-path="${esc(short(k))}">${tile(g.name,'s')}</span><b>${esc(g.name)}</b>${shut?`<small>${n?`<i class="dot"></i>`:''}${g.list.length}</small>`:''}<span class="gnew" data-gnew data-tip="New session in ${esc(g.name)}">${svg('plus')}</span></div>`+(shut?'':
       g.list.map(s=>{const sel=!V.isNew&&s.id===V.sel,tip=V.compact||s.line?` data-tip="${esc(s.title+' — '+s.project+(s.line?' · '+s.line:''))}"`:'';
         return s.id===V.renaming?`<div class="sess ren ${sel?'sel':''}" data-id="${s.id}">${tile(s.project)}</span><input id="renIn" maxlength="120" autocomplete="off" spellcheck="false" aria-label="Session name"></div>`
-        :`<button class="sess ${s.status} ${sel?'sel':''} ${s.unread?'unread':''} ${s.done?'isdone':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}"${tip}>${tile(s.project)}${s.status==='work'?'<u class="go"></u>':needsYou(s)?`<u class="${s.status==='wait'?'warn':'new'}"></u>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b>${s.outside||s.term?`<em class="xb">${svg('term')}</em>`:''}<span class="st">${stateOf(s)}</span><span class="sact"><span data-done data-tip="${s.done?'Back to the inbox':'Mark done'}"${s.done?'':' data-tip-k="Ctrl D"'}>${svg(s.done?'refresh':'check')}</span><span data-dots>${svg('dots')}</span></span></span>${s.status==='work'&&!s.outside&&!s.term&&s.line?`<span class="l2">${esc(s.line)}</span>`:''}</span></button>`}).join(''));
+        :`<button class="sess ${s.status} ${sel?'sel':''} ${s.unread?'unread':''} ${s.done?'isdone':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}"${tip}>${tile(s.project,s.thread?'stack':'')}${s.status==='work'?'<u class="go"></u>':needsYou(s)?`<u class="${s.status==='wait'?'warn':'new'}"></u>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b>${s.thread?`<span class="thr" data-tip="${s.thread} sessions, one thread">${s.thread<=4?'<i></i>'.repeat(s.thread):s.thread}</span>`:''}${s.outside||s.term?`<em class="xb">${svg('term')}</em>`:''}<span class="st">${stateOf(s)}</span><span class="sact"><span data-done data-tip="${s.done?'Back to the inbox':'Mark done'}"${s.done?'':' data-tip-k="Ctrl D"'}>${svg(s.done?'refresh':'check')}</span><span data-dots>${svg('dots')}</span></span></span>${s.status==='work'&&!s.outside&&!s.term&&s.line?`<span class="l2">${esc(s.line)}</span>`:''}</span></button>`}).join(''));
   }).join('')||`<div class="none inbox0">Nothing needs you.<br>Older sessions are under Done.</div>`;
 }
 $('list').onclick=e=>{
@@ -256,11 +259,13 @@ async function openSession(id,sending){
   if(V.sel!==id){V.qLocal=[];V.qNow=null}
   resetJump();
   V.isNew=false;V.sel=id;V.place=null;V.ans=null;V.skOpen=false;V.q.auto=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:'',mode:''};V.loading=true;V.dismissed=null;V.openTools.clear();V.shutTools.clear();V.codeOpen.clear();V.codeShut.clear();V.outOpen.clear();V.outFull.clear();V.cmdAll.clear();V.subAll.clear();V.repAll.clear();V.task=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
+  V.thread=null;V.handing=null;V.cont=null;V.older=new Map();V.shown=0;V.focus=null;V.hopen.clear();V.olOpen=new Set([id]);
   render();
-  try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.place=d.place||null;V.used={model:d.model||'',effort:d.effort||'',mode:d.mode||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||'',mode:d.defaults?.mode||''}}
+  try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.thread=d.thread||null;V.handing=d.handing||null;V.cont=d.continued||null;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.place=d.place||null;V.used={model:d.model||'',effort:d.effort||'',mode:d.mode||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||'',mode:d.defaults?.mode||''}}
   catch(e){oops(e.message)}
   V.loading=false;render();toBottom(true);loadChanges();
   if(V.sel===id&&V.context)countCtx(id);
+  if(V.sel===id&&V.thread)showEarlier();   // the session before shows above this one, dimmed
 }
 
 /* ---------- conversation ---------- */
@@ -309,6 +314,7 @@ function stepHtml(x,live,inner){
     if(label)h+=`<div class="stm"><button data-out="${esc(x.id)}">${label}</button></div>`}
   if(x.events?.length)h+=`<div class="evs">${x.events.slice(-3).map(e=>`<time>${new Date(e.t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</time><span>${esc(e.x)}</span>`).join('')}</div>`;
   if(x.group==='agent'&&(x.sub||x.report||x.tokens||x.doing))h+=agentHtml(x,run||bgRun);
+  if(x.group==='recall'&&x.report)h+=`<div class="rcl ${V.repAll.has(x.id)?'all':''}">${esc(x.report)}</div>${x.report.split('\n').length>7?`<button class="agm" data-repall="${esc(x.id)}">${V.repAll.has(x.id)?'Show less':'Show all it found'}</button>`:''}`;
   return h+'</div>';
 }
 // An agent's step holds its own: what it is doing, its newest steps, its size, and when it is done a few lines of its report.
@@ -322,16 +328,17 @@ function agentHtml(x,going){
     h+=`<div class="agr ${open?'all':''}"><b>Report.</b> ${esc(x.report)}</div>${long?`<button class="agm" data-repall="${esc(x.id)}">${open?'Show less':'Show whole report'}</button>`:''}`}
   return h+'</div>';
 }
-const stepById=id=>{for(const it of V.items)if(it.kind==='tools')for(const x of it.tools)if(x.id===id)return x};
+// a step of this session, or of an earlier one of its thread shown above it (its output is read from that session)
+const stepById=id=>{for(const list of [V.items,...[...V.older.values()].map(o=>o.items)])for(const it of list)if(it.kind==='tools')for(const x of it.tools)if(x.id===id)return Object.assign(x,{owner:it.sid||null})};
 async function toggleOutput(id){
   const x=stepById(id);if(!x)return;
   if(V.outOpen.delete(id))return renderThread();
   V.outOpen.add(id);renderThread();
   if(x.cut&&!V.outFull.has(id)){const sel=V.sel;
-    try{const d=await api(`sessions/${sel}/output?tool=${encodeURIComponent(id)}`);if(V.sel===sel){V.outFull.set(id,d.text);renderThread()}}
+    try{const d=await api(`sessions/${x.owner||sel}/output?tool=${encodeURIComponent(id)}`);if(V.sel===sel){V.outFull.set(id,d.text);renderThread()}}
     catch(e){if(V.sel===sel){V.outFull.set(id,x.out+'\n\n('+e.message+')');renderThread()}}}
 }
-const GROUPS={read:['read','file','files'],edit:['edited','file','files'],run:['ran','command','commands'],search:['searched','time','times'],web:['looked up','thing','things'],agent:['ran','agent','agents']};
+const GROUPS={recall:['looked back','time','times'],read:['read','file','files'],edit:['edited','file','files'],run:['ran','command','commands'],search:['searched','time','times'],web:['looked up','thing','things'],agent:['ran','agent','agents']};
 function toolSummary(tools){
   const n={};for(const t of tools)n[t.group]=(n[t.group]||0)+1;
   const parts=Object.entries(n).map(([g,c])=>GROUPS[g]?`${GROUPS[g][0]} ${c} ${GROUPS[g][c>1?2:1]}`:null).filter(Boolean);
@@ -358,6 +365,22 @@ const RANK={video:0,page:1,pdf:2,image:3};
 const picUrl=id=>`/api/picture/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const picCards=list=>list.length?`<div class="mpics ${list.length===1?'one':''}">${list.map(p=>`<button class="mpic" data-tip="${esc(p.name||'Pasted picture')}"><img src="${esc(p.url)}" loading="lazy" alt=""></button>`).join('')}</div>`:'';
 let lbx=null;   // the pictures of the message open in the large view, and which one shows
+// One item of the conversation as the thread draws it. `since`: where the turn in progress starts (its steps are open).
+function itemPart(it,ix,since,latest){
+    let h='';
+    if(it.kind==='user'){const at=it.files||[];h=`<div class="me">${picCards((it.pics||[]).map(p=>({url:picUrl(p.id),name:p.name})))}${it.skill?`<span class="chip">${svg('zap')}${esc(it.skill)}</span>`:''}${esc(it.text)}${at.length?`<div class="matt">${at.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`}
+    else if(it.kind==='assistant')h=`<div class="ai">${md(it.text)}</div>`;
+    else if(it.kind==='tools'){const live=ix>since,open=V.openTools.has(it.n)||live&&!V.shutTools.has(it.n);
+      h=`<div class="acts ${open?'open':''}"><button class="act" data-tools="${it.n}" data-on="${open?1:''}">${svg('chev-r')}${esc(toolSummary(it.tools))}${stepsTime(it.tools,live)}</button>${open?`<div class="steps">${it.tools.map(x=>stepHtml(x,live)).join('')}</div>`:''}</div>`}
+    else if(it.kind==='bg')h=`<div class="bgn ${esc(it.of||'')} ${it.bad?'bad':''}"><i></i>${it.event?`<b>${esc(it.name||'Monitor')}</b><span class="mono">${esc(it.event)}</span>`:`<span>${esc(it.text||'')}</span>`}<time>${clock(it.ts)}</time></div>`;
+    // a question card you answered: each answer under its question, on your side of the thread
+    else if(it.kind==='answers')h=`<div class="ans">${it.said?esc(it.said):it.answers.map(x=>`<div class="aq" ${x.head?`data-tip="${esc(x.q)}"`:''}>${esc(x.head||x.q)}</div><div class="aa">${esc(x.a)}</div>`).join('')}</div>`;
+    else if(it.kind==='skill')h=`<div class="sknote">${svg('zap')}Loaded skill <b>${esc(it.name)}</b></div>`;
+    else if(it.kind==='note')h=`<div class="sys">${esc(it.stop?`${it.stop==='auth'?'Paused':'Stopped'} at ${clock(it.ts)} · ${it.stop==='auth'?it.profile+' was signed out':it.stop==='limit'?'limit reached on '+it.profile:(it.text||'something went wrong')}`:it.text)}</div>`;
+    else if(it.kind==='done')h=`<div class="tfoot">Worked for ${dur(it.ms)}${it.ts?' · '+clock(it.ts):''}</div>`;
+    else if(it.kind==='work'&&A.preview)h=workCards(it,latest);
+    return h;
+}
 function showPic(){const {list,i}=lbx;$('lbxImg').src=list[i];$('lbxN').textContent=list.length>1?`${i+1} of ${list.length}`:'';$('lbxN').hidden=list.length<2;$('lbx').hidden=false}
 function closePic(){lbx=null;$('lbx').hidden=true;$('lbxImg').removeAttribute('src')}
 $('lbx').onclick=closePic;
@@ -393,27 +416,22 @@ function renderThread(){
   if(nw||V.loading){patch(t,pd?pend:[['loading','<div class="loading">Opening…</div>']]);renderRail();return}
   const parts=[],latest=new Map();
   for(const it of V.items)if(it.kind==='work')for(const f of it.files)latest.set(f.path,it.n);
+  if(V.thread&&V.focus&&V.older.has(V.focus))return renderFocus(t);
+  if(V.thread)parts.push(...threadParts());
   if(V.cut)parts.push(['cut','<div class="sys">Earlier messages are not shown</div>']);
   // the steps of the turn in progress are open while it runs, unless you closed them; they close when it ends.
   // The turn starts at your last message: an earlier turn that was stopped leaves no end mark, and must not open again.
   lastStep=null;if(busy()){const t=V.items.findLast(x=>x.kind==='tools')?.tools;lastStep=t?.[t.length-1]?.id??null}
   const going=busy(),since=going?V.items.findLastIndex(x=>x.kind==='done'||x.kind==='note'||x.kind==='user'):Infinity;
+  const skip=firstAuto(V.items,V.thread?.handoff);
   for(const [ix,it] of V.items.entries()){
-    let h='';
-    if(it.kind==='user'){const at=it.files||[];h=`<div class="me">${picCards((it.pics||[]).map(p=>({url:picUrl(p.id),name:p.name})))}${it.skill?`<span class="chip">${svg('zap')}${esc(it.skill)}</span>`:''}${esc(it.text)}${at.length?`<div class="matt">${at.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`}
-    else if(it.kind==='assistant')h=`<div class="ai">${md(it.text)}</div>`;
-    else if(it.kind==='tools'){const live=ix>since,open=V.openTools.has(it.n)||live&&!V.shutTools.has(it.n);
-      h=`<div class="acts ${open?'open':''}"><button class="act" data-tools="${it.n}" data-on="${open?1:''}">${svg('chev-r')}${esc(toolSummary(it.tools))}${stepsTime(it.tools,live)}</button>${open?`<div class="steps">${it.tools.map(x=>stepHtml(x,live)).join('')}</div>`:''}</div>`}
-    else if(it.kind==='bg')h=`<div class="bgn ${esc(it.of||'')} ${it.bad?'bad':''}"><i></i>${it.event?`<b>${esc(it.name||'Monitor')}</b><span class="mono">${esc(it.event)}</span>`:`<span>${esc(it.text||'')}</span>`}<time>${clock(it.ts)}</time></div>`;
-    // a question card you answered: each answer under its question, on your side of the thread
-    else if(it.kind==='answers')h=`<div class="ans">${it.said?esc(it.said):it.answers.map(x=>`<div class="aq" ${x.head?`data-tip="${esc(x.q)}"`:''}>${esc(x.head||x.q)}</div><div class="aa">${esc(x.a)}</div>`).join('')}</div>`;
-    else if(it.kind==='skill')h=`<div class="sknote">${svg('zap')}Loaded skill <b>${esc(it.name)}</b></div>`;
-    else if(it.kind==='note')h=`<div class="sys">${esc(it.stop?`${it.stop==='auth'?'Paused':'Stopped'} at ${clock(it.ts)} · ${it.stop==='auth'?it.profile+' was signed out':it.stop==='limit'?'limit reached on '+it.profile:(it.text||'something went wrong')}`:it.text)}</div>`;
-    else if(it.kind==='done')h=`<div class="tfoot">Worked for ${dur(it.ms)}${it.ts?' · '+clock(it.ts):''}</div>`;
-    else if(it.kind==='work'&&A.preview)h=workCards(it,latest);
+    if(it.n===skip)continue;
+    const h=itemPart(it,ix,since,latest);
     if(h&&it.n===J.at)parts.push(['newline','<div class="newline">New</div>']);
     if(h)parts.push(['i'+it.n,h]);
   }
+  if(V.cont&&!V.handing)parts.push(['cont',`<div class="tstub"><span>Handed off · <b>continues in Session ${V.cont.n}</b></span><span class="gap"></span><button data-tgo="${esc(V.cont.id)}">Open</button></div>`]);
+  if(V.handing)parts.push(['handing',`<div class="seam writing"><span>Writing the handoff · ${esc(hLabel(V.handing))}…</span></div>`]);
   parts.push(...pend);
   if(answered())parts.push(['working','<div class="w1"><i class="spin"></i><span class="shim">Working</span></div>']);
   else if(V.run?.status==='working')parts.push(['working',`<div class="w1"><i class="spin"></i><span class="shim">${esc(V.run.activity||'Working')}</span><span class="el" id="elapsed"></span></div>`]);
@@ -446,12 +464,12 @@ const stageOf=f=>{const u=esc(fileUrl(f));
     :`<iframe class="pvf" src="${u}" title="${esc(f.name)}"></iframe>`};
 
 /* ---------- long conversations: a rail of turns beside the thread, and an outline in the side panel ---------- */
-function turnsOf(){const out=[];let cur=null;
-  for(const it of V.items){
+function turnsOf(items=V.items,h=items===V.items?V.thread?.handoff:V.older.get(items[0]?.sid)?.handoff){const out=[];let cur=null;const skip=firstAuto(items,h);
+  for(const it of items){if(it.n===skip){cur={n:it.n,body:'',files:0,cmds:0,ms:0,asked:0,hide:true};continue}
     if(it.kind==='user'){cur={n:it.n,ts:it.ts,text:((it.skill?'/'+it.skill+' ':'')+(it.text||'')).trim()||(it.files?.length||it.pics?.length?'Attachment':'…'),body:'',files:0,cmds:0,ms:0,asked:it.asked||0};out.push(cur)}
     else if(cur){if(it.kind==='tools')for(const t of it.tools){if(t.group==='edit')cur.files++;else if(t.group==='run')cur.cmds++}
       else if(it.kind==='done')cur.ms+=it.ms||0;else if(it.kind==='assistant')cur.body+=' '+it.text}}
-  return out}
+  return out.filter(t=>!t.hide)}
 const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
 const turnMeta=(t,html)=>[t.files&&plural(t.files,'file'),t.cmds&&plural(t.cmds,'command'),t.ms&&dur(t.ms),t.asked&&(html?`<em>${plural(t.asked,'question')}</em>`:plural(t.asked,'question'))].filter(Boolean).join(' · ');
 const dayOf=ts=>{const d=new Date(ts);if(!ts||isNaN(d))return '';const a=new Date();a.setHours(0,0,0,0);const b=new Date(d);b.setHours(0,0,0,0);const diff=Math.round((a-b)/864e5);
@@ -459,9 +477,16 @@ const dayOf=ts=>{const d=new Date(ts);if(!ts||isNaN(d))return '';const a=new Dat
 let curTurn=null,railT;
 const goTurn=n=>{const el=$('thread').querySelector(`[data-k="i${n}"]`);if(el)$('scroll').scrollTo({top:Math.max(0,el.offsetTop-16),behavior:'smooth'})};
 function renderRail(){
-  const all=turnsOf(),ts=all.slice(-48),r=$('rail');r.hidden=V.isNew||all.length<3;if(r.hidden){r.innerHTML='';r._h='';return}
-  const h=ts.map(t=>t.n+(t.asked?'w':'')+(t.n===curTurn?'c':'')).join();if(r._h===h)return;r._h=h;
-  r.innerHTML=ts.map((t,i)=>`<button data-turn="${t.n}" class="${t.n===curTurn?'cur':t.asked?'w':''}" data-tip="${esc(`Turn ${all.length-ts.length+i+1} of ${all.length}${t.ts?' · '+clock(t.ts):''}${turnMeta(t)?' · '+turnMeta(t):''} — ${t.text.slice(0,140)}`)}"><i></i></button>`).join('')}
+  const r=$('rail');
+  // in a thread, the turns of the sessions shown above this one count too, with a dot where each starts
+  const segs=V.focus?[V.older.get(V.focus)?.items||[]]:[...threadShown().map(x=>V.older.get(x.id)?.items||[]),V.items];
+  const marks=[];segs.forEach((items,i)=>{const ts=turnsOf(items);if(i&&ts.length)marks.push({brk:true});marks.push(...ts)});
+  const all=marks.filter(m=>!m.brk),keep=all.slice(-48),from=marks.indexOf(keep[0]),ts=from>0?marks.slice(from):marks,more=!V.focus&&V.thread?V.thread.sessions.length-V.shown:0;
+  r.hidden=V.isNew||all.length<3&&!V.thread;if(r.hidden){r.innerHTML='';r._h='';return}
+  const h=more+'|'+ts.map(t=>t.brk?'|':t.n+(t.asked?'w':'')+(t.n===curTurn?'c':'')).join();if(r._h===h)return;r._h=h;
+  let k=all.length-keep.length;
+  r.innerHTML=(more?`<button class="more" data-tbrowse data-tip="${esc(more>1?`Sessions 1–${more} of this thread`:'Session 1 of this thread')}" data-tip-d="Not loaded. Browse them in the outline.">+${more}</button>`:'')
+    +ts.map(t=>t.brk?'<span class="brk"></span>':`<button data-turn="${t.n}" class="${t.n===curTurn?'cur':t.asked?'w':''}" data-tip="${esc(`Turn ${++k} of ${all.length}${t.ts?' · '+clock(t.ts):''}${turnMeta(t)?' · '+turnMeta(t):''} — ${t.text.slice(0,140)}`)}"><i></i></button>`).join('')}
 // The turn you are reading: the last message of yours at or above the top of the view, or the newest at the bottom.
 function markTurn(){const sc=$('scroll'),top=sc.scrollTop+70,end=sc.scrollTop+sc.clientHeight>=sc.scrollHeight-6;let cur=null,last=null;
   for(const el of $('thread').children){if(!el.classList.contains('me'))continue;const n=+String(el.dataset.k).slice(1);last=n;if(el.offsetTop<=top)cur=n}
@@ -469,8 +494,9 @@ function markTurn(){const sc=$('scroll'),top=sc.scrollTop+70,end=sc.scrollTop+sc
 $('scroll').addEventListener('scroll',()=>{paintJump();clearTimeout(railT);railT=setTimeout(markTurn,80)},{passive:true});
 $('rail').onclick=e=>{const b=e.target.closest('[data-turn]');if(b)goTurn(+b.dataset.turn)};
 function renderOutline(){
+  if(V.thread)return renderThreadOutline();
   const all=turnsOf(),q=$('olQ').value.trim().toLowerCase(),hit=q?all.filter(t=>(t.text+' '+t.body).toLowerCase().includes(q)):all;
-  $('olT').textContent=`Conversation · ${plural(all.length,'turn')}`;$('bOutline').classList.toggle('on',V.side==='outline'&&!V.pv);
+  $('olT').textContent=`Conversation · ${plural(all.length,'turn')}`;$('olQ').placeholder='Find in this conversation';$('bOutline').classList.toggle('on',V.side==='outline'&&!V.pv);
   let day=null;
   $('oll').innerHTML=hit.length?hit.map(t=>{const d=dayOf(t.ts),sep=d&&d!==day?`<div class="daysep">${d}</div>`:'';day=d||day;
     return sep+`<button class="olrow ${t.n===curTurn?'cur':''}" data-turn="${t.n}"><time>${t.ts?clock(t.ts):''}</time><span class="tx2"><b>${esc(t.text.split('\n')[0])}</b><span class="mt">${turnMeta(t,true)}</span></span></button>`}).join('')
@@ -478,16 +504,118 @@ function renderOutline(){
 $('bOutline').onclick=()=>{V.side=V.side==='outline'&&!V.pv?null:'outline';V.pv=null;V.full=false;$('olQ').value='';renderPanel();if(V.side){markTurn();$('olQ').focus()}};
 $('olClose').onclick=()=>{V.side=null;renderPanel()};
 $('olQ').oninput=renderOutline;
-$('oll').onclick=e=>{const b=e.target.closest('[data-turn]');if(b)goTurn(+b.dataset.turn)};
+$('oll').onclick=e=>{
+  const g=e.target.closest('[data-sg]');if(g){const id=g.dataset.sg;V.olOpen.has(id)?V.olOpen.delete(id):V.olOpen.add(id);if(V.olOpen.has(id)&&id!==V.sel)loadOlder(id).then(renderOutline);renderOutline();return}
+  const b=e.target.closest('[data-turn]');if(!b)return;const sid=b.dataset.sid;
+  if(!sid||sid===V.sel||threadShown().some(x=>x.id===sid)){if(V.focus){V.focus=null;renderThread()}goTurn(+b.dataset.turn);return}
+  look(sid,+b.dataset.turn)};
+
+/* ---------- threads: a session handed off goes on in a new one; together they read as one conversation ---------- */
+const HMODEL={auto:'Auto',haiku:'Haiku',sonnet:'Sonnet',opus:'Opus'};
+const hLabel=h=>`${HMODEL[h.model]||h.model}${h.auto&&h.model!=='auto'?' (Auto)':''} · ${h.effort}`;
+const hPick=()=>({model:'auto',effort:'medium',...(A.prefs?.handoff||{}),...(V.hpick[V.sel]||{})});
+// The message a new session of a thread started with when you said nothing: the handoff stands in for it.
+const firstAuto=(items,h)=>{if(!h?.first)return null;const u=items.find(x=>x.kind==='user');return u&&u.text===h.first?u.n:null};
+const pastify=h=>h.replace(/^<(\w+)( class=")?/,(m,t,c)=>c?`<${t} class="past `:`<${t} class="past"`);
+// The earlier sessions that show above this one: the newest `V.shown` of them.
+const threadShown=()=>V.thread?V.thread.sessions.slice(V.thread.sessions.length-V.shown).filter(x=>V.older.has(x.id)):[];
+const sessDay=x=>x.mts?dayOf(x.mts*1000):'';
+const span=(a,b)=>{const x=sessDay(a),y=sessDay(b);return x===y?x:`${x} – ${y}`};
+function seamHtml(x,h,now){
+  return `<div class="seam"><span><b>Session ${x.n}</b>${now?'':sessDay(x)?' · '+esc(sessDay(x)):''}${x.turns&&!now?' · '+plural(x.turns,'turn'):''}${h?`<button class="tag ${V.hopen.has(x.id)?'on':''}" data-hand="${esc(x.id)}" data-tip="The handoff this session started from" data-tip-d="${esc(hLabel(h))}">Handoff</button>`:''}</span></div>`}
+const handHtml=h=>`<div class="hoff"><div class="ai">${md(h.sections||'')}</div><details><summary>Word for word: your messages, answers, files changed, failed commands</summary><div class="ai">${md(h.facts||'')}</div></details><div class="hmeta">Written by ${esc(hLabel(h))}${h.at?' · '+clock(new Date(h.at).toISOString()):''}</div></div>`;
+function olderParts(x,o,dim){
+  const out=[],latest=new Map(),skip=firstAuto(o.items,o.handoff);
+  for(const it of o.items)if(it.kind==='work')for(const f of it.files)latest.set(f.path,it.n);
+  for(const [ix,it] of o.items.entries()){if(it.n===skip)continue;const h=itemPart(it,ix,Infinity,latest);if(h)out.push(['i'+it.n,dim?pastify(h):h])}
+  return out;
+}
+function threadParts(){
+  const T=V.thread,E=T.sessions,from=E.length-V.shown,out=[];
+  if(from>0){const turns=E.slice(0,from).reduce((n,x)=>n+(x.turns||0),0);
+    out.push(['tstub',`<div class="tstub"><span><b>${from>1?`Sessions 1–${from}`:'Session 1'}</b> · ${esc(span(E[0],E[from-1]))} · ${plural(turns,'turn')}</span><span class="gap"></span><button data-tmore>${V.olderBusy?'Loading…':'Show'}</button><button data-tbrowse>Browse</button></div>`])}
+  for(const x of E.slice(from)){const o=V.older.get(x.id);if(!o)continue;
+    out.push(['seam'+x.id,seamHtml(x,o.handoff)]);if(V.hopen.has(x.id)&&o.handoff)out.push(['hand'+x.id,handHtml(o.handoff)]);
+    out.push(...olderParts(x,o,true))}
+  out.push(['seamcur',seamHtml({id:V.sel,n:T.n},T.handoff,true)]);
+  if(V.hopen.has(V.sel)&&T.handoff)out.push(['handcur',handHtml(T.handoff)]);
+  return out;
+}
+// One earlier session looked at on its own (picked in the outline): the rest of the thread folds away on both sides.
+function renderFocus(t){
+  const T=V.thread,E=T.sessions,k=E.findIndex(x=>x.id===V.focus),x=E[k],o=V.older.get(x.id),parts=[];
+  if(k>0)parts.push(['ftop',`<div class="tstub"><span><b>${k>1?`Sessions 1–${k}`:'Session 1'}</b> · ${esc(span(E[0],E[k-1]))}</span><span class="gap"></span><button data-tbrowse>Browse</button></div>`]);
+  parts.push(['seam'+x.id,seamHtml(x,o.handoff)]);if(V.hopen.has(x.id)&&o.handoff)parts.push(['hand'+x.id,handHtml(o.handoff)]);
+  parts.push(...olderParts(x,o,false));
+  parts.push(['fend',`<div class="tstub"><span><b>${k+2<T.n?`Sessions ${k+2}–${T.n}`:`Session ${T.n}`}</b> · to now</span><span class="gap"></span><button data-tback>Show</button></div>`]);
+  patch(t,parts);fitThumbs();markCards();renderRail();renderBack();renderStrip();if(V.side==='outline')renderOutline();
+}
+$('tback').onclick=e=>{e.stopPropagation();backToNow()};
+const renderBack=()=>{const b=$('tback');b.hidden=!V.focus||V.isNew;if(!b.hidden)b.innerHTML=`${svg('chev-d')}Back to now · Session ${V.thread.n}`};
+// An earlier session's conversation, read once: its items numbered apart from this session's, and the handoff it began from.
+const olderReq=new Map();
+function loadOlder(id){
+  if(V.older.has(id))return Promise.resolve(V.older.get(id));
+  if(olderReq.has(id))return olderReq.get(id);
+  const sel=V.sel,k=V.thread?.sessions.findIndex(x=>x.id===id)??-1,base=-(k+1)*1e8;
+  const p=api('sessions/'+id).then(d=>{const o={items:d.items.map(it=>({...it,n:base+it.n,sid:id})),handoff:d.thread?.handoff||null};if(V.sel===sel)V.older.set(id,o);return o})
+    .catch(e=>{oops(e.message);return null}).finally(()=>olderReq.delete(id));
+  olderReq.set(id,p);return p;
+}
+// Shows one more earlier session above, keeping what you were reading where it was.
+async function showEarlier(){
+  const T=V.thread;if(!T||V.olderBusy)return;const E=T.sessions,x=E[E.length-V.shown-1];if(!x)return;
+  const sel=V.sel;V.olderBusy=true;renderThread();
+  const o=await loadOlder(x.id);V.olderBusy=false;if(V.sel!==sel)return;
+  const sc=$('scroll'),h0=sc.scrollHeight,top0=sc.scrollTop,end=!awayNow();
+  if(o)V.shown++;renderThread();
+  sc.scrollTop=end?sc.scrollHeight:top0+(sc.scrollHeight-h0);
+}
+async function look(id,n){
+  const sel=V.sel;await loadOlder(id);if(V.sel!==sel||!V.older.has(id))return;
+  V.focus=id;renderThread();if(n!=null)requestAnimationFrame(()=>goTurn(n));else $('scroll').scrollTop=0;
+}
+function backToNow(){V.focus=null;renderThread();renderBack();renderStrip();toBottom(true)}
+function openOutline(){if(V.side!=='outline'||V.pv){V.side='outline';V.pv=null;V.full=false;$('olQ').value='';renderPanel();markTurn()}}
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-tmore],[data-tbrowse],[data-tback],[data-hand],[data-tgo]');if(!el)return;
+  e.stopPropagation();
+  if(el.dataset.tgo)return openSession(el.dataset.tgo);
+  if(el.dataset.tmore!=null)showEarlier();
+  else if(el.dataset.tbrowse!=null)openOutline();
+  else if(el.dataset.tback!=null)backToNow();
+  else{const id=el.dataset.hand;V.hopen.has(id)?V.hopen.delete(id):V.hopen.add(id);renderThread()}
+});
+// The outline of a thread: one group per session, the current one open; Find looks through all of them.
+let olWant=null;
+function renderThreadOutline(){
+  const T=V.thread,E=T.sessions,q=$('olQ').value.trim().toLowerCase(),cur=turnsOf();
+  const groups=[...E.map(x=>({x,items:V.older.get(x.id)?.items})),{x:{id:V.sel,n:T.n,turns:cur.length,now:true},items:V.items}];
+  if(q){const miss=E.filter(x=>!V.older.has(x.id));if(miss.length&&olWant!==q){olWant=q;Promise.all(miss.map(x=>loadOlder(x.id))).then(()=>{olWant=null;renderOutline()})}}
+  $('olT').textContent=`Thread · ${plural(T.n,'session')} · ${plural(E.reduce((n,x)=>n+(x.turns||0),0)+cur.length,'turn')}`;$('olQ').placeholder='Find in this thread';
+  $('bOutline').classList.toggle('on',V.side==='outline'&&!V.pv);
+  const fid=V.focus||null;
+  const html=groups.map(({x,items})=>{
+    const ts=items?turnsOf(items):null,hits=q&&ts?ts.filter(t=>(t.text+' '+t.body).toLowerCase().includes(q)):ts;
+    if(q&&ts&&!hits.length)return '';
+    const open=!!q||V.olOpen.has(x.id),n=x.now?cur.length:x.turns||0;
+    const head=`<button class="sgh" data-sg="${esc(x.id)}"><span class="cv">${svg('chev-r')}</span><span class="tx"><b>Session ${x.n}<time>${x.now?'now':esc(sessDay(x))}</time>${x.now?'<i class="nowdot"></i>':''}</b><small>${q&&hits?`<em>${plural(hits.length,'match')}</em> · `:''}${x.topic?esc(x.topic)+' · ':''}${plural(n,'turn')}</small></span></button>`;
+    const rows=!open?'':!ts?'<div class="skl" style="padding:6px 10px">Loading…</div>':hits.map(t=> `<button class="olrow ${t.n===curTurn?'cur':''}" data-turn="${t.n}" data-sid="${esc(x.id)}"><time>${t.ts?clock(t.ts):''}</time><span class="tx2"><b>${q?hlite(t.text.split('\n')[0],q):esc(t.text.split('\n')[0])}</b><span class="mt">${turnMeta(t,true)}</span></span></button>`).join('');
+    return `<div class="sg ${open?'open':''} ${x.now?'now':''} ${fid===x.id?'look':''}">${head}${open?`<div class="sgr">${rows}</div>`:''}</div>`}).join('');
+  $('oll').innerHTML=html||`<div class="skl" style="padding:14px 10px">${q&&olWant?'Looking…':'Nothing in this thread matches.'}</div>`;
+}
+const hlite=(t,q)=>{const i=t.toLowerCase().indexOf(q);return i<0?esc(t):esc(t.slice(0,i))+`<mark>${esc(t.slice(i,i+q.length))}</mark>`+esc(t.slice(i+q.length))};
+
 
 /* ---------- context: how full it is, what fills it, and compacting on request ---------- */
 const kTok=n=>n>=1e6?(n/1e6).toFixed(n%1e6?1:0)+'M':Math.round(n/1000)+'k';
 function renderCtx(){const c=V.context,m=$('mCtx');if(!c||V.isNew){m.hidden=true;return}
-  const d=V.ctx?.id===V.sel?V.ctx:null,pct=Math.min(100,Math.round(c.used/c.window*100)),COL=['var(--accent)','var(--warn)','var(--go)','var(--dim)','var(--hot)'],rows=(d?.rows||[]).slice(0,5);
-  m.innerHTML=`<div class="big">${pct}%<small>${kTok(c.used)} of ${kTok(c.window)} tokens</small></div>`+
-    (rows.length?`<div class="cbar">${rows.map((r,i)=>`<i style="width:${Math.min(100,r.tokens/c.window*100)}%;background:${COL[i]}"></i>`).join('')}</div>`+rows.map((r,i)=>`<div class="crow"><i style="background:${COL[i]}"></i>${esc(r.name)}<span>${kTok(r.tokens)}</span></div>`).join('')
+  const d=V.ctx?.id===V.sel?V.ctx:null,pct=Math.min(100,Math.round(c.used/c.window*100)),COL=['var(--accent)','var(--warn)','var(--go)','var(--dim)','var(--hot)'],rows=(d?.rows||[]).slice(0,5),off=isWorking()||!!V.handing;
+  m.innerHTML=`<div class="big"><b>${kTok(c.used)}</b><small>of ${kTok(c.window)}</small><em>${pct}%</em></div>`+
+    (rows.length?`<div class="cbar">${rows.map((r,i)=>`<i style="width:${Math.min(100,r.tokens/c.window*100)}%;background:${COL[i]}"></i>`).join('')}</div><div class="clg">${rows.map((r,i)=>`<div class="crow"><i style="background:${COL[i]}"></i>${esc(r.name)}<span>${kTok(r.tokens)}</span></div>`).join('')}</div>`
       :`<div class="cbar"><i style="width:${pct}%;background:var(--accent)"></i></div><div class="cap2" id="ctxNote">${d?.err?esc(d.err):'Counting what fills it…'}</div>`)+
-    `<div class="sep"></div><button class="item" data-compact ${isWorking()?'disabled':''}><span class="nm"><b>Compact the conversation now</b><span>Summarises earlier turns to free up room</span></span></button><div class="cap2">Compacts by itself when nearly full.</div>`}
+    `<div class="sep"></div><button class="item act2 pri" data-handoff ${off?'disabled':''}><span class="ic">${svg('arrow-r')}</span><span class="nm"><b>Continue in a new session</b><span>Handoff by <u data-hpick>${esc(hLabel(hPick()))}</u>${svg('chev-d','cv')}</span></span></button>`+
+    `<button class="item act2" data-compact ${off?'disabled':''}><span class="ic">${svg('compress')}</span><span class="nm"><b>Summarise to make room</b><span>Compact · earlier detail fades</span></span></button>`}
 $('pCtx').onclick=e=>{e.stopPropagation();const was=$('mCtx').hidden;closePops();hideTip();if(!was)return;
   $('mCtx').hidden=false;$('pCtx').classList.add('open');
   const id=V.sel;
@@ -497,7 +625,46 @@ $('pCtx').onclick=e=>{e.stopPropagation();const was=$('mCtx').hidden;closePops()
 function countCtx(id){V.ctx={id,at:Date.now()};
   api(`sessions/${id}/context`).then(r=>{V.ctx={id,at:Date.now(),rows:r.rows};if(V.sel===id&&r.window&&!isWorking()){V.context={used:r.used,window:r.window};renderComposer()}},
     err=>{V.ctx={id,at:0,err:'The breakdown is not available ('+err.message+')'}}).then(()=>{if(V.sel===id&&!$('mCtx').hidden)renderCtx()})}
-$('mCtx').onclick=e=>{e.stopPropagation();if(e.target.closest('[data-compact]')&&!isWorking()){closePops();sendText('/compact')}};
+$('mCtx').onclick=e=>{e.stopPropagation();
+  if(e.target.closest('[data-hpick]'))return openHPick(e.target.closest('[data-hpick]'));
+  if(e.target.closest('[data-compact]')&&!isWorking()){closePops();sendText('/compact')}
+  else if(e.target.closest('[data-handoff]')&&!isWorking()&&!V.handing){closePops();handOff()}};
+
+/* ---------- handing off: a new session goes on from a handoff, and the old one stays to look back at ---------- */
+async function handOff(text=''){
+  const id=V.sel,p=hPick();if(!id||V.isNew)return false;
+  V.handing={model:p.model,effort:p.effort};V.focus=null;renderThread();toBottom(true);renderComposer();
+  try{await api(`sessions/${id}/handoff`,{model:p.model,effort:p.effort,text,use:{model:curModel()||undefined,effort:curEffort()||undefined,mode:V.pick[id]?.mode||undefined}});delete V.hpick[id];return true}
+  catch(e){if(V.sel===id){V.handing=null;render()}oops(e.message);return false}
+}
+// Who writes the handoff, for this one: picked from the line under the action, or the strip; Settings holds the default.
+function openHPick(anchor){
+  const m=$('mHand'),p=hPick(),wasOpen=!m.hidden&&m._a===anchor;
+  if(wasOpen){m.hidden=true;return}
+  m._a=anchor;
+  m.innerHTML=`<div class="skl">Handoff written by</div>`+[['auto','Auto','by how much went on'],['haiku','Haiku','short sessions'],['sonnet','Sonnet','most threads'],['opus','Opus','intricate ones']].map(([v,n,d])=>`<button class="item ${p.model===v?'on':''}" data-hm="${v}"><span class="nm"><b>${n}</b></span><small>${d}</small></button>`).join('')
+    +`<div class="hef">${['low','medium','high'].map(v=>`<button class="${p.effort===v?'on':''}" data-he="${v}">${v}</button>`).join('')}</div><div class="cap2">Default in Settings · General</div>`;
+  m.hidden=false;
+  const c=m.offsetParent.getBoundingClientRect(),r=anchor.getBoundingClientRect();
+  m.style.left=Math.max(8,Math.min(r.left-c.left,c.width-m.offsetWidth-8))+'px';m.style.bottom=(c.bottom-r.top+6)+'px';
+}
+$('mHand').onclick=e=>{e.stopPropagation();const b=e.target.closest('[data-hm],[data-he]');if(!b)return;
+  V.hpick[V.sel]={...V.hpick[V.sel],...(b.dataset.hm?{model:b.dataset.hm}:{effort:b.dataset.he})};
+  const a=$('mHand')._a;$('mHand').hidden=true;renderComposer();if(!$('mCtx').hidden)renderCtx();if(a?.isConnected)openHPick(a)};
+// From this many tokens a quiet strip above the message box offers the handoff: the setting, or ¾ of a smaller window.
+const offerAt=c=>Math.min(A.prefs?.handoff?.offer||400000,Math.round(c.window*.75));
+const hDismissed=()=>{try{return JSON.parse(localStorage.getItem('ww.hoff')||'{}')}catch{return {}}};
+function renderStrip(){
+  const el=$('hstrip'),c=V.context,id=V.sel;
+  const on=!V.isNew&&!!c&&!V.loading&&!isWorking()&&!V.handing&&!V.focus&&c.used>=offerAt(c)&&!hDismissed()[id];
+  el.hidden=!on;if(!on)return;
+  el.innerHTML=`<span class="t"><b>Context ${kTok(c.used)}</b> · earlier turns start to blur</span><span class="by">by <u data-hpick>${esc(hLabel(hPick()))}</u>${svg('chev-d','cv')}</span><button class="hgo" data-hgo>Hand off</button><button class="hc2" data-hcompact>Compact</button><button class="ib hx" data-hx data-tip="Not now" data-tip-d="It is still in the context menu and as /handoff.">${svg('x')}</button>`;
+}
+$('hstrip').onclick=e=>{e.stopPropagation();const t=e.target;
+  if(t.closest('[data-hpick]'))return openHPick(t.closest('[data-hpick]'));
+  if(t.closest('[data-hgo]'))handOff();
+  else if(t.closest('[data-hcompact]'))sendText('/compact');
+  else if(t.closest('[data-hx]')){const d=hDismissed();d[V.sel]=Date.now();const ks=Object.keys(d);if(ks.length>200)delete d[ks[0]];localStorage.setItem('ww.hoff',JSON.stringify(d));renderStrip()}};
 
 /* ---------- compare: a question about things the agent just made, with those things next to it ---------- */
 // Each option is shown with the file its preview names, the text the agent attached to it, or the file from this turn that
@@ -741,7 +908,8 @@ function renderSlash(){
   const m=$('input').value.match(/^\/([\w:-]*)$/)||(V.skOpen?['','']:null),el=$('slash');
   $('bSkills').classList.toggle('on',!!V.skOpen);
   if(!m){el.hidden=true;slHits=[];return}
-  needSkills();const all=skillList(),q=m[1].toLowerCase();el.hidden=false;
+  needSkills();const got=skillList(),q=m[1].toLowerCase();el.hidden=false;
+  const all=got&&!V.isNew?[{name:'handoff',about:'Continue in a new session; nothing is lost. Words after it become its first message.',from:'Workwood'},...got.filter(x=>x.name!=='handoff')]:got;
   if(!all){slHits=[];el.innerHTML='<div class="note">Loading skills…</div>';return}
   slHits=all.filter(s=>s.name.toLowerCase().startsWith(q)).concat(q?all.filter(s=>{const n=s.name.toLowerCase();return !n.startsWith(q)&&n.includes(q)}):[]);
   slSel=Math.min(slSel,Math.max(slHits.length-1,0));
@@ -932,6 +1100,8 @@ function renderSettings(){
     <div class="srow"><span>Clear quiet sessions<small>A session nobody has touched for this long leaves the sidebar. Search still finds it.</small></span><select class="sval" id="sDays">${[[1,'After a day'],[3,'After 3 days'],[7,'After 7 days'],[14,'After 14 days'],[30,'After 30 days'],[0,'Never']].map(([v,n])=>`<option value="${v}" ${(pf.doneDays??7)===v?'selected':''}>${n}</option>`).join('')}</select></div>${LOGIN?`<div class="srow"><span>Open at login<small>Start Workwood when you sign in to this computer.</small></span><i class="stog ${loginOn?'on':''}" data-set="login"></i></div>`:''}
     <div class="srow"><span>Offer Bypass mode<small>A permission mode that never asks before edits or commands. Only for work you trust completely.</small></span><i class="stog ${pf.bypass?'on':''}" data-set="bypass"></i></div>
     ${A.profiles.length>1?`<div class="srow"><span>Continue on another profile at a limit<small>When a session hits a limit, it goes on with the profile that has the most room after 5 minutes. The card counts down, so you can cancel.</small></span><i class="stog ${pf.autoContinue?'on':''}" data-set="auto"></i></div>`:''}
+    <div class="srow"><span>Handoff written by<small>Auto picks by how much went on: Haiku for short sessions, Sonnet for most, Opus for long or intricate ones.</small></span><select class="sval" id="sHModel">${[['auto','Auto'],['haiku','Haiku'],['sonnet','Sonnet'],['opus','Opus']].map(([v,n])=>`<option value="${v}" ${(pf.handoff?.model||'auto')===v?'selected':''}>${n}</option>`).join('')}</select><select class="sval" id="sHEffort">${['low','medium','high'].map(v=>`<option value="${v}" ${(pf.handoff?.effort||'medium')===v?'selected':''}>${cap(v)}</option>`).join('')}</select></div>
+    <div class="srow"><span>Offer a handoff at<small>A strip above the message box offers it from here, or at ¾ of a smaller window.</small></span><select class="sval" id="sHOffer">${[100000,200000,300000,400000,600000].map(v=>`<option value="${v}" ${(pf.handoff?.offer||400000)===v?'selected':''}>${v/1000}k tokens</option>`).join('')}</select></div>
     <div class="srow"><span>Dictation language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>${speechRow()}
     <div class="srow"><span>Project folders<small>Folders that hold your projects. Separate several with a semicolon.</small></span><input class="sval sin mono" id="sFolders" spellcheck="false" autocomplete="off" value="${esc((pf.folders||[]).map(short).join('; '))}" placeholder="${esc(short((A.folders||[])[0]||''))}">${window.workwood?.pickFolder?'<button class="sval" id="sBrowse" data-tip="Choose a folder to add">Add…</button>':''}</div>`;
   else if(stab===1)renderProfilePage(pg);
@@ -1151,6 +1321,7 @@ $('spage').onchange=async e=>{
     if(pk&&PD){const name=PD.name;PD={name,d:await api(`profiles/${name}/defaults`,{[pk]:e.target.value})};e.target.blur();renderSettings();if(V.isNew&&V.profile===name)loadDefaults()}
     if(e.target.id==='sDays')A.prefs=await api('settings',{doneDays:+e.target.value});
     if(e.target.id==='sLang')A.prefs=await api('settings',{language:e.target.value});
+    if(e.target.id==='sHModel'||e.target.id==='sHEffort'||e.target.id==='sHOffer')A.prefs=await api('settings',{handoff:{[{sHModel:'model',sHEffort:'effort',sHOffer:'offer'}[e.target.id]]:e.target.id==='sHOffer'?+e.target.value:e.target.value}});
     if(e.target.id==='sFolders'){A.prefs=await api('settings',{folders:e.target.value.split(';').map(x=>x.trim()).filter(Boolean)});e.target.value=(A.prefs.folders||[]).map(short).join('; ')}}catch(err){oops(err.message);renderSettings()}
   e.target.blur();
 };
@@ -1448,6 +1619,7 @@ function renderComposer(){
   const c=!nw&&V.context,pct=c?Math.min(100,Math.round(c.used/c.window*100)):0;
   $('pCtx').innerHTML=c?`<i class="ring" style="--p:${pct}"></i><span class="pct">${pct}%</span>`:'';$('pCtx').className='ctx '+(pct>=80?'mid':'')+($('mCtx').hidden?'':' open');$('sCtx').hidden=!c;
   $('pCtx').dataset.tip=c?`${pct}% of the agent's memory of this conversation is used: ${kTok(c.used)} of ${kTok(c.window)} tokens`:'';
+  renderStrip();renderBack();
 }
 const short=p=>A.home&&p&&p.startsWith(A.home)?'~'+p.slice(A.home.length):p||'';
 // The profile menu: a small table, one row per account with its 5-hour and 7-day limits, the one with most room first.
@@ -1487,7 +1659,7 @@ function renderMenus(){
     +'<div class="sep"></div><div class="lab">Effort</div><div class="eseg">'+EFFORTS.filter(x=>x[0]||!de).map(([v,n,d])=>`<button class="${v===shownEffort()?'on':''}" data-e="${esc(v)}" data-tip="${esc(d+(v&&v===de?'. Your default.':''))}">${n}</button>`).join('')+'</div>'
     +`<div class="cap2" style="padding-top:6px">${de?`${esc(EFFORTS.find(x=>x[0]===de)?.[1]||de)} is your default effort. `:''}Applies from your next message.</div>`;
 }
-function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('pCtx').classList.remove('open');$('gmenu').hidden=true;$('emenu').hidden=true;$('smenu').hidden=true;V.menuFor=null;document.querySelectorAll('.sess.mopen').forEach(b=>b.classList.remove('mopen'));$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
+function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('mHand').hidden=true;$('pCtx').classList.remove('open');$('gmenu').hidden=true;$('emenu').hidden=true;$('smenu').hidden=true;V.menuFor=null;document.querySelectorAll('.sess.mopen').forEach(b=>b.classList.remove('mopen'));$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
 const toggle=(btn,pop,then)=>e=>{e.stopPropagation();const was=$(pop).hidden;closePops();if(was){V.mk=false;V.find='';renderMenus();$(pop).hidden=false;$(btn).classList.add('open');then?.()}};
 $('pProject').onclick=toggle('pProject','mProject',()=>$('pFind').focus());
 $('pProfile').onclick=toggle('pProfile','mProfile');
@@ -1637,6 +1809,13 @@ $('queue').onclick=async e=>{
   catch(err){oops(err.message)}finally{V.qGone.delete(id);renderQueue()}
 };
 async function sendText(text,asProfile,attachments){
+  if(!V.isNew&&/^\/handoff(\s|$)/.test(text.trim())){   // Workwood's own command: hand off, with what follows as the new session's first message
+    if(attachments?.length){oops('Send the files in the new session, after the handoff.');return false}
+    if(isWorking()){oops('Hand off once the turn is over.');return false}
+    return handOff(text.trim().slice(8).trim());
+  }
+  if(V.handing&&!V.isNew){oops('The handoff is being written; the conversation goes on in the new session.');return false}
+  if(V.focus)V.focus=null;
   if(V.busy)return false;V.busy=true;oops('');
   {const p=profile(asProfile||curProfile());clearTimeout(limT);limT=null;V.limBase=p&&p.h5!=null?{name:p.name,h5:p.h5,d7:p.d7}:null}
   const later=isWorking()&&V.run?.status==='working';   // the agent is busy: it waits in the queue, where it can still be changed
@@ -1988,7 +2167,8 @@ function renderHead(){
   const pl=V.place||{project:s.project,worktree:null,branch:s.branch,cwd:s.cwd};
   w.dataset.tip=pl.cwd||s.cwd;
   w.innerHTML=(pl.worktree?`<span class="pl1">${svg('tree')}<b>${esc(pl.worktree)}</b><small>worktree</small></span>${pl.branch&&pl.branch!==pl.worktree?`<span>${svg('branch')}${esc(pl.branch)}</span>`:''}`
-    :pl.branch?`<span class="pl1">${svg('branch')}<b>${esc(pl.branch)}</b></span>`:'')+`<span class="${pl.worktree||pl.branch?'plp':'pl1'}">${pl.worktree||pl.branch?'':svg('folder')}${pl.worktree||pl.branch?esc(pl.project||s.project):`<b>${esc(pl.project||s.project)}</b>`}</span>`;
+    :pl.branch?`<span class="pl1">${svg('branch')}<b>${esc(pl.branch)}</b></span>`:'')+`<span class="${pl.worktree||pl.branch?'plp':'pl1'}">${pl.worktree||pl.branch?'':svg('folder')}${pl.worktree||pl.branch?esc(pl.project||s.project):`<b>${esc(pl.project||s.project)}</b>`}</span>`
+    +(V.thread?`<button class="chain" data-tbrowse data-tip="This session continues ${V.thread.n>2?V.thread.n-1+' earlier ones':'an earlier one'}" data-tip-d="Browse them in the outline.">${V.thread.n<=4?`<span class="thr">${'<i></i>'.repeat(V.thread.n)}</span>`:''}${V.thread.n} sessions</button>`:'');
   const d=$('bDone');d.innerHTML=`${svg(s.done?'refresh':'check')}<span>${s.done?'Back to inbox':'Done'}</span>`;d.dataset.tip=s.done?'Bring this session back into the sidebar':'Mark done';d.dataset.tipD=s.done?'':'It leaves the sidebar, and search still finds it.';d.dataset.tipK=s.done?'':'Ctrl D';
 }
 function render(){
@@ -2057,6 +2237,10 @@ function connect(){
     if(was==='working'&&d.run?.status!=='working'&&d.run?.status!=='waiting'){const id=V.sel;if(V.ctx?.id===id)V.ctx=null;setTimeout(()=>api('sessions/'+id).then(x=>{if(V.sel===id&&x.place){V.place=x.place;renderHead()}}).catch(()=>{}),900)}   // the agent may have moved to a worktree
     if(d.run?.context)V.context=d.run.context;if(d.run?.model)V.used.model=d.run.model;if(d.run?.effort)V.used.effort=d.run.effort;if(d.run?.mode){V.used.mode=d.run.mode;if(V.pick[d.sessionId])delete V.pick[d.sessionId].mode}if(V.qNow&&!(d.run?.queued||[]).some(q=>q.id===V.qNow))V.qNow=null;checkSoon();changesSoon();renderThread();renderCard();renderQueue();renderComposer();renderTerm();follow(end)});
   es.addEventListener('item',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const i=V.items.findIndex(x=>x.n===d.item.n),end=!awayNow();noteArrival(d.item,i<0);if(i>=0)V.items[i]=d.item;else V.items.push(d.item);if(d.item.kind==='work'){addWork(d.item.files);renderPanel()}checkSoon();changesSoon();renderThread();follow(end,i<0&&d.item.kind==='assistant'?d.item.n:null)});
+  es.addEventListener('handoff',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;
+    if(d.state==='writing'){V.handing={model:d.model,effort:d.effort,auto:d.auto};renderThread();renderComposer()}
+    else if(d.state==='done'){V.handing=null;openSession(d.to)}
+    else{V.handing=null;render();oops('The handoff was not written: '+(d.error||'something went wrong'))}});
   es.onerror=()=>{};
 }
 hydrate();setTheme(themePref());render();connect();

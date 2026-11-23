@@ -720,7 +720,7 @@ const server = http.createServer(async (req, res) => {
 
 /** Starts the service and resolves with the address to open. */
 export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
-  src.clearOldAttachments(); src.clearOldAttachments(30, PICTURE_ROOT); voice.warmIfPresent(prefs.speech);
+  src.clearOldAttachments(); src.clearOldAttachments(30, PICTURE_ROOT); voice.prefer(prefs.speech);
   state.claude = await src.claudePath();
   await new Promise(r => server.listen(port, '127.0.0.1', r));
   await new Promise(r => previews.listen(0, '127.0.0.1', r));

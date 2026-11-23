@@ -1016,6 +1016,18 @@ test('dictation: a recording comes back as text, and only with the token', async
   assert.equal((await fetch(new URL('/api/voice', svc.address), { method: 'POST', body: new Float32Array(16000) })).status, 403);
 });
 
+test('dictation: the model is loaded only when dictation starts, and let go after a while without it', async () => {
+  const quick = await startService(sb, { WORKWOOD_STT_IDLE: '600' });
+  try {
+    const voice = async (q = '') => (await quick.call('voice' + q)).body;
+    assert.equal((await voice()).state, 'idle');                                          // nothing in memory at start-up
+    await until(async () => (await voice('?warm')).state === 'ready', 'the model to load when dictation starts');
+    await until(async () => (await voice()).state === 'idle', 'the model to be let go when nothing wants it', 5000);
+    const r = await fetch(new URL('/api/voice', quick.address), { method: 'POST', headers: { 'x-workwood-token': 'test-token' }, body: new Float32Array(16000) });
+    assert.deepEqual(await r.json(), { text: 'dictated words' });                         // and loaded again for the next recording
+  } finally { quick.stop(); }
+});
+
 test('dictation: the GPU model is downloaded only when asked, then used, and can be turned off again', async () => {
   const say = () => fetch(new URL('/api/voice', svc.address), { method: 'POST', headers: { 'x-workwood-token': 'test-token' }, body: new Float32Array(16000) }).then(r => r.json());
   const voice = async () => (await svc.call('voice')).body;

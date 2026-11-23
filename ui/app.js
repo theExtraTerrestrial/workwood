@@ -940,7 +940,7 @@ function renderSettings(){
   else{pg.innerHTML=`<div class="pgh">About</div>`+(about?`<div class="srow"><span>Workwood</span><span class="sstate">${esc(about.version)}</span></div>
     ${updRow()}
     <div class="srow"><span>Claude Code<small>Runs your sessions.</small></span><span class="sstate ${about.claude?'':'bad'}">${esc(about.claude||'Not found')}</span></div>
-    <div class="srow"><span>Speech model<small>${esc(about.speech.model)}, on ${about.speech.device==='cuda'?'the graphics card':'the processor'}.</small></span><span class="sstate ${about.speech.state==='failed'?'bad':''}">${{idle:'Not loaded yet',loading:'Loading…',ready:'Ready',failed:'Could not be loaded'}[about.speech.state]}</span></div>
+    <div class="srow"><span>Speech model<small>${esc(about.speech.model)}, on ${about.speech.device==='cuda'?'the graphics card':'the processor'}.</small></span><span class="sstate ${about.speech.state==='failed'?'bad':''}">${{idle:'Loads when you dictate',loading:'Loading…',ready:'Ready',failed:'Could not be loaded'}[about.speech.state]}</span></div>
     <div class="srow"><span>Service<small>Node ${esc(about.node)}</small></span><span class="sstate">Running</span></div>`:'<div class="cap2">Loading…</div>');
     if(!about)api('about').then(a=>{about=a;renderSettings()}).catch(()=>{})}
 }

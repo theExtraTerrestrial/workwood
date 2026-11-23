@@ -4,6 +4,8 @@
 // the CUDA libraries onnxruntime needs, which come from NVIDIA's own packages on PyPI (pinned, checked by hash).
 // Models live in ~/.cache/workwood/models, the CUDA libraries in ~/.cache/workwood/cuda.
 // The model runs in a child process (voice-worker.mjs) so the CUDA libraries can be on its library path.
+// It is loaded when you start dictating, not before, and let go after a while without dictation: loaded, the GPU
+// model holds about 3.5 GB of memory (the CUDA libraries and the model's weights), the standard one about 1 GB.
 import { fork, execFile } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -25,6 +27,7 @@ export const MODELS = {
 // What onnxruntime-node 1.30's CUDA provider links against (CUDA 13, cuDNN 9). Change these with onnxruntime.
 const CUDA_PKGS = [['nvidia-cuda-runtime', '13.5.37'], ['nvidia-cublas', '13.10.1.6'], ['nvidia-curand', '10.4.5.25'], ['nvidia-cudnn-cu13', '9.28.1.4']];
 const CUDA_LIBS = /^lib(cudart|cublas|cublasLt|curand|cudnn(_\w+)?)\.so\.\d+$/;
+const IDLE_MS = +process.env.WORKWOOD_STT_IDLE || 5 * 60e3;   // how long a loaded model waits for more dictation
 const LIB_SHARE = 0.4;   // of the whole download: the libraries are about 1.0 GB, the model 1.6 GB
 
 // better: the GPU model. gpu: the card's name, or null if there is none to use; state: absent | getting | present | failed
@@ -74,7 +77,7 @@ function spawnEngine(kind) {
 
 /** Make `e` the engine dictation uses, and let the status follow it. A GPU model that cannot load gives way to the standard one. */
 function use(e) {
-  cur = e;
+  cur = e; idleSoon();
   Object.assign(status, { state: 'loading', progress: 0, error: null, model: MODELS[e.kind].name, device: MODELS[e.kind].device });
   e.onProgress = p => { status.progress = Math.round(100 * p.got / p.all); };
   e.ready.then(() => { if (cur === e) status.state = 'ready'; }, err => {
@@ -85,7 +88,20 @@ function use(e) {
   e.child.on('exit', () => { if (cur === e && status.state === 'ready') { cur = null; status.state = 'idle'; } });
   return e;
 }
-export function warm() { return cur && !cur.dead ? cur : use(spawnEngine(wantKind())); }
+export function warm() { idleSoon(); return cur && !cur.dead ? cur : use(spawnEngine(wantKind())); }
+
+/** Let the model go once nothing has wanted it for IDLE_MS. Not while it is in use, nor while it loads (a first download can be long). */
+let idleT = null;
+function idleSoon() {
+  clearTimeout(idleT);
+  idleT = setTimeout(() => {
+    if (busy || status.state === 'loading' || B.state === 'getting') return idleSoon();
+    const e = cur; cur = null;
+    if (e) { e.stop(); if (status.state === 'ready') status.state = 'idle'; }
+    spare?.stop(); spare = null;
+  }, IDLE_MS);
+  idleT.unref();
+}
 async function engine() {
   for (;;) {
     const e = warm();
@@ -104,18 +120,14 @@ export function choose(kind) {
   if (old) queue.finally(() => old.stop());
 }
 
-/** At start-up: have the model in memory before the first press, but never download it unasked. */
-export async function warmIfPresent(kind) {
-  want = kind === 'turbo' ? 'turbo' : 'small';
-  await gpu;
-  if (process.env.WORKWOOD_STT || wantKind() === 'turbo' || fs.existsSync(path.join(MODELS_DIR, ...MODELS.small.id.split('/')))) warm();
-}
+/** At start-up: which model to load when dictation starts. Nothing is loaded yet. */
+export function prefer(kind) { want = kind === 'turbo' ? 'turbo' : 'small'; }
 export const isBusy = () => busy > 0;
 /** 16 kHz mono samples in, text out. One at a time. */
 export function transcribe(audio, language = process.env.WORKWOOD_STT_LANGUAGE || 'english') {   // any language Whisper knows, by name
   busy++;
   const job = queue.then(async () => String(await (await engine()).run(audio, language) || '').replace(/\[[A-Z_ ]+\]|\([a-z ]+\)/g, '').replace(/\s+/g, ' ').trim());
-  queue = job.catch(() => {}).finally(() => { busy--; });
+  queue = job.catch(() => {}).finally(() => { busy--; idleSoon(); });
   return job;
 }
 
@@ -132,7 +144,7 @@ export async function getBetter() {
     const e = spawnEngine('turbo');
     e.onProgress = p => at(LIB_SHARE + (1 - LIB_SHARE) * p.got / p.all);
     await e.ready;
-    spare?.stop(); spare = e; have = true;
+    spare?.stop(); spare = e; have = true; idleSoon();
     Object.assign(B, { state: 'present', progress: 100 });
     return true;
   } catch (err) {

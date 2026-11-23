@@ -130,7 +130,11 @@ function oops(msg){const o=$('oops');o.textContent=msg||'';o.hidden=!msg;if(msg)
 // Just enough Markdown for agent replies. Everything is escaped first.
 function md(src){
   const blocks=[];let s=String(src).replace(/```[^\n]*\n([\s\S]*?)```/g,(_,c)=>{blocks.push(`<pre><code>${esc(c.replace(/\n$/,''))}</code></pre>`);return `\u0000${blocks.length-1}\u0000`});
-  const inline=t=>esc(t).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,'$1');
+  // A code span opens with a run of backticks and closes on a run of the same length, so `` a`b `` holds a backtick;
+  // one space either side is padding. Its text is set aside first so bold and links never reach inside it.
+  const inline=t=>{const cs=[];
+    t=String(t).replace(/(?<!`)(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g,(_,f,c)=>{if(/^ [\s\S]* $/.test(c)&&c.trim())c=c.slice(1,-1);cs.push(`<code>${esc(c)}</code>`);return `\u0001${cs.length-1}\u0001`});
+    return esc(t).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,'$1').replace(/\u0001(\d+)\u0001/g,(_,i)=>cs[i])};
   const out=[];let list=null,para=[],table=null;
   // A list keeps each item's indent, so items written under another become a list inside it.
   const listHtml=items=>{let h='';const stack=[];
@@ -144,7 +148,7 @@ function md(src){
     }
     while(stack.length)h+=`</li></${stack.pop().t}>`;return h};
   const flush=()=>{if(para.length){out.push('<p>'+para.map(inline).join('<br>')+'</p>');para=[]}if(list){out.push(listHtml(list.i));list=null}
-    if(table){out.push('<table>'+table.map((r,i)=>'<tr>'+r.map(c=>i?`<td>${inline(c)}</td>`:`<th>${inline(c)}</th>`).join('')+'</tr>').join('')+'</table>');table=null}};
+    if(table){out.push('<div class="tw"><table>'+table.map((r,i)=>'<tr>'+r.map(c=>i?`<td>${inline(c)}</td>`:`<th>${inline(c)}</th>`).join('')+'</tr>').join('')+'</table></div>');table=null}};
   for(const line of s.split('\n')){
     let m;
     if((m=line.match(/^\u0000(\d+)\u0000$/))){flush();out.push(blocks[+m[1]])}
@@ -363,18 +367,29 @@ const KIND={page:'Page',image:'Image',video:'Video',pdf:'PDF'};
 const RANK={video:0,page:1,pdf:2,image:3};
 // Pictures you sent show as small cards in your message, from the copy the service keeps; one opens large.
 const picUrl=id=>`/api/picture/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
-const picCards=list=>list.length?`<div class="mpics ${list.length===1?'one':''}">${list.map(p=>`<button class="mpic" data-tip="${esc(p.name||'Pasted picture')}"><img src="${esc(p.url)}" loading="lazy" alt=""></button>`).join('')}</div>`:'';
+// Each is the same small square the message box showed before sending; `gap` keeps it off the words that follow.
+const picCards=(list,gap)=>list.length?`<div class="mpics${gap?' gap':''}">${list.map(p=>`<button class="mpic" data-tip="${esc(p.name||'Pasted picture')}"><img src="${esc(p.url)}" loading="lazy" alt=""></button>`).join('')}</div>`:'';
+// A question card you answered, settled in the thread at full width: the questions named as the live card named them,
+// one shown at a time (the others stacked behind, a click on a name away), each with what you picked or wrote.
+const ansAt=new Map();   // which question an answered card shows, by card, so redrawing the thread keeps it
+const ansKey=it=>V.sel+'|'+it.n;
+function answeredCard(it){
+  const qs=it.said?(it.asked?.length?it.asked:[{q:'',head:'Question'}]):it.answers,n=qs.length,key=ansKey(it),at=Math.min(ansAt.get(key)||0,n-1);
+  const own=(t,label)=>`<div class="aown"><i>${label}</i><div class="atxt">${esc(t)}</div></div>`;
+  const answer=x=>it.said?own(it.said,'You wrote instead'):x.picks?`<div class="apicks">${x.picks.map(p=>`<span class="apk"><span class="mark ${x.multi?'sq':''}">${svg('check')}</span>${esc(p)}</span>`).join('')}</div>`:own(x.a,'You wrote');
+  return `<div class="ans ${n>1?'stack':''}" data-ans="${esc(key)}"><div class="steps2">${qs.map((x,k)=>`<button class="qhd ${k===at?'':'off'}" data-astep="${k}">${esc(x.head||'Question '+(k+1))}</button>`).join('')}<span class="cnt">${n>1?`${at+1} of ${n} · `:''}Answered</span></div>
+    ${qs.map((x,k)=>`<div class="apage" ${k===at?'':'hidden'}>${x.q?`<div class="aq">${esc(x.q)}</div>`:''}${answer(x)}</div>`).join('')}</div>`;
+}
 let lbx=null;   // the pictures of the message open in the large view, and which one shows
 // One item of the conversation as the thread draws it. `since`: where the turn in progress starts (its steps are open).
 function itemPart(it,ix,since,latest){
     let h='';
-    if(it.kind==='user'){const at=it.files||[];h=`<div class="me">${picCards((it.pics||[]).map(p=>({url:picUrl(p.id),name:p.name})))}${it.skill?`<span class="chip">${svg('zap')}${esc(it.skill)}</span>`:''}${esc(it.text)}${at.length?`<div class="matt">${at.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`}
+    if(it.kind==='user'){const at=it.files||[];h=`<div class="me">${picCards((it.pics||[]).map(p=>({url:picUrl(p.id),name:p.name})),it.text||it.skill||(it.files||[]).length)}${it.skill?`<span class="chip">${svg('zap')}${esc(it.skill)}</span>`:''}${esc(it.text)}${at.length?`<div class="matt">${at.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`}
     else if(it.kind==='assistant')h=`<div class="ai">${md(it.text)}</div>`;
     else if(it.kind==='tools'){const live=ix>since,open=V.openTools.has(it.n)||live&&!V.shutTools.has(it.n);
       h=`<div class="acts ${open?'open':''}"><button class="act" data-tools="${it.n}" data-on="${open?1:''}">${svg('chev-r')}${esc(toolSummary(it.tools))}${stepsTime(it.tools,live)}</button>${open?`<div class="steps">${it.tools.map(x=>stepHtml(x,live)).join('')}</div>`:''}</div>`}
     else if(it.kind==='bg')h=`<div class="bgn ${esc(it.of||'')} ${it.bad?'bad':''}"><i></i>${it.event?`<b>${esc(it.name||'Monitor')}</b><span class="mono">${esc(it.event)}</span>`:`<span>${esc(it.text||'')}</span>`}<time>${clock(it.ts)}</time></div>`;
-    // a question card you answered: each answer under its question, on your side of the thread
-    else if(it.kind==='answers')h=`<div class="ans">${it.said?esc(it.said):it.answers.map(x=>`<div class="aq" ${x.head?`data-tip="${esc(x.q)}"`:''}>${esc(x.head||x.q)}</div><div class="aa">${esc(x.a)}</div>`).join('')}</div>`;
+    else if(it.kind==='answers')h=answeredCard(it);
     else if(it.kind==='skill')h=`<div class="sknote">${svg('zap')}Loaded skill <b>${esc(it.name)}</b></div>`;
     else if(it.kind==='note')h=`<div class="sys">${esc(it.stop?`${it.stop==='auth'?'Paused':'Stopped'} at ${clock(it.ts)} · ${it.stop==='auth'?it.profile+' was signed out':it.stop==='limit'?'limit reached on '+it.profile:(it.text||'something went wrong')}`:it.text)}</div>`;
     else if(it.kind==='done')h=`<div class="tfoot">Worked for ${dur(it.ms)}${it.ts?' · '+clock(it.ts):''}</div>`;
@@ -410,7 +425,7 @@ function renderThread(){
   const nw=V.isNew,t=$('thread');
   // What you just sent is shown straight away, and gives way to the real message when the service reports it.
   if(V.pend&&V.items.filter(it=>it.kind==='user').length>=V.pend.need)V.pend=null;
-  const pd=V.pend,pend=pd?[['pend',`<div class="me">${picCards(pd.pics||[])}${esc(pd.text)}${pd.files.length?`<div class="matt">${pd.files.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`]].concat(V.run?.status==='working'&&!nw&&!V.loading?[]:[['pendw','<div class="w1"><i class="spin"></i><span class="shim">Starting</span></div>']]):[];
+  const pd=V.pend,pend=pd?[['pend',`<div class="me">${picCards(pd.pics||[],pd.text||pd.files.length)}${esc(pd.text)}${pd.files.length?`<div class="matt">${pd.files.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`]].concat(V.run?.status==='working'&&!nw&&!V.loading?[]:[['pendw','<div class="w1"><i class="spin"></i><span class="shim">Starting</span></div>']]):[];
   t.hidden=nw&&!pd;$('hello').hidden=!nw||!!pd||isHome();
   if(nw&&!pd){renderRail();return}   // a session not started has no turns: clear the rail left by the one you were reading
   if(nw||V.loading){patch(t,pd?pend:[['loading','<div class="loading">Opening…</div>']]);renderRail();return}
@@ -793,7 +808,10 @@ $('bPreview').onclick=()=>{if(V.pv){V.pv=null;V.full=false;renderPanel();return}
 $('bExt').onclick=()=>{const f=V.work.find(w=>w.path===V.pv);if(f)window.open(fileUrl(f),'_blank','noopener')};
 // A turn's new files go to the top of the list; a file written again replaces its older entry.
 function addWork(files){const has=new Set(files.map(f=>f.path));V.work=files.concat(V.work.filter(f=>!has.has(f.path)))}
-$('thread').onclick=e=>{const pc=e.target.closest('.mpic');if(pc){const all=[...pc.parentNode.querySelectorAll('.mpic')];lbx={list:all.map(b=>b.querySelector('img').src),i:all.indexOf(pc)};hideTip();showPic();return}
+$('thread').onclick=e=>{const st=e.target.closest('[data-astep]');if(st){const c=st.closest('.ans'),k=+st.dataset.astep;ansAt.set(c.dataset.ans,k);
+    c.querySelectorAll('[data-astep]').forEach(b=>b.classList.toggle('off',+b.dataset.astep!==k));c.querySelectorAll('.apage').forEach((p,j)=>p.hidden=j!==k);
+    const cnt=c.querySelector('.cnt');if(cnt)cnt.textContent=`${k+1} of ${c.querySelectorAll('.apage').length} · Answered`;return}
+  const pc=e.target.closest('.mpic');if(pc){const all=[...pc.parentNode.querySelectorAll('.mpic')];lbx={list:all.map(b=>b.querySelector('img').src),i:all.indexOf(pc)};hideTip();showPic();return}
   const o=e.target.closest('[data-open]');if(o){showWork(o.dataset.open,!V.run?.pending);return}
   const t=e.target.closest('[data-copy],[data-cmdall],[data-out],[data-stopstep],[data-suball],[data-repall],[data-code]');
   if(t){const d=t.dataset;

@@ -210,7 +210,8 @@ test('question card: answers reach the agent', async () => {
   const s = await idle(id);
   assert.equal(lastText(s), 'ANSWERS {"Which direction should I take?":"Dark","What else should it include?":"Tests, Docs"}');
   // and the thread keeps what you answered, live and read back from the history
-  const want = [['Direction', 'Dark'], ['Scope', 'Tests, Docs']], of = items => items.filter(x => x.kind === 'answers').map(x => x.answers.map(a => [a.head, a.a]));
+  // each says which options it picked: one, or several where the question let you pick several
+  const want = [['Direction', 'Dark', ['Dark'], false], ['Scope', 'Tests, Docs', ['Tests', 'Docs'], true]], of = items => items.filter(x => x.kind === 'answers').map(x => x.answers.map(a => [a.head, a.a, a.picks, !!a.multi]));
   assert.deepEqual(of(s.items), [want]);
   const { readTranscript } = await import('../service/transcript.mjs');
   assert.deepEqual(of((await readTranscript(fileOf(id))).items), [want]);
@@ -222,6 +223,8 @@ test('question card: words written instead of answering stay in the thread; decl
   await svc.call(`sessions/${id}/answer`, { requestId: p.id, action: 'deny', text: 'neither, make it grey' });
   let s = await idle(id);
   assert.deepEqual(s.items.filter(x => x.kind === 'answers').map(x => x.said), ['neither, make it grey']);
+  // and the questions they stood in for stay with them
+  assert.deepEqual(s.items.find(x => x.kind === 'answers').asked.map(a => a.head), ['Direction', 'Scope']);
   id = await newSession('ASK and I decline'); p = await pending(id);
   await svc.call(`sessions/${id}/answer`, { requestId: p.id, action: 'deny' });
   s = await idle(id);
@@ -1605,8 +1608,13 @@ ui('window: question card, two steps, by clicking', async () => {
   await page.waitForSelector('.ai:has-text("ANSWERS")');
   assert.match(await page.locator('.ai').last().innerText(), /"Dark".*"Tests, Mobile"/);
   assert.equal(await page.locator('#qcard').isHidden(), true);
-  const ans = await page.locator('.ans').last().innerText();                // what you answered stays, on your side
-  assert.match(ans, /Direction\s+Dark\s+Scope\s+Tests, Mobile/);
+  // what you answered stays as a settled card: one question at a time with your pick, the next a click on its name away
+  const card = page.locator('.ans').last();
+  assert.match(await card.innerText(), /1 of 2 · Answered\s+Which direction should I take\?\s+Dark/i);
+  assert.equal(await card.locator('.apage:not([hidden]) .apk').count(), 1);
+  await card.locator('[data-astep="1"]').click();
+  assert.match(await card.innerText(), /2 of 2 · Answered\s+What else should it include\?\s+Tests\s+Mobile/i);
+  assert.equal(await card.locator('.apage:not([hidden]) .apk .mark.sq').count(), 2);
 });
 
 ui('window: a typed answer replaces the options', async () => {
@@ -1615,6 +1623,9 @@ ui('window: a typed answer replaces the options', async () => {
   await page.click('.qopt:has-text("Docs")'); await page.click('[data-act=send]');
   await page.waitForSelector('.ai:has-text("ANSWERS")');
   assert.match(await page.locator('.ai').last().innerText(), /"something else".*"Docs"/);
+  const card = page.locator('.ans').last();                                         // your own words show as written, not as a pick
+  assert.match(await card.locator('.apage:not([hidden])').innerText(), /You wrote\s+something else/i);
+  assert.equal(await card.locator('.apage:not([hidden]) .apk').count(), 0);
 });
 
 ui('window: Stop on a question card ends the turn without an answer, by click or by Escape', async () => {

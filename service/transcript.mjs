@@ -470,16 +470,30 @@ export const ERRORS = {
 
 // What a question card was answered with, from its tool result: each question with its answer, or the words you
 // wrote instead of answering. Claude Code keeps the answers in the result (and its text says them as "question"="answer").
-// Declined or cancelled with nothing said: nothing to show.
+// Declined or cancelled with nothing said: nothing to show. Each answer says which options it picked (`picks`, more than
+// one when the question let you pick several) or nothing when you wrote your own; words said instead of answering keep
+// the questions they stood in for (`asked`), so the thread can show what was asked.
+const pickedOf = (q, a) => {
+  const labels = (q?.options || []).map(o => o?.label).filter(Boolean);
+  if (labels.includes(a)) return [a];
+  if (!q?.multiSelect) return null;
+  const parts = a.split(', ');
+  return parts.length > 1 && parts.every(x => labels.includes(x)) ? parts : null;
+};
 function answersOf(questions, r, result) {
   const text = resultText(r.content);
-  if (r.is_error) { const said = /and said: ([\s\S]+)$/.exec(text)?.[1]?.trim(); return said ? { said } : null; }
+  if (r.is_error) {
+    const said = /and said: ([\s\S]+)$/.exec(text)?.[1]?.trim();
+    const qs = questions.length ? questions : (result?.questions || []);
+    return said ? { said, ...(qs.length ? { asked: qs.map(q => ({ q: q.question, head: q.header || null })) } : {}) } : null;
+  }
   const given = result && typeof result.answers === 'object' && result.answers ? result.answers : {};
   if (!Object.keys(given).length) for (const [, q, a] of text.matchAll(/"((?:[^"\\]|\\.)*)"="((?:[^"\\]|\\.)*)"/g)) given[q] = a;
   const qs = questions.length ? questions : (result?.questions || []);
   const list = qs.map(q => ({ q: q.question, head: q.header || null, a: given[q.question] })).filter(x => x.a);
   for (const [q, a] of Object.entries(given)) if (!list.some(x => x.q === q) && a) list.push({ q, head: null, a: String(a) });
-  return list.length ? { answers: list.map(x => ({ ...x, a: String(x.a) })) } : null;
+  return list.length ? { answers: list.map(x => { const a = String(x.a), picks = pickedOf(qs.find(q => q.question === x.q), a);
+    return { ...x, a, ...(picks ? { picks } : {}), ...(qs.find(q => q.question === x.q)?.multiSelect ? { multi: true } : {}) }; }) } : null;
 }
 
 // A slash command Claude Code ran by itself that failed — a /compact cut off by a limit, say — as the stop it is, with

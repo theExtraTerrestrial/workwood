@@ -288,6 +288,30 @@ async function turn(prompt, said = prompt, uuid) {
     text('The screenshot is ready.');
     return finish('ok');
   }
+  if (/\bVARIANTS\b/.test(prompt)) {
+    // versions in folders of their own, both index.html, told apart by their folder and title; written in the other order
+    const page = (title, h) => `<!doctype html><title>${title}</title><h1>${h}</h1>`;
+    const files = [['v2/index.html', page('Checkout &mdash; tall header', 'Tall one')], ['v1/index.html', page('Checkout &mdash; compact header', 'Compact one')]];
+    say(files.map(([name, body], i) => {
+      const f = path.join(cwd, 'variants', name); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, body);
+      return { type: 'tool_use', id: 'toolu_v' + i, name: 'Write', input: { file_path: f, content: body } };
+    }));
+    record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: files.map((f, i) => ({ type: 'tool_result', tool_use_id: 'toolu_v' + i, content: 'ok' })) } });
+    const r = await ask('AskUserQuestion', { questions: [{ question: 'Which header do you want?', header: 'Header', multiSelect: false,
+      options: [{ label: 'Compact', description: 'One row.' }, { label: 'Tall', description: 'Two rows.' }] }] });
+    text('PICKED ' + JSON.stringify(r.updatedInput?.answers || r.message));
+    return finish('ok');
+  }
+  if (/\bPOINTED\b/.test(prompt)) {
+    // pages it did not write with a tool (a script made them), named only by the options' previews; one outside the project is not offered
+    fs.mkdirSync(path.join(cwd, 'designs'), { recursive: true });
+    fs.writeFileSync(path.join(cwd, 'designs', 'first.html'), '<h1>Calm page</h1>'); fs.writeFileSync(path.join(cwd, 'designs', 'second.html'), '<h1>Loud page</h1>'); fs.writeFileSync(path.join(home, 'secret.html'), '<h1>Not yours</h1>');
+    const r = await ask('AskUserQuestion', { questions: [{ question: 'Which one?', header: 'Pick', multiSelect: false,
+      options: [{ label: 'Calm', description: '', preview: 'designs/first.html' }, { label: 'Loud', description: '', preview: `\`${path.join(cwd, 'designs', 'second.html')}\`` },
+        { label: 'Neither', description: '', preview: path.join(home, 'secret.html') }] }] });
+    text('PICKED ' + JSON.stringify(r.updatedInput?.answers || r.message));
+    return finish('ok');
+  }
   if (/\bMOCKUP\b/.test(prompt)) {
     // writes two pages that share a stylesheet, and a picture; MOCKUP ASK then stops to ask about them
     const dir = path.join(cwd, 'mockups'); fs.mkdirSync(dir, { recursive: true });
@@ -320,6 +344,7 @@ readline.createInterface({ input: process.stdin }).on('close', () => setTimeout(
   if (process.env.FAKE_CLAUDE_TRACE) log('IN ' + line.slice(0, 300));
   if (m.type === 'control_request') {
     const ok = (response = {}) => out({ type: 'control_response', response: { subtype: 'success', request_id: m.request_id, response } });
+    if (m.request.subtype === 'initialize' && m.request.appendSystemPrompt) log('appended ' + m.request.appendSystemPrompt);
     if (m.request.subtype === 'initialize') return ok({ commands: [
       { name: 'mockup', description: 'Build standalone mockups to compare side by side (project)', argumentHint: '' },
       { name: 'teach', description: 'Teach a new skill or concept. (user)', argumentHint: '' },

@@ -496,18 +496,62 @@ function countCtx(id){V.ctx={id,at:Date.now()};
 $('mCtx').onclick=e=>{e.stopPropagation();if(e.target.closest('[data-compact]')&&!isWorking()){closePops();sendText('/compact')}};
 
 /* ---------- compare: a question about things the agent just made, with those things next to it ---------- */
-// Each option is shown with the text the agent attached to it, or with the file from this turn that its wording names.
-// When nothing can be told apart that way, this turn's files are offered under their own names instead.
-const plainWords=s=>' '+String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()+' ';
+// Each option is shown with the file its preview names, the text the agent attached to it, or the file from this turn that
+// matchFiles finds for it. When nothing can be told apart that way, this turn's files are offered under their own names instead.
+const STOP=new Set('the a an and or of to in on with for by at as is it its this that one two all no not but from into than then only more less your you we our page file mockup mockups option version variant design html htm png svg jpg jpeg webp pdf'.split(' '));
+// The words of a name: "headerCompact-v2" is header, compact, v2 and 2.
+const nameWords=s=>String(s||'').replace(/([a-z])([A-Z])/g,'$1 $2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).flatMap(w=>{const m=/^([a-z]+)(\d+)$/.exec(w)||/^(\d+)([a-z]+)$/.exec(w);return m?[w,m[1],m[2]]:[w]});
+const textWords=s=>nameWords(s).filter(w=>!STOP.has(w)&&(w.length>1||/\d/.test(w)));
+const sameWord=(a,b)=>a===b||a.length>=4&&b.length>=4&&(a.startsWith(b)||b.startsWith(a));
+// Which of this turn's files each option is about, or null. In order of trust:
+//  1. the words that tell the files apart (not the ones every file shares, like "header" or "index"), in the file's path
+//     below the folder they share and in its title, against the option's label and then its description;
+//  2. a letter or number in the name (a, b, c; 1, 2, 3; v1, v2) that is the option's place in the list;
+//  3. what is left in the order it was written, when as many pages (or pictures) are left as options, and the files
+//     look like versions of one thing or the question is about choosing between such things.
+function matchFiles(options,files,ask=''){
+  const out=options.map(()=>null);if(!files.length||!options.length)return out;
+  const dirs=files.map(f=>f.path.split(/[\\/]/).slice(0,-1));let common=dirs[0].length;
+  for(const d of dirs){let i=0;while(i<common&&d[i]===dirs[0][i])i++;common=i}
+  const raw=files.map((f,i)=>dirs[i].slice(common).join(' ')+' '+f.name.replace(/\.[^.]+$/,''));
+  const own=files.map((f,i)=>({path:new Set(textWords(raw[i])),title:new Set(textWords(f.title))}));
+  const shared=new Set();
+  if(files.length>1)for(const k of ['path','title']){const n=new Map();own.forEach(o=>o[k].forEach(w=>n.set(w,(n.get(w)||0)+1)));
+    own.forEach(o=>{for(const w of o[k])if(n.get(w)===files.length){o[k].delete(w);shared.add(w)}})}
+  const ords=raw.map(r=>{const ws=nameWords(r).filter(w=>/^([a-h]|[1-9])$/.test(w));return ws.length===1?(/\d/.test(ws[0])?+ws[0]-1:ws[0].charCodeAt(0)-97):null});
+  const numbered=ords.filter(x=>x!==null),ordOk=numbered.length>1&&new Set(numbered).size===numbered.length;
+  const hits=(ws,set)=>ws.filter(w=>[...set].some(x=>sameWord(w,x))).length;
+  const score=(k,i)=>{const l=textWords(options[k].label),d=textWords(options[k].description);
+    return 4*hits(l,own[i].path)+3*hits(l,own[i].title)+hits(d,own[i].path)+hits(d,own[i].title)+(ordOk&&ords[i]===k?2:0)};
+  const pairs=[];options.forEach((o,k)=>files.forEach((f,i)=>{const s=score(k,i);if(s>0)pairs.push({k,i,s})}));
+  pairs.sort((x,y)=>y.s-x.s);
+  const usedF=new Set(),stuck=new Set();   // stuck: options and files with a tie at their best, which are left to no one
+  for(const p of pairs){if(out[p.k]||usedF.has(p.i)||stuck.has('k'+p.k)||stuck.has('i'+p.i))continue;
+    if(pairs.some(q=>q!==p&&q.s===p.s&&(q.k===p.k&&!usedF.has(q.i)||q.i===p.i&&!out[q.k]))){stuck.add('k'+p.k);stuck.add('i'+p.i);continue}
+    out[p.k]=files[p.i];usedF.add(p.i)}
+  const left=options.map((o,k)=>k).filter(k=>!out[k]);
+  const askWords=textWords(ask),about=usedF.size>0||askWords.some(w=>[...shared].some(x=>sameWord(w,x)))||/\b(mockups?|designs?|versions?|variants?|directions?|layouts?|looks?|styles?|drafts?|concepts?|options?|themes?)\b/i.test(ask);
+  if(left.length&&about&&(left.length>1||usedF.size))for(const kind of ['page','image']){
+    const rest=files.filter((f,i)=>!usedF.has(i)&&f.kind===kind);
+    if(rest.length===left.length){left.forEach((k,j)=>out[k]=rest[j]);break}
+  }
+  return out;
+}
+const pathOf=p=>String(p||'').trim().replace(/^`+|`+$/g,'').replace(/^file:\/\//,'').replace(/^\.\//,'');
 function compareSet(){
   const p=V.run?.pending;if(V.isNew||p?.kind!=='question')return null;
   const qs=p.input.questions,q=qs[Math.min(V.q.step,qs.length-1)];
   let files=[];
   if(A.preview)for(let j=V.items.length-1;j>=0&&V.items[j].kind!=='user';j--)if(V.items[j].kind==='work')files=V.items[j].files.concat(files);
   files=files.filter((f,i)=>files.findIndex(x=>x.path===f.path)===i).map(f=>V.work.find(w=>w.path===f.path)||f);
-  const used=new Set(),of=q.options.map(o=>typeof o.preview==='string'&&o.preview.trim()?{text:o.preview}:null);
-  for(const words of [o=>o.label,o=>o.label+' '+(o.description||'')])q.options.forEach((o,k)=>{if(of[k])return;const t=plainWords(words(o));
-    const f=files.find(f=>!used.has(f.path)&&(t.includes(plainWords(f.name))||t.includes(plainWords(f.name.replace(/\.[^.]+$/,'')))));if(f){used.add(f.path);of[k]={file:f}}});
+  // an option whose preview is a file's path shows that file; other text in a preview is shown as it is
+  const byPath=o=>{const t=pathOf(o.preview);if(!t||/\n/.test(t))return null;const ends='/'+t.replace(/\\/g,'/').replace(/^~\//,'');
+    return files.find(f=>f.path===t||f.path.replace(/\\/g,'/').endsWith(ends))||null};
+  // (a path to a file it cannot show is not shown as text either)
+  const isPath=o=>{const t=pathOf(o.preview);return !!t&&!/\s/.test(t.replace(/ /g,''))&&/\.(html?|svg|png|jpe?g|gif|webp|avif|mp4|webm|mov|m4v|pdf)$/i.test(t)};
+  const used=new Set(),of=q.options.map(o=>{const f=byPath(o);if(f){used.add(f.path);return {file:f}}return typeof o.preview==='string'&&o.preview.trim()&&!isPath(o)?{text:o.preview}:null});
+  const open=q.options.map((o,k)=>k).filter(k=>!of[k]),found=matchFiles(open.map(k=>q.options[k]),files.filter(f=>!used.has(f.path)),q.header+' '+q.question);
+  open.forEach((k,j)=>{if(found[j])of[k]={file:found[j]}});
   let tabs=of.map((x,k)=>x&&{...x,opt:k,label:q.options[k].label}).filter(Boolean);
   if(!tabs.length&&files.length>1&&files.length<=4)tabs=files.map(f=>({file:f,opt:null,label:f.name}));
   return tabs.length>1?{q,tabs}:null;
@@ -524,7 +568,7 @@ function optionsHtml(q,set){
     return `<div class="qgrid ${q.options.length>4||set&&!loose?'one':''}">${all.map(k=>row(q.options[k],k)).join('')}</div>${loose?`<button class="qlook" data-big="0">${svg('monitor')}Look at the ${set.tabs.length} files it made</button>`:''}`;
   }
   const pic=k=>{const t=set.tabs[tabOf(k)];
-    return `<button class="qopt pic" data-opt="${k}"><span class="th ${t.file?(t.file.kind==='page'?'pg':''):'txt mono'}">${t.file?thumb(t.file):esc(t.text)}</span><span class="cap">${mark}${words(q.options[k])}</span><span class="big" data-big="${tabOf(k)}" data-tip="Open it large, beside the question">${svg('max')}</span></button>`};
+    return `<button class="qopt pic" data-opt="${k}"><span class="th ${t.file?(t.file.kind==='page'?'pg':''):'txt mono'}"${t.file?` data-tip="${esc(t.file.path)}"`:''}>${t.file?thumb(t.file):esc(t.text)}</span><span class="cap">${mark}${words(q.options[k])}</span><span class="big" data-big="${tabOf(k)}" data-tip="Open it large, beside the question">${svg('max')}</span></button>`};
   const rest=all.filter(k=>tabOf(k)<0);
   return `<div class="qgrid pics" style="--n:${withPic.length===3?3:2}">${withPic.map(pic).join('')}</div>${rest.length?`<div class="qgrid one">${rest.map(k=>row(q.options[k],k)).join('')}</div>`:''}`;
 }

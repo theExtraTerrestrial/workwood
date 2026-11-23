@@ -5,7 +5,8 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { Builder, ERRORS, describeTool, learnWindow, parseNotification } from './transcript.mjs';
+import os from 'node:os';
+import { Builder, ERRORS, describeTool, learnWindow, parseNotification, previewKind } from './transcript.mjs';
 import { lastCwd } from './sources.mjs';
 
 export const runs = new Map(); // sessionId -> run
@@ -14,6 +15,19 @@ let liveSeq = 1_000_000;        // live items are numbered above anything read f
 // When the last background task has ended, how long the session stays open for the turn it may wake the agent for.
 const GRACE = +process.env.WORKWOOD_BG_GRACE || 8000;
 const sleep = ms => new Promise(r => setTimeout(() => r(null), ms));
+
+// Told to every session Workwood runs, after Claude Code's own instructions: how to ask so the window can show what you made.
+export const SHOW_NOTE = 'This session runs in Workwood, a window that shows the pages and pictures you make next to the conversation. '
+  + 'When you ask the user to choose between files you made (mockups, pages, images), set each option\'s `preview` to the path of its file '
+  + 'and nothing else, so each option shows as that file to pick from.';
+// A question option whose preview is the path of a file that can be shown: that file, absolute.
+export function previewPath(preview, cwd) {
+  let p = typeof preview === 'string' ? preview.trim().replace(/^`+|`+$/g, '').replace(/^file:\/\//, '') : '';
+  if (!p || /\n/.test(p) || !previewKind(p)) return null;
+  if (p === '~' || p.startsWith('~/')) p = path.join(os.homedir(), p.slice(1));
+  p = path.resolve(cwd || '/', p);
+  try { return fs.statSync(p).isFile() ? p : null; } catch { return null; }
+}
 
 
 export function publicRun(r) {
@@ -140,6 +154,12 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
     const id = randomUUID();
     run.pending = { id, kind, toolName, input, choices, suggestions: suggestions || [], finish };
     run.status = 'waiting'; run.activity = describeTool(toolName, input).verb;
+    // files its options point at are offered with what it made, even ones it did not write this turn
+    // (only from the project or the folders it may read: a page is served with its neighbours)
+    if (kind === 'question') {
+      const inside = f => [cwd, ...readable].some(d => d && !path.relative(d, f).startsWith('..') && !path.isAbsolute(path.relative(d, f)));
+      for (const q of input.questions) for (const o of q.options) { const f = previewPath(o?.preview, cwd); if (f && inside(f)) run.builder.offer(f); }
+    }
     if (kind !== 'permission') sayItems(run.builder.flushWork()); // what it made so far is usually what the question is about
     else if (toolUseID) sayItems(run.builder.touchStep(toolUseID, st => { st.wait = true; }));
     sayState();
@@ -179,7 +199,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
           permissionMode: run.mode || process.env.WORKWOOD_PERMISSION_MODE || undefined,
           ...(run.mode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
           pathToClaudeCodeExecutable: claude,
-          systemPrompt: { type: 'preset', preset: 'claude_code' },
+          systemPrompt: { type: 'preset', preset: 'claude_code', append: SHOW_NOTE },
           settingSources: ['user', 'project', 'local'],
           stderr: d => { if (process.env.WORKWOOD_DEBUG) process.stderr.write(d); },
         } });

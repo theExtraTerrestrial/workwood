@@ -169,6 +169,8 @@ test('starts a session on the global profile without touching Claudius', async (
   const log = readLog(sb).slice(before);
   assert.ok(log.some(l => /account=live@example.com config=global resume=no/.test(l)), log.join('|'));
   assert.ok(!log.some(l => l.startsWith('claudius refresh')));
+  // Claude Code's own instructions, with Workwood's note on how to ask about files after them
+  assert.ok(log.some(l => l.startsWith('appended This session runs in Workwood') && l.includes('`preview`')), log.join('|'));
   // when the turn ends, the context is Claude Code's own count, not the last reply's size (which /compact leaves behind)
   assert.deepEqual(s.context, { used: 51000, window: 200000 });
 });
@@ -1563,6 +1565,27 @@ ui('window: a question whose options carry their own text shows that text in the
   await page.click('#qcard .qopt:has-text("Light")'); await page.click('#qcard [data-act="next"]');
   await page.click('#qcard .qopt:has-text("Tests")'); await page.click('#qcard [data-act="send"]');
   await page.waitForSelector('.ai:has-text("ANSWERS")');
+});
+
+ui('window: mockups are matched to options by their folder and title, not only by a name the label contains', async () => {
+  await startNew('make header VARIANTS');
+  await page.waitForSelector('#qcard .qgrid.pics .qopt.pic');
+  assert.deepEqual(await page.locator('#qcard .qopt.pic b').allInnerTexts(), ['Compact', 'Tall']);
+  assert.equal(await page.frameLocator('#qcard .qopt.pic >> nth=0 >> iframe').locator('h1').innerText(), 'Compact one');   // v1/index.html, written second
+  assert.equal(await page.frameLocator('#qcard .qopt.pic >> nth=1 >> iframe').locator('h1').innerText(), 'Tall one');
+  await page.click('#qcard .qopt.pic:has-text("Tall") .cap'); await page.click('#qcard [data-act="send"]');
+  await page.waitForSelector('.ai:has-text("PICKED")');
+});
+
+ui('window: an option whose preview is a file\'s path shows that file, even one no tool wrote; not one outside the project', async () => {
+  await startNew('show what is POINTED at');
+  await page.waitForSelector('#qcard .qgrid.pics .qopt.pic');
+  assert.deepEqual(await page.locator('#qcard .qopt.pic b').allInnerTexts(), ['Calm', 'Loud']);
+  assert.equal(await page.frameLocator('#qcard .qopt.pic >> nth=0 >> iframe').locator('h1').innerText(), 'Calm page');
+  assert.equal(await page.frameLocator('#qcard .qopt.pic >> nth=1 >> iframe').locator('h1').innerText(), 'Loud page');
+  assert.equal(await page.locator('#qcard .qopt:not(.pic):has-text("Neither")').count(), 1);   // its path is not one it may show
+  await page.click('#qcard .qopt.pic:has-text("Calm") .cap'); await page.click('#qcard [data-act="send"]');
+  await page.waitForSelector('.ai:has-text("PICKED")');
 });
 
 ui('window: a session working in the app says what it is doing under its name; not one in a terminal, not in the compact sidebar', async () => {

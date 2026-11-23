@@ -75,6 +75,28 @@ const KINDS = { html: 'page', htm: 'page', svg: 'image', png: 'image', jpg: 'ima
   mp4: 'video', webm: 'video', mov: 'video', m4v: 'video', pdf: 'pdf' };
 export const previewKind = p => KINDS[path.extname(String(p)).slice(1).toLowerCase()] || null;
 
+// What a page calls itself: its <title>, or else its first heading. A question about mockups is matched to them by it too.
+const titles = new Map();   // path -> { v, title }
+const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', mdash: '—', ndash: '–', middot: '·' };
+function pageTitle(file, v) {
+  const had = titles.get(file); if (had?.v === v) return had.title;
+  let title = '';
+  try {
+    const fd = fs.openSync(file, 'r'), buf = Buffer.alloc(32768);
+    try { title = buf.toString('utf8', 0, fs.readSync(fd, buf, 0, buf.length, 0)); } finally { fs.closeSync(fd); }
+    const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(title) || /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(title);
+    title = m ? m[1].replace(/<[^>]*>/g, ' ').replace(/&(#\d+|[a-z]+);/gi, (e, n) => n[0] === '#' ? String.fromCodePoint(+n.slice(1)) : ENT[n.toLowerCase()] ?? e).replace(/\s+/g, ' ').trim().slice(0, 160) : '';
+  } catch { title = ''; }
+  if (titles.size > 2000) titles.clear();
+  titles.set(file, { v, title });
+  return title;
+}
+/** How a previewable file is described to the window. */
+export function fileEntry(file, st, ts) {
+  const kind = previewKind(file), v = Math.round(st.mtimeMs), title = kind === 'page' ? pageTitle(file, v) : '';
+  return { path: file, name: path.basename(file), kind, v, ts, ...(title ? { title } : {}) };
+}
+
 // Files a shell command names that could be shown: a script that writes a page, a screenshot, a recording.
 // Whether the command really made or changed them is decided afterwards, from when the file was last written.
 const NAMED = new RegExp(`(?:[A-Za-z]:[\\\\/]|~[\\\\/]|[\\\\/])?[\\w.@+\\\\/-]*[\\w-]\\.(?:${Object.keys(KINDS).join('|')})(?![\\w.-])`, 'gi');
@@ -340,17 +362,19 @@ export class Builder {
    */
   toolsDone(ts) { const at = (ts ? Date.parse(ts) : Date.now()) + 2000; for (const n of this.named) n.to = Math.max(n.to ?? 0, at); }
   closeText() { const last = this.items[this.items.length - 1]; if (last && last.kind === 'assistant') last.open = false; }
+  /** A file the agent points at without having written it this turn (a question's option names it): offered with the rest. */
+  offer(file) { if (path.isAbsolute(file) && previewKind(file) && !this.fresh.has(file)) this.fresh.set(file, this.lastTs || new Date().toISOString()); }
   /** Previewable files written since the last call become one item, shown as cards. Files that are gone are left out. */
   flushWork() {
     const files = [];
     for (const [file, ts] of this.fresh) {
-      try { const st = fs.statSync(file); if (st.isFile()) files.push({ path: file, name: path.basename(file), kind: previewKind(file), v: Math.round(st.mtimeMs), ts }); } catch {}
+      try { const st = fs.statSync(file); if (st.isFile()) files.push(fileEntry(file, st, ts)); } catch {}
     }
     this.fresh.clear();
     // What commands made: a named file counts when it was last written while its command ran.
     for (const n of this.named) for (const file of n.files) {
       if (files.some(f => f.path === file)) continue;
-      try { const st = fs.statSync(file); if (st.isFile() && st.mtimeMs >= n.from && st.mtimeMs <= (n.to ?? Infinity)) files.push({ path: file, name: path.basename(file), kind: previewKind(file), v: Math.round(st.mtimeMs), ts: n.ts }); } catch {}
+      try { const st = fs.statSync(file); if (st.isFile() && st.mtimeMs >= n.from && st.mtimeMs <= (n.to ?? Infinity)) files.push(fileEntry(file, st, n.ts)); } catch {}
     }
     this.named = []; this.cmdFrom = null;
     if (!files.length) return [];
@@ -408,7 +432,7 @@ function earlyWork(file, upto, cwd) {
 function earlyFiles(file) {
   const out = [];
   for (const g of early.get(file)?.groups || []) for (const { path: p, ts } of g) {
-    try { const st = fs.statSync(p); if (st.isFile()) out.push({ path: p, name: path.basename(p), kind: previewKind(p), v: Math.round(st.mtimeMs), ts }); } catch {}
+    try { const st = fs.statSync(p); if (st.isFile()) out.push(fileEntry(p, st, ts)); } catch {}
   }
   return out;
 }

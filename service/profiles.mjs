@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import fss from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { readCreds, writeCreds, withRenewLock, fresh } from './oauth.mjs';
+import { readCreds, writeCreds, withRenewLock, fresh, readKeychain, dropKeychain } from './oauth.mjs';
 
 const HOME = os.homedir(), PROFILE_ROOT = path.join(HOME, '.claude-profiles');   // as in sources.mjs, which imports this file
 export const CLAUDE_DIR = path.join(HOME, '.claude');
@@ -224,6 +224,9 @@ export async function adoptLive(p) {
 // What `claudius add` and `relogin` do, done here: Claude Code's own sign-in (`claude auth login`) runs with the
 // profile's folder as its config folder, so the new sign-in lands in that folder and nowhere else. Whether it
 // worked is decided from the folder (a sign-in with an access token appeared), never from what the sign-in printed.
+// On macOS Claude Code puts the sign-in in the Keychain instead (see oauth.mjs): there it worked when the folder's
+// Keychain item holds a token it did not hold before the sign-in began, and that sign-in is then copied into the
+// folder's `.credentials.json`, where Claudius and the rest of Workwood look for it.
 
 export const dirOf = name => path.join(PROFILE_ROOT, name);
 /** A name as Claudius would make it: lower case, letters, digits, dots, dashes and underscores. Null if none is left. */
@@ -232,16 +235,31 @@ export function cleanName(raw) {
   return s && !s.endsWith('.lock') ? s : null;
 }
 export async function credsReady(dir) { try { return /"accessToken"/.test(await fs.readFile(path.join(dir, '.credentials.json'), 'utf8')); } catch { return false; } }
+// The Keychain's token for a profile when its sign-in began, by name; a sign-in that only leaves this behind failed.
+const kcBefore = new Map();
+const kcToken = async name => (await readKeychain(dirOf(name)))?.claudeAiOauth?.accessToken || null;
+async function markSignIn(name) { kcBefore.set(name, await kcToken(name)); }
+/** Whether the sign-in that just ended landed: in the folder, or (macOS) as a new token in its Keychain item. */
+async function landed(name) {
+  const before = kcBefore.get(name) ?? null; kcBefore.delete(name);
+  if (await credsReady(dirOf(name))) return true;
+  const now = await kcToken(name);
+  if (!now || now === before) return false;
+  await writeCreds(dirOf(name), await readKeychain(dirOf(name)));   // into the folder, for Claudius and the rest of Workwood
+  return true;
+}
 
 /** A new, empty profile folder for a sign-in to land in. */
 export async function create(name) {
   await fs.mkdir(PROFILE_ROOT, { recursive: true });
   try { await fs.mkdir(dirOf(name), { mode: 0o700 }); }
   catch (e) { if (e.code === 'EEXIST') throw new Error(`There is already a profile called ${name}.`); throw e; }
+  await dropKeychain(dirOf(name));   // left by an earlier profile of this name: not this one's sign-in
+  await markSignIn(name);
 }
 /** After an added profile's sign-in: kept and wired if it signed in, gone without a trace if not. */
 export async function finishAdd(name, claudeVersion) {
-  if (!(await credsReady(dirOf(name)))) { await fs.rm(dirOf(name), { recursive: true, force: true }); return false; }
+  if (!(await landed(name))) { await fs.rm(dirOf(name), { recursive: true, force: true }); await dropKeychain(dirOf(name)); return false; }
   await tidy(name, claudeVersion);
   return true;
 }
@@ -258,12 +276,13 @@ async function restore(name) {
 }
 export async function beginRelogin(name) {
   await restore(name);
+  await markSignIn(name);
   const creds = path.join(dirOf(name), '.credentials.json');
   if (fss.existsSync(creds)) await fs.rename(creds, bakOf(name));
 }
 /** Ends a sign-in again: the new sign-in kept if there is one, the old one back if not. True when it worked. */
 export async function finishRelogin(name, claudeVersion) {
-  const ok = await credsReady(dirOf(name));
+  const ok = await landed(name);
   await restore(name);
   if (ok) await tidy(name, claudeVersion);
   return ok;
@@ -287,7 +306,9 @@ async function tidy(name, claudeVersion) {
 /** Renames a profile's folder, and the active-profile mark with it. */
 export async function rename(from, to) {
   if (fss.existsSync(dirOf(to))) throw new Error(`There is already a profile called ${to}.`);
+  const kc = await readKeychain(dirOf(from)), best = kc && await readCreds(dirOf(from));
   await fs.rename(dirOf(from), dirOf(to));
+  if (kc) { await writeCreds(dirOf(to), best).catch(() => {}); await dropKeychain(dirOf(from)); }   // the Keychain item is named by the folder
   if ((await activeName()) === from) await writeText(path.join(PROFILE_ROOT, '.active_profile'), to + '\n');
 }
 /**
@@ -299,5 +320,6 @@ export async function remove(name) {
   if (!cleanName(name) || cleanName(name) !== name) throw new Error('That is not a profile name.');
   if ((await activeName()) === name) throw new Error(`${name} is the account ~/.claude is signed in to. Switch to another one with Claudius first.`);
   await fs.rm(dirOf(name), { recursive: true, force: true });
+  await dropKeychain(dirOf(name));
 }
 const writeText = async (file, text) => { const tmp = `${file}.${process.pid}.tmp`; await fs.writeFile(tmp, text, { mode: 0o600 }); await fs.rename(tmp, file); };

@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as prof from './profiles.mjs';
+import { readCreds } from './oauth.mjs';
 
 const run = promisify(execFile);
 export const HOME = os.homedir();
@@ -368,7 +369,7 @@ export async function envForProfile(profile, profiles) {
   const p = profiles.find(x => x.name === profile);
   if (!p || p.global) return cleanEnv();
   const dir = path.join(PROFILE_ROOT, profile);
-  if (!fss.existsSync(path.join(dir, '.credentials.json'))) throw new Error(`Profile ${profile} has no saved sign-in.`);
+  if (!(await readCreds(dir))?.claudeAiOauth) throw new Error(`Profile ${profile} has no saved sign-in.`);
   // Wire the shared history, as `claudius run` would, and bring a copy of the live sign-in up to date. A lapsed
   // token is left for Claude Code to renew when it starts: it takes the same renewal lock as Workwood and Claudius.
   try { await prof.link(profile, version ??= await claudeVersion(CLAUDE)); } catch (e) { console.error('[workwood] link:', String(e.message).split('\n')[0]); }

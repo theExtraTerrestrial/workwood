@@ -14,6 +14,9 @@
 // nothing is sent.
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
+import crypto from 'node:crypto';
+import { execFile } from 'node:child_process';
 
 const TOKEN_URL = process.env.WORKWOOD_TOKEN_URL || 'https://platform.claude.com/v1/oauth/token';
 const CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';   // Claude Code's own, as Claudius uses it
@@ -21,7 +24,45 @@ const STALE = 60000, UPDATE = 5000, WAIT = Number(process.env.WORKWOOD_LOCK_WAIT
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 export const fresh = o => !!o?.accessToken && (o.expiresAt || 0) > Date.now() + 60000;
-export const readCreds = async dir => { try { return JSON.parse(await fs.readFile(path.join(dir, '.credentials.json'), 'utf8')); } catch { return null; } };
+const readFile = async dir => { try { return JSON.parse(await fs.readFile(path.join(dir, '.credentials.json'), 'utf8')); } catch { return null; } };
+const expiry = c => c?.claudeAiOauth?.expiresAt || 0;
+
+// On macOS Claude Code keeps a sign-in in the login Keychain, not in `.credentials.json`: `claude auth login` writes
+// only there, renewals go there, and the file is at most a fallback that falls behind (or is removed). The item is
+// "Claude Code-credentials" for ~/.claude and "Claude Code-credentials-<first 8 hex of sha256(config folder)>" for
+// any CLAUDE_CONFIG_DIR, account the macOS user, as Claude Code (and Claudius) name it. So on macOS a sign-in is
+// read from both places, the fresher one winning, and written to both. Only for the user's own home: a test's
+// stand-in HOME must never reach the real Keychain.
+const KC = 'Claude Code-credentials';
+const KEYCHAIN = process.platform === 'darwin' && process.env.WORKWOOD_KEYCHAIN !== '0'
+  && (() => { try { return os.homedir() === os.userInfo().homedir; } catch { return false; } })();
+const KC_USER = KEYCHAIN ? os.userInfo().username : '';
+export const keychainService = dir => path.resolve(dir) === path.join(os.homedir(), '.claude') ? KC
+  : `${KC}-${crypto.createHash('sha256').update(dir.normalize('NFC')).digest('hex').slice(0, 8)}`;
+// Bounded, so a Keychain that asks for permission cannot hold anything up for long.
+const security = (args, input) => new Promise(res => {
+  const c = execFile('/usr/bin/security', args, { timeout: 5000, maxBuffer: 1 << 20 }, (err, out) => res(err ? null : out));
+  c.stdin.on('error', () => {}); c.stdin.end(input ?? '');
+});
+/** The sign-in Claude Code keeps in the Keychain for a config folder; null off macOS or when there is none. */
+export async function readKeychain(dir) {
+  if (!KEYCHAIN) return null;
+  const out = await security(['find-generic-password', '-a', KC_USER, '-w', '-s', keychainService(dir)]);
+  try { const j = JSON.parse(out); return j && typeof j === 'object' ? j : null; } catch { return null; }
+}
+// Written as Claude Code writes it: through `security -i`, hex-encoded, so the token never shows on a command line.
+async function writeKeychain(dir, data) {
+  if (!KEYCHAIN) return;
+  const hex = Buffer.from(JSON.stringify(data)).toString('hex');
+  await security(['-i'], `add-generic-password -U -a "${KC_USER}" -s "${keychainService(dir)}" -X "${hex}"\n`);
+}
+export async function dropKeychain(dir) { if (KEYCHAIN) await security(['delete-generic-password', '-a', KC_USER, '-s', keychainService(dir)]); }
+
+/** A config folder's sign-in: its `.credentials.json`, or on macOS the Keychain's copy when that is fresher. */
+export const readCreds = async dir => {
+  const [file, kc] = await Promise.all([readFile(dir), readKeychain(dir)]);
+  return kc?.claudeAiOauth && expiry(kc) >= expiry(file) ? kc : file || kc;
+};
 
 /** The two folders that lock renewal for a config folder: the current one and the older one. */
 export async function lockPaths(dir) {
@@ -90,9 +131,10 @@ export async function validToken(dir) {
   } catch (e) { return { error: e.code === 'ELOCKED' ? 'busy' : 'offline' }; }
 }
 
-/** Writes credentials the way both tools do: a private file renamed over the old one. */
+/** Writes credentials the way both tools do: a private file renamed over the old one (and on macOS the Keychain). */
 export async function writeCreds(dir, data) {
   const file = path.join(dir, '.credentials.json'), tmp = `${file}.${process.pid}.tmp`;
   try { await fs.writeFile(tmp, JSON.stringify(data), { mode: 0o600 }); await fs.rename(tmp, file); }
   catch (e) { await fs.rm(tmp, { force: true }).catch(() => {}); throw e; }
+  await writeKeychain(dir, data);   // on macOS Claude Code reads the Keychain first: a renewal only there is one it sees
 }

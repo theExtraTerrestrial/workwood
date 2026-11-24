@@ -1,0 +1,155 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 46 — Rewind</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<!-- the app's own stylesheet: the thread, message box, strip and menus below are drawn by it -->
+<link rel="stylesheet" href="../ui/app.css">
+<style>
+/* the design page around the frames */
+html,body{height:auto}
+body{overflow:auto;background:var(--bg);padding:36px 24px 80px}
+.top{max-width:1320px;margin:0 auto 8px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top>span{color:var(--faint);font-size:12.5px}
+.tg{margin-left:auto;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:8px;box-shadow:0 0 0 1px var(--line2)}
+.lede{max-width:1320px;margin:0 auto 28px;color:var(--faint);font-size:12.5px}.lede b{color:var(--dim);font-weight:650}
+.opts{max-width:1320px;margin:0 auto;display:grid;gap:44px}
+.opt>h2{font-size:14px;margin:0 0 2px;font-weight:700;display:flex;gap:8px;align-items:center}
+.opt>h2 em{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);padding:1px 6px;border-radius:5px}
+.opt>p{margin:0 0 12px;color:var(--faint);font-size:12.5px;max-width:760px}
+.row2{display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:20px}
+.cap{font-size:11.5px;color:var(--faint);margin:0 0 6px;font-weight:600}
+
+/* a frame: the conversation pane, as the app lays it out */
+.frame{background:var(--bg);border-radius:14px;box-shadow:0 0 0 1px var(--line2);height:520px;display:flex;overflow:hidden;position:relative}
+.frame .conv{height:100%}
+.frame .scroll{overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:20px 22px 4px}
+.frame .col{width:100%}
+.frame .composer{padding:8px 22px 12px}
+.frame .panel{width:44%}
+.frame .tfoot{margin-bottom:16px}
+
+/* new: the rewind arrow beside a prompt you point at */
+.me{position:relative}
+.rwb{position:absolute;right:calc(100% + 6px);top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--dim);background:var(--pop);border:1px solid var(--line2);box-shadow:var(--shadow)}
+.rwb svg{width:15px;height:15px}
+.rwb.on{color:var(--text)}
+/* new: what a rewind would take out, dimmed under a dashed cut */
+.cut{display:flex;align-items:center;gap:10px;margin:0 0 16px;font-size:11.5px;color:var(--faint)}
+.cut::before,.cut::after{content:"";flex:1;border-top:1px dashed var(--line2)}
+.cut b{color:var(--dim);font-weight:650}
+.gone{opacity:.3}
+/* the popovers anchored at the arrow */
+.pop.at{position:absolute;bottom:auto;top:calc(100% + 8px);right:0;left:auto;width:300px}
+.pop.at.up{top:auto;bottom:calc(100% + 8px)}
+.pop .ic{width:28px;height:28px;border-radius:8px;background:var(--surface2);display:grid;place-items:center;color:var(--dim);flex:none}
+.pop .ic svg{width:14px;height:14px}
+.pop .item.pri .ic{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
+.pop .item small{font-size:11px;color:var(--faint);white-space:nowrap}
+.pop .item:hover{background:var(--surface2)}
+.pop .hd{padding:4px 8px 6px;font-size:11.5px;color:var(--faint);display:flex}.pop .hd b{color:var(--text);font-weight:650;margin-right:6px}
+.ftog{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:var(--dim)}
+.ftog small{margin-left:auto;color:var(--faint)}
+.sw{width:24px;height:14px;border-radius:8px;background:var(--line2);position:relative;flex:none}
+.sw::after{content:"";position:absolute;left:2px;top:2px;width:10px;height:10px;border-radius:50%;background:var(--faint)}
+.sw.on{background:color-mix(in srgb,var(--accent) 65%,transparent)}.sw.on::after{left:12px;background:#fff}
+.gob{margin:4px 6px 4px;display:flex;justify-content:flex-end;gap:6px}
+.gob button{padding:5px 12px;border-radius:8px;font-weight:700;font-size:12px}
+.gob .p{background:var(--accent);color:var(--btn-ink)}.gob .s{background:var(--surface2);color:var(--dim);font-weight:600}
+/* the strip after a rewind: the existing handoff strip, in its quiet colour */
+.hstrip.rw{background:var(--surface);animation:none}
+.hstrip.rw .t{display:flex;align-items:center;gap:7px}.hstrip.rw .t>span{overflow:hidden;text-overflow:ellipsis}
+.hstrip .ci{color:var(--accent)}
+.hstrip .hc2.u{background:none;color:var(--dim);display:inline-flex;align-items:center;gap:5px}
+.hstrip .hc2.u svg{width:12px;height:12px}
+/* the outline panel's rows, with the rewind action */
+.olrow{position:relative}
+.olrow .ra{margin-left:auto;align-self:center;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:650;color:var(--accent);padding:3px 8px;border-radius:7px;background:color-mix(in srgb,var(--accent) 13%,transparent)}
+.olrow .ra svg{width:12px;height:12px}
+.olrow.gone{opacity:.35}
+.olcut{display:flex;align-items:center;gap:8px;margin:2px 10px;font-size:11px;color:var(--faint)}.olcut::before,.olcut::after{content:"";flex:1;border-top:1px dashed var(--line2)}
+.olbar{border-top:1px solid var(--line);padding:10px;display:flex;gap:6px;align-items:center;font-size:12px;color:var(--faint)}
+.olbar b{color:var(--text);font-weight:650}
+.olbar button{padding:5px 11px;border-radius:8px;font-weight:700;font-size:12px}
+.olbar .p{background:var(--accent);color:var(--btn-ink);margin-left:auto}.olbar .s{background:var(--surface2);color:var(--dim);font-weight:600}
+
+details.uh{max-width:1320px;margin:44px auto 0;border-top:1px solid var(--line);padding-top:16px;font-size:12.5px;color:var(--dim)}
+details.uh summary{cursor:pointer;color:var(--text);font-weight:650;font-size:13px}
+details.uh ul{margin:8px 0 0;padding-left:18px}details.uh li{margin:4px 0}
+details.uh code{font-size:11.5px;color:var(--text)}
+.note{max-width:1320px;margin:24px auto 0;border-top:1px solid var(--line);padding-top:18px;font-size:13px;color:var(--dim)}
+.note h3{font-size:13px;margin:0 0 6px;color:var(--text)}.note ol{margin:0;padding-left:18px}.note li{margin:3px 0}
+</style></head><body>
+
+<div class="top"><h1>Rewind</h1><span>round 46 · take back a stretch of the conversation, then do whatever comes next</span><button class="tg" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<div class="lede">Rewinding no longer means sending. In every option it also opens from <b>Esc Esc</b> and <b>/rewind</b>. Same session throughout: 142k in context, and the third prompt went wrong.</div>
+
+<div class="opts" id="opts"></div>
+
+<details class="uh"><summary>Under the hood</summary><ul>
+<li><b>Rewind</b> = undo files if asked (<code>rewindFiles(prompt uuid)</code>, file checkpointing on every run; Edit/Write only, not shell commands), then cut the session file after the kept turn (temp file + rename). The next turn resumes plainly. Only while nothing holds the session.</li>
+<li><b>Undo the rewind</b> (A): the cut tail is kept in a temp file until the next message or handoff, then deleted. File edits come back too only if they weren't undone.</li>
+<li><b>Hand off from here</b> (B, C): the handoff writer resumes with <code>resumeSessionAt</code> at the kept turn, so it reads only up to there. The old session is left whole; nothing is cut.</li>
+<li><b>Context numbers</b>: the size at any prompt is the usage on the reply just before it, already in the transcript.</li>
+</ul></details>
+
+<div class="note"><h3>Open questions</h3><ol>
+<li>Which one: A (recommended), B or C? They also combine, e.g. A's strip with B's "Hand off from here".</li>
+<li>Undo file edits: on by default when the dropped turns edited files?</li>
+<li>In A, should the strip go away on its own (say, at the next message), or stay until closed?</li>
+</ol></div>
+
+<script>
+const I={
+ rw:'<svg viewBox="0 0 24 24"><path d="M4 4v6h6"/><path d="M4.6 10A8 8 0 1 1 6.3 17.7"/></svg>',
+ ar:'<svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg>',
+ ed:'<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+ ch:'<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>',
+ cv:'<svg viewBox="0 0 24 24" class="cv"><path d="m6 9 6 6 6-6"/></svg>',
+ x:'<svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+ clip:'<svg viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>',
+ sl:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="m14 8.5-4 7"/></svg>',
+ mic:'<svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg>',
+ up:'<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+ cmp:'<svg viewBox="0 0 24 24"><path d="M8 3v5H3M16 21v-5h5M3 8l6-6M21 16l-6 6"/></svg>'};
+
+// the conversation, as the app renders it
+const step=t=>`<div class="acts"><button class="act">${I.ch}${t}</button></div>`;
+const P1=`<div class="me">Add a CSV export to the reports page</div>${step('Edited 2 files')}<div class="ai"><p>Done. An Export button now writes the visible rows to <code>report.csv</code>.</p></div><div class="tfoot">Worked for 1m 40s · 10:02 AM</div>`;
+const P2t='Make it also do the filtred rows in the pdf export';
+const P2=(extra='')=>`<div class="me">${P2t}${extra}</div>`;
+const P2rest=`${step('Edited 4 files · ran 3 commands')}<div class="ai"><p>There was no PDF export yet, so I added <code>pdfExport.ts</code> and wired it to the toolbar.</p></div><div class="tfoot">Worked for 6m 05s · 10:11 AM</div>`;
+
+const box=(text='',ph=true)=>`<div class="box"><textarea rows="1" placeholder="Message the agent…">${text}</textarea><div class="row"><button class="ib">${I.clip}</button><button class="ib">${I.sl}</button><span class="gap"></span><button class="ib">${I.mic}</button><button class="send">${I.up}</button></div></div>`;
+const support=(pct,used)=>`<div class="support"><span class="slot"><button class="pick"><span class="nm"><span>live</span></span>${I.cv}</button></span><span class="lim"><span class="m"><span class="wn">5h</span><span class="bar"><i style="width:34%"></i></span>34%</span><span class="m"><span class="wn">7d</span><span class="bar"><i style="width:41%"></i></span>41%</span></span><span class="gap"></span><span class="slot"><button class="pick mode k-default"><i class="dot"></i><span class="lbl">Ask</span>${I.cv}</button></span><span class="slot"><button class="pick"><span>Opus<span class="eff"> <i>·</i> High</span></span>${I.cv}</button></span><span class="slot"><button class="ctx" data-tip="${used}"><i class="ring" style="--p:${pct}"></i><span class="pct">${pct}%</span></button></span></div>`;
+const frame=(thread,composer,panel='')=>`<div class="frame"><section class="conv"><div class="scroll"><div class="col">${thread}</div></div><div class="composer">${composer}</div></section>${panel}</div>`;
+const fr=(cap,html)=>`<div><div class="cap">${cap}</div>${html}</div>`;
+
+// A: rewind right away; a strip offers what next
+const popA=`<div class="pop at"><div class="hd"><b>Rewind to before this</b>3 turns · −38k</div><div class="ftog"><span class="sw on"></span>Undo file edits<small>4 files</small></div><div class="gob"><button class="p">Rewind</button></div></div>`;
+const A1=frame(`${P1}${P2(`<button class="rwb on">${I.rw}</button>${popA.replace('class="pop at"','class="pop at up"')}`)}${P2rest}`, box()+support(14,'142k'));
+const stripA=`<div class="hstrip rw"><span class="t">${I.rw.replace('<svg','<svg class="ci"')}<b>Rewound</b><span> · 3 turns out, 4 files undone</span></span><button class="hc2">Edit that prompt</button><button class="hgo">Hand off</button><button class="hc2 u">${I.rw}Undo</button><button class="ib hx">${I.x}</button></div>`;
+const A2=frame(P1, stripA+box()+support(10,'104k'));
+
+// B: the arrow opens what to do from here, each one step
+const popB=`<div class="pop at"><button class="item pri"><span class="ic">${I.rw}</span><span class="nm"><b>Rewind to here</b></span><small>−38k</small></button><button class="item"><span class="ic">${I.ed}</span><span class="nm"><b>Rewind and edit this prompt</b></span></button><button class="item"><span class="ic">${I.ar}</span><span class="nm"><b>Hand off from here</b></span><small>new session</small></button><div class="sep"></div><div class="ftog"><span class="sw on"></span>Undo file edits<small>4 files</small></div></div>`;
+const B1=frame(`${P1}<div class="cut"><b>3 turns</b> · 38k</div>${P2(`<button class="rwb on">${I.rw}</button>${popB.replace('class="pop at"','class="pop at up"')}`)}<div class="gone">${P2rest}</div>`, box()+support(14,'142k'));
+
+// C: rewind from the conversation outline, for long sessions
+const ol=`<aside class="panel"><div class="pwrap"><div class="phead"><span class="ctitle">Conversation</span><span class="gap"></span><button class="ib">${I.x}</button></div><div class="ol">
+ <button class="olrow"><time>09:48</time><span class="tx2"><b>Look at the reports page and tell me how it loads</b><span class="mt">61k</span></span></button>
+ <button class="olrow"><time>10:00</time><span class="tx2"><b>Add a CSV export to the reports page</b><span class="mt">2 files · 88k</span></span></button>
+ <div class="olcut">3 turns · 38k</div>
+ <button class="olrow cur"><time>10:05</time><span class="tx2"><b>${P2t}</b><span class="mt">4 files · 3 commands</span></span></button>
+ <button class="olrow gone"><time>10:12</time><span class="tx2"><b>Now add a header row</b><span class="mt">1 file</span></span></button>
+ <button class="olrow gone"><time>10:14</time><span class="tx2"><b>Run the tests</b><span class="mt">2 commands</span></span></button>
+ </div><div class="olbar"><span><b>104k</b> after</span><button class="p">Rewind</button><button class="s">Hand off from here</button></div></div></aside>`;
+const C1=frame(`${P1}<div class="cut"><b>3 turns</b> · 38k</div><div class="gone">${P2('')}${P2rest}</div>`, box()+support(14,'142k'), ol);
+
+document.getElementById('opts').innerHTML=[
+ ['A','Rewind now, decide after',true,'The arrow asks once, then rewinds. Nothing is sent. A strip offers what next: edit the old prompt, hand off, or undo the rewind.',
+   `<div class="row2">${fr('1 · the arrow beside a prompt',A1)}${fr('2 · rewound: the box stays empty',A2)}</div>`],
+ ['B','One menu, three ways out',false,'The arrow opens a menu of finished actions: rewind, rewind and edit, or hand off from that point (the old session stays whole). No in-between state.',
+   `<div class="row2">${fr('the arrow’s menu, with the cut previewed',B1)}</div>`],
+ ['C','From the outline',false,'The conversation outline (the list icon in the header) picks the point. Best for long sessions, where the prompt is far up.',
+   `<div class="row2">${fr('the outline, with a point picked',C1)}</div>`]
+].map(([k,t,rec,d,body])=>`<section class="opt"><h2>${k} · ${t}${rec?'<em>Recommended</em>':''}</h2><p>${d}</p>${body}</section>`).join('');
+</script>
+</body></html>

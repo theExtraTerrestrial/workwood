@@ -1,0 +1,173 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 48 — A rewind icon</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<!-- the app's own stylesheet: the thread, message box, strip and menus below are drawn by it -->
+<link rel="stylesheet" href="../ui/app.css">
+<style>
+/* the design page around the frames */
+html,body{height:auto}
+body{overflow:auto;background:var(--bg);padding:36px 24px 80px}
+.top{max-width:1320px;margin:0 auto 8px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top>span{color:var(--faint);font-size:12.5px}
+.tg{margin-left:auto;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:8px;box-shadow:0 0 0 1px var(--line2)}
+.lede{max-width:1320px;margin:0 auto 28px;color:var(--faint);font-size:12.5px}.lede b{color:var(--dim);font-weight:650}
+.opts{max-width:1320px;margin:0 auto;display:grid;gap:44px}
+.opt>h2{font-size:14px;margin:0 0 2px;font-weight:700;display:flex;gap:8px;align-items:center}
+.opt>h2 em{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);padding:1px 6px;border-radius:5px}
+.opt>p{margin:0 0 12px;color:var(--faint);font-size:12.5px;max-width:760px}
+.row2{display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:20px}
+.cap{font-size:11.5px;color:var(--faint);margin:0 0 6px;font-weight:600}
+
+/* a frame: the conversation pane, as the app lays it out */
+.frame{background:var(--bg);border-radius:14px;box-shadow:0 0 0 1px var(--line2);height:520px;display:flex;overflow:hidden;position:relative}
+.frame .conv{height:100%}
+.frame .scroll{overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:20px 22px 4px}
+.frame .col{width:100%}
+.frame .composer{padding:8px 22px 12px}
+.frame .panel{width:44%}
+.frame .tfoot{margin-bottom:16px}
+
+/* new: the rewind arrow beside a prompt you point at */
+.me{position:relative}
+.rwb{position:absolute;right:calc(100% + 6px);top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--dim);background:var(--pop);border:1px solid var(--line2);box-shadow:var(--shadow)}
+.rwb svg{width:15px;height:15px}
+.rwb.on{color:var(--text)}
+/* new: what a rewind would take out, dimmed under a dashed cut */
+.cut{display:flex;align-items:center;gap:10px;margin:0 0 16px;font-size:11.5px;color:var(--faint)}
+.cut::before,.cut::after{content:"";flex:1;border-top:1px dashed var(--line2)}
+.cut b{color:var(--dim);font-weight:650}
+.gone{opacity:.3}
+/* the popovers anchored at the arrow */
+.pop.at{position:absolute;bottom:auto;top:calc(100% + 8px);right:0;left:auto;width:300px}
+.pop.at.up{top:auto;bottom:calc(100% + 8px)}
+.pop .ic{width:28px;height:28px;border-radius:8px;background:var(--surface2);display:grid;place-items:center;color:var(--dim);flex:none}
+.pop .ic svg{width:14px;height:14px}
+.pop .item.pri .ic{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
+.pop .item small{font-size:11px;color:var(--faint);white-space:nowrap}
+.pop .item:hover{background:var(--surface2)}
+.pop .hd{padding:4px 8px 6px;font-size:11.5px;color:var(--faint);display:flex}.pop .hd b{color:var(--text);font-weight:650;margin-right:6px}
+.ftog{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:var(--dim)}
+.ftog small{margin-left:auto;color:var(--faint)}
+.sw{width:24px;height:14px;border-radius:8px;background:var(--line2);position:relative;flex:none}
+.sw::after{content:"";position:absolute;left:2px;top:2px;width:10px;height:10px;border-radius:50%;background:var(--faint)}
+.sw.on{background:color-mix(in srgb,var(--accent) 65%,transparent)}.sw.on::after{left:12px;background:#fff}
+.gob{margin:4px 6px 4px;display:flex;justify-content:flex-end;gap:6px}
+.gob button{padding:5px 12px;border-radius:8px;font-weight:700;font-size:12px}
+.gob .p{background:var(--accent);color:var(--btn-ink)}.gob .s{background:var(--surface2);color:var(--dim);font-weight:600}
+/* the strip after a rewind: the existing handoff strip, in its quiet colour */
+.hstrip.rw{background:var(--surface);animation:none}
+.hstrip.rw .t{display:flex;align-items:center;gap:7px}.hstrip.rw .t>span{overflow:hidden;text-overflow:ellipsis}
+.hstrip .ci{color:var(--accent)}
+.hstrip .hc2.u{background:none;color:var(--dim);display:inline-flex;align-items:center;gap:5px}
+.hstrip .hc2.u svg{width:12px;height:12px}
+/* the outline panel's rows, with the rewind action */
+.olrow{position:relative}
+.olrow .ra{margin-left:auto;align-self:center;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:650;color:var(--accent);padding:3px 8px;border-radius:7px;background:color-mix(in srgb,var(--accent) 13%,transparent)}
+.olrow .ra svg{width:12px;height:12px}
+.olrow.gone{opacity:.35}
+.olcut{display:flex;align-items:center;gap:8px;margin:2px 10px;font-size:11px;color:var(--faint)}.olcut::before,.olcut::after{content:"";flex:1;border-top:1px dashed var(--line2)}
+.olbar{border-top:1px solid var(--line);padding:10px;display:flex;gap:6px;align-items:center;font-size:12px;color:var(--faint)}
+.olbar b{color:var(--text);font-weight:650}
+.olbar button{padding:5px 11px;border-radius:8px;font-weight:700;font-size:12px}
+.olbar .p{background:var(--accent);color:var(--btn-ink);margin-left:auto}.olbar .s{background:var(--surface2);color:var(--dim);font-weight:600}
+
+details.uh{max-width:1320px;margin:44px auto 0;border-top:1px solid var(--line);padding-top:16px;font-size:12.5px;color:var(--dim)}
+details.uh summary{cursor:pointer;color:var(--text);font-weight:650;font-size:13px}
+details.uh ul{margin:8px 0 0;padding-left:18px}details.uh li{margin:4px 0}
+details.uh code{font-size:11.5px;color:var(--text)}
+.note{max-width:1320px;margin:24px auto 0;border-top:1px solid var(--line);padding-top:18px;font-size:13px;color:var(--dim)}
+.note h3{font-size:13px;margin:0 0 6px;color:var(--text)}.note ol{margin:0;padding-left:18px}.note li{margin:3px 0}
+.frame .composer{position:relative}
+/* Esc Esc: the list of your prompts, above the message box, then the same menu for the one picked */
+.pop.rpk{left:22px;right:22px;width:auto;max-width:700px;margin:0 auto;bottom:calc(100% - 2px);max-height:none}
+.rpk .item{min-height:32px}
+.rpk .item{padding:7px 8px}.rpk .item .nm b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rpk .item.sel{background:var(--surface2)}.rpk .item.now .nm b{color:var(--faint);font-style:italic}
+.rpk .item .fc{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--faint)}.rpk .item .fc svg{width:11px;height:11px}
+.rpk .item .k{width:40px;text-align:right;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.rpk .hd kbd{font:inherit;padding:0 5px;border-radius:4px;box-shadow:0 0 0 1px var(--line2);margin-left:4px;color:var(--dim)}
+.pop.rpk .hd{display:flex!important;flex-direction:row;flex:none;align-items:center;justify-content:space-between;text-align:left}.pop.rpk .hd b{display:inline;margin:0}.rpk .hd span{margin-left:auto}
+.bk{display:flex;align-items:center;gap:8px;padding:4px 6px 8px;border-bottom:1px solid var(--line);margin-bottom:5px;font-size:12px;color:var(--dim)}
+.bk button{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--faint);background:var(--surface2);flex:none}.bk button svg{width:12px;height:12px;transform:scaleX(-1)}
+.bk b{flex:1;min-width:0;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bk small{color:var(--faint);font-size:11px;white-space:nowrap}
+.olw{position:relative}.olw .pop.at{top:calc(100% + 2px);right:6px;width:290px}
+.olw .olrow{padding-right:40px}
+.orb{position:absolute;right:8px;top:8px;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--dim);background:var(--pop);border:1px solid var(--line2)}
+.orb svg{width:13px;height:13px}.orb.on{color:var(--text);border-color:var(--faint)}
+.olrow.hov{background:var(--surface)}
+.sgr .olrow.old{cursor:pointer}
+.spec{font-size:11.5px;color:var(--faint);margin:8px 0 0}.spec b{color:var(--dim);font-weight:600}
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:20px}
+.arr{font-size:11.5px;color:var(--faint);font-weight:600;margin:0 0 6px}
+.ic3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:1320px;margin:0 auto}
+.icard{border-radius:14px;box-shadow:0 0 0 1px var(--line2);padding:18px 18px 16px;background:var(--bg)}
+.icard h2{font-size:14px;margin:0 0 2px;font-weight:700;display:flex;gap:8px;align-items:center}
+.icard h2 em{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);padding:1px 6px;border-radius:5px}
+.icard>p{margin:0 0 14px;color:var(--faint);font-size:12px;min-height:34px}
+.bigs{display:flex;gap:18px;align-items:center;margin:0 0 18px}
+.bigs span{width:64px;height:64px;border-radius:16px;background:var(--surface);display:grid;place-items:center;color:var(--text)}
+.bigs span svg{width:30px;height:30px;stroke-width:1.6}
+.bigs span.s{width:36px;height:36px;border-radius:9px}.bigs span.s svg{width:16px;height:16px;stroke-width:1.75}
+.bigs span.xs{width:24px;height:24px;border-radius:7px;background:none}.bigs span.xs svg{width:13px;height:13px}
+.spot{font-size:11px;color:var(--faint);font-weight:600;margin:14px 0 6px}
+.icard .me{margin:0 0 0 auto;max-width:78%;font-size:13.5px}
+.icard .me .rwb{position:absolute}
+.icard .pop{position:static;width:100%;box-shadow:none}
+.icard .olw{border-radius:9px}
+.icard .hstrip{margin:0;padding-bottom:5px;border-radius:12px;border-bottom:1px solid var(--line2);max-width:none}
+.vs{display:flex;gap:10px;align-items:center;font-size:11.5px;color:var(--faint);margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.vs span{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--surface);color:var(--dim)}.vs svg{width:14px;height:14px}
+.km{max-width:1320px;margin:40px auto 0;border-top:1px solid var(--line);padding-top:20px}
+.km h2{font-size:14px;margin:0 0 2px;font-weight:700}.km>p{margin:0 0 14px;color:var(--faint);font-size:12.5px}
+.kgrid{display:grid;grid-template-columns:repeat(2,minmax(0,420px));gap:28px;padding-left:260px}
+.kcol .olw{border-radius:9px;margin-bottom:6px}
+.kcol .pop{position:relative;width:290px;overflow:visible!important;max-height:none!important;margin-left:auto;bottom:auto;left:auto}
+.kcol .pop .item{padding:6px 8px}.kcol .pop .item .nm b{font-weight:500}
+.kcol .pop .item .ki{width:16px;display:grid;place-items:center;color:var(--faint);flex:none}.kcol .pop .item .ki svg{width:14px;height:14px}
+.kcol .pop .item small{color:var(--faint);font-size:11px}
+.kcol .pop .item.sub::after{content:"›";color:var(--faint);margin-left:4px}
+.kcol .pop .item.off{opacity:.4}
+.kcol .pop .item.new b::after{content:"new";margin-left:7px;font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);padding:1px 5px;border-radius:4px}
+.sub2{position:absolute!important;left:auto!important;right:calc(100% + 4px)!important;top:36px!important;bottom:auto!important;width:250px!important}
+.keb{position:absolute;right:8px;top:9px;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;color:var(--text);background:var(--surface2)}
+.keb svg{width:14px;height:14px}
+</style></head><body>
+<div class="top"><h1>A rewind icon</h1><span>round 48 · not a circular arrow, which reads as refresh or retry</span><button class="tg" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<div class="lede">Each icon in every spot it appears: beside a prompt, first in the menu, on an outline row, and in the strip.</div>
+<div class="ic3" id="ic3"></div>
+<section class="km"><h2>The outline’s ⋮ menu</h2><p>Clicking a row still goes there; ⋮ appears on the row you point at. Earlier sessions get the same menu without Rewind.</p><div class="kgrid" id="kgrid"></div></section>
+<div class="note"><h3>Open questions</h3><ol>
+<li>Which more actions join Go to, Rewind and Copy?</li>
+<li>Should the arrow beside a prompt in the chat become this ⋮ menu too, or stay a single rewind button?</li>
+</ol></div>
+<script>
+const I={ch:'<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>',ed:'<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',ar:'<svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg>',x:'<svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+ old:'<svg viewBox="0 0 24 24"><path d="M4 4v6h6"/><path d="M4.6 10A8 8 0 1 1 6.3 17.7"/></svg>',
+ retry:'<svg viewBox="0 0 24 24"><path d="M20 4v6h-6"/><path d="M19.4 10A8 8 0 1 0 17.7 17.7"/></svg>'};
+const OPTS=[
+ ['A','Rewind','The media rewind mark: two triangles pointing back. Says “go back” and nothing else, and matches the word Rewind.',true,
+  '<svg viewBox="0 0 24 24"><path d="M11 6.5v11L3.5 12z"/><path d="M20.5 6.5v11L13 12z"/></svg>'],
+ ['B','Back to here','An arrow up to a line: return to this point. The line is the same cut the menu previews. Could read as “scroll to top”.',false,
+  '<svg viewBox="0 0 24 24"><path d="M5 4h14"/><path d="M12 20V9"/><path d="m7 13 5-5 5 5"/></svg>'],
+ ['C','Turn back','A U-turn arrow, as undo is drawn: take back what came after. Could read as undo or reply.',false,
+  '<svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>']];
+document.getElementById('ic3').innerHTML=OPTS.map(([k,t,d,rec,svg])=>`<div class="icard"><h2>${k} · ${t}${rec?'<em>Recommended</em>':''}</h2><p>${d}</p>
+ <div class="bigs"><span>${svg}</span><span class="s">${svg}</span><span class="xs">${svg}</span></div>
+ <div class="spot">beside a prompt</div><div style="padding-left:40px"><div class="me">Make it also do the filtred rows<button class="rwb on">${svg}</button></div></div>
+ <div class="spot">the menu</div><div class="pop"><button class="item pri"><span class="ic">${svg}</span><span class="nm"><b>Rewind to here</b></span><small>−38k</small></button><button class="item"><span class="ic">${I.ed}</span><span class="nm"><b>Rewind and edit this prompt</b></span></button><button class="item"><span class="ic">${I.ar}</span><span class="nm"><b>Hand off from here</b></span><small>new session</small></button></div>
+ <div class="spot">an outline row</div><div class="olw"><button class="olrow hov"><time>10:05</time><span class="tx2"><b>Make it also do the filtred rows</b><span class="mt">4 files · 3 commands</span></span></button><button class="orb on">${svg}</button></div>
+ <div class="spot">the strip</div><div class="hstrip rw"><span class="t">${svg.replace('<svg','<svg class="ci"')}<b>Rewound</b><span> · 3 turns out</span></span><button class="hc2">Edit</button><button class="hgo">Hand off</button></div>
+ <div class="vs"><span>${I.old}</span><span>${I.retry}</span>the circular arrow now, beside what retry looks like elsewhere</div></div>`).join('');
+
+const RW=OPTS[0][4], K='<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="12" cy="19" r="1.3"/></svg>';
+const ic={go:'<svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg>',cp:'<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg>',
+ box:'<svg viewBox="0 0 24 24"><rect x="3" y="12" width="18" height="8" rx="3"/><path d="M12 3v6M9 6l3 3 3-3"/></svg>',df:'<svg viewBox="0 0 24 24"><path d="M12 4v8M8 8h8M8 19h8"/></svg>',
+ fk:'<svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M6 7v2a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V7M12 12v5"/></svg>',
+ ed:'<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',ho:'<svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg>'};
+const it=(i,t,m='',c='')=>`<button class="item ${c}"><span class="ki">${i}</span><span class="nm"><b>${t}</b></span>${m?`<small>${m}</small>`:''}</button>`;
+const rowK=(t,x,m)=>`<div class="olw"><button class="olrow hov"><time>${t}</time><span class="tx2"><b>${x}</b><span class="mt">${m}</span></span></button><span class="keb">${K}</span></div>`;
+const menu=(cur)=>`<div class="pop">${it(ic.go,'Go to')}${cur?it(RW,'Rewind','','sub'):''}<div class="sep"></div>${it(ic.cp,'Copy')}${cur?`<div class="pop sub2">${it(RW,'Rewind to here','−38k')}${it(ic.ed,'Rewind and edit')}${it(ic.ho,'Hand off from here')}<div class="sep"></div><div class="ftog"><span class="sw on"></span>Undo file edits<small>4 files</small></div></div>`:''}</div>`;
+document.getElementById('kgrid').innerHTML=`<div class="kcol"><div class="spot">this session · Rewind open</div>${rowK('10:05','Make it also do the filtred rows','4 files · 3 commands')}${menu(true)}</div>
+<div class="kcol"><div class="spot">an earlier session · no Rewind</div>${rowK('Mon','Sketch the data model for exports','1 file')}${menu(false)}</div>`;
+document.querySelectorAll('.kcol .item.sub').forEach(b=>b.style.background='var(--surface2)');
+</script></body></html>

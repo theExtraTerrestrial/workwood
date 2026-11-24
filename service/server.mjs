@@ -9,8 +9,8 @@ import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as src from './sources.mjs';
-import { readTranscript, outputFromTranscript, PICTURE_ROOT, PICTURE_ID } from './transcript.mjs';
-import { runs, startTurn, answer, setMode, stop, stopStep, liveOutput, taskOutput, publicRun, listCommands, addToTurn, unqueue, sendNow, contextOf } from './runs.mjs';
+import { readTranscript, outputFromTranscript, forgetEarly, PICTURE_ROOT, PICTURE_ID } from './transcript.mjs';
+import { runs, startTurn, answer, setMode, stop, stopStep, liveOutput, taskOutput, publicRun, listCommands, addToTurn, unqueue, sendNow, contextOf, rewindFilesOf } from './runs.mjs';
 import { terms, openTerm, attach, typeInto, resize, closeTerm, closeAll } from './terminals.mjs';
 import { changesFor, changeOf } from './changes.mjs';
 import * as home from './home.mjs';
@@ -19,6 +19,7 @@ import * as usage from './usage.mjs';
 import * as prof from './profiles.mjs';
 import * as update from './update.mjs';
 import * as ho from './handoff.mjs';
+import * as rw from './rewind.mjs';
 import { createRequire } from 'node:module';
 
 const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui');
@@ -329,6 +330,19 @@ async function listNew(id, cwd, title, profile) {
  * Hands a session off: its handoff is written (by the model picked, or by Auto), and a new session starts from it, in
  * the same folder and on the same profile, continuing the thread. Answers at once; events tell how it goes.
  */
+// After a rewind or its undo the history file is shorter or longer than anything read of it: read it afresh.
+function rewound(s) {
+  forgetEarly(s.file); counted.delete(s.id);
+  const run = runs.get(s.id);
+  if (run) { run.context = null; run.endedAt = 0; }   // the last turn in memory may be one that was taken out
+  setTimeout(() => { refreshAll(); }, 100); pushState();
+}
+const rewoundOf = id => { const k = rw.kept(id); return k ? { turns: k.turns, undone: k.undone, text: k.text, filesError: k.filesError || null } : null; };
+// Waits until a file has stopped growing for a moment (up to three seconds).
+async function settled(file) {
+  let last = -1;
+  for (let i = 0; i < 20; i++) { const n = fss.statSync(file).size; if (n === last) return; last = n; await new Promise(r => setTimeout(r, 150)); }
+}
 async function handOff(s, b) {
   const pref = ho.MODELS.includes(b.model) ? b.model : prefs.handoff.model, effort = ho.EFFORTS.includes(b.effort) ? b.effort : prefs.handoff.effort;
   const run = runs.get(s.id), profile = run?.profile || s.profile, use = b.use || {};
@@ -336,7 +350,7 @@ async function handOff(s, b) {
   emit('handoff', { sessionId: s.id, state: 'writing', model: pref, effort }); pushState();
   try {
     const env = await src.envForProfile(profile, state.profiles);
-    const c = await ho.collect(s.file, s.cwd), model = ho.pickModel(pref, c.stats);
+    const c = await ho.collect(s.file, s.cwd, typeof b.at === 'string' ? b.at : null), model = ho.pickModel(pref, c.stats);
     if (handing.get(s.id)) handing.get(s.id).model = model;
     emit('handoff', { sessionId: s.id, state: 'writing', model, effort, auto: pref === 'auto' });
     const sections = await ho.writeSections({ digest: c.digest, previous: ho.readHandoff(s.id)?.sections || null, model, effort, cwd: s.cwd, env, claude: state.claude });
@@ -489,7 +503,7 @@ async function api(req, res, url) {
     // come back as idle beside items from before it ended (the next read, or the event stream, brings the rest).
     const now = { context: run?.context || t.context, model: run?.builder.model || t.model, effort: run?.effort || t.effort, mode: run?.mode || t.mode || null, run: publicRun(run) };
     const next = [...prevOf].find(([, p]) => p === s.id)?.[0], cont = next && state.sessions.find(x => x.id === next);   // handed off: where the thread goes on
-    return send(res, 200, { ...t, place, ...now, thread: await threadInfo(s.id), handing: handing.get(s.id) || null, continued: cont ? { id: cont.id, n: chainOf(cont.id).length } : null, defaults: await src.defaultsFor(s.cwd, run?.profile || s.profile, state.profiles) });
+    return send(res, 200, { ...t, place, ...now, thread: await threadInfo(s.id), handing: handing.get(s.id) || null, rewound: rewoundOf(s.id), continued: cont ? { id: cont.id, n: chainOf(cont.id).length } : null, defaults: await src.defaultsFor(s.cwd, run?.profile || s.profile, state.profiles) });
   }
   if (parts[0] === 'voice') {
     if (req.method === 'GET') { if (url.searchParams.has('warm')) voice.warm(); return send(res, 200, voice.status); }
@@ -643,7 +657,7 @@ async function api(req, res, url) {
     const profile = state.profiles.find(p => p.name === b.profile)?.name || run?.profile || s.profile;
     const env = await src.envForProfile(profile, state.profiles);
     let content; try { content = await src.takeAttachments(b.text, b.attachments); } catch (e) { return send(res, 400, { error: e.message }); }
-    touch(s.id); unread.delete(s.id); keep();
+    touch(s.id); unread.delete(s.id); keep(); rw.forget(s.id);   // the session goes on: a rewind before stays
     await startTurn({ sessionId: s.id, cwd: s.cwd, profile, env, text: b.text || '', content, readable: [src.ATTACH_ROOT], model: b.model, effort: b.effort, mode: modeOf(b.mode), claude: state.claude, emit, transcript: fileOf(s.cwd), thread: threadFor(s.id) });
     pushState();
     return send(res, 200, { ok: true });
@@ -657,8 +671,39 @@ async function api(req, res, url) {
     if (terms.has(s.id) || (state.live.get(s.id) && state.live.get(s.id).status !== 'idle')) return send(res, 409, { error: 'This session is open in a terminal.' });
     if (!s.file || !fss.existsSync(s.file)) return send(res, 409, { error: 'This session has no saved history yet.' });
     if ('use' in b && b.use?.mode && modeOf(b.use.mode) === undefined) return send(res, 400, { error: 'No such mode.' });
-    handOff(s, b);
+    rw.forget(s.id); handOff(s, b);
     return send(res, 200, { ok: true });
+  }
+  if (parts[0] === 'sessions' && (parts[2] === 'rewind' || parts[2] === 'unrewind')) {   // take back a prompt and all after it, or put them back
+    const s = state.sessions.find(x => x.id === parts[1]);
+    if (!s) return send(res, 404, { error: 'No such session.' });
+    const run = runs.get(s.id);
+    if (handing.has(s.id)) return send(res, 409, { error: 'The handoff is being written.' });
+    if (run && (run.status === 'working' || run.status === 'waiting' || run.lingering)) return send(res, 409, { error: 'This session is still working. Rewind once it is over.' });
+    await refreshLive();   // a Claude Code open on it would go on from the turns in its memory, and write them back
+    if (terms.has(s.id) || state.live.get(s.id)) return send(res, 409, { error: 'This session is open in a terminal. Close it there first.' });
+    if (!s.file || !fss.existsSync(s.file)) return send(res, 409, { error: 'This session has no saved history yet.' });
+    if (parts[2] === 'unrewind') {
+      try { await rw.undo(s.id); } catch (e) { return send(res, 409, { error: e.message }); }
+      rewound(s); return send(res, 200, { ok: true });
+    }
+    const uid = String(b.at || '');
+    if (!/^[\w-]{8,}$/.test(uid)) return send(res, 400, { error: 'Pick a message to rewind to.' });
+    const c = await rw.findCut(s.file, uid);
+    if (!c) return send(res, 409, { error: 'That message is no longer in this session.' });
+    let files = [], undone = 0, filesError = null;
+    if (b.files !== false && c.edits.length) {
+      try {
+        const env = await src.envForProfile(run?.profile || s.profile, state.profiles);
+        const r = await rewindFilesOf({ sessionId: s.id, cwd: s.cwd, env, claude: state.claude, uid, before: async paths => { files = await rw.snapshot(paths); } });
+        if (r.canRewind === false) { files = []; filesError = r.error || 'Claude Code kept no copies of them.'; } else undone = r.filesChanged.length;
+      } catch (e) { files = []; filesError = String(e.message).split('\n')[0]; }
+      await settled(s.file);   // Claude Code writes a few lines as it closes
+    }
+    const info = { turns: c.turns, undone, text: c.text, filesError };
+    await rw.cut(s.id, s.file, c, { ...info, files });
+    rewound(s);
+    return send(res, 200, info);
   }
   if (parts[0] === 'sessions' && parts[2] === 'answer') { answer(parts[1], b); pushState(); return send(res, 200, { ok: true }); }
   if (parts[0] === 'sessions' && parts[2] === 'unqueue') return send(res, 200, { items: unqueue(parts[1], b.ids) });
@@ -717,7 +762,7 @@ async function api(req, res, url) {
       } else if (live) return send(res, 409, { error: 'This session is open in a terminal. Close it there before deleting it.' });
       await src.deleteSession(s.file, s.id);
       for (const [c, p] of prevOf) if (p === s.id) { if (prevOf.has(s.id)) prevOf.set(c, prevOf.get(s.id)); else prevOf.delete(c); }   // the thread closes over the gap
-      prevOf.delete(s.id);
+      prevOf.delete(s.id); rw.forget(s.id);
       deleted.add(s.id); runs.delete(s.id); dropAuto(s.id); workPaths.delete(s.id); dirsBySession.delete(s.id);
       done.delete(s.id); own?.delete(s.id); unread.delete(s.id); await keep();
       state.sessions = state.sessions.filter(x => x.id !== s.id);

@@ -118,14 +118,14 @@ async function turn(prompt, said = prompt, uuid) {
   turnUuid = uuid || null;
   record({ type: 'session-owner', accountUuid: identity.accountUuid });
   if (/\bMODEWAIT\b/.test(prompt)) {  // works until the mode is changed (or 5 s), then says which mode it is in
-    record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: said } });
+    record({ type: 'user', uuid: turnUuid || randomUUID(), message: { role: 'user', content: said } });
     say([{ type: 'tool_use', id: 'toolu_mw', name: 'Bash', input: { command: 'make slowly', description: 'Build slowly' } }]);
     await new Promise(r => { modeChanged = r; setTimeout(r, 5000); }); modeChanged = null; stepDone('toolu_mw');
     text('Mode now: ' + mode);
     return finish('ok');
   }
   if (/\bLISTEN\b/.test(prompt)) {     // works on something long, and takes what you write meanwhile into the same turn
-    record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: said } });
+    record({ type: 'user', uuid: turnUuid || randomUUID(), message: { role: 'user', content: said } });
     say([{ type: 'tool_use', id: 'toolu_long', name: 'Bash', input: { command: 'make everything', description: 'Build everything' } }]);
     await new Promise(r => setTimeout(r, 700)); stepDone('toolu_long');
     const m = inbox.shift() || await new Promise(r => { hear = r; });
@@ -135,7 +135,7 @@ async function turn(prompt, said = prompt, uuid) {
   }
   if (/\bCHATTER\b/.test(prompt)) {    // a long reply, then a step, then three short replies with steps between: time to scroll up and be told of them
     // (TALL: the first of them is short and the next one long and a while later, so the thread grows after you went to look)
-    record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: said } });
+    record({ type: 'user', uuid: turnUuid || randomUUID(), message: { role: 'user', content: said } });
     const wait = ms => new Promise(r => setTimeout(r, ms));
     text(Array.from({ length: 40 }, (_, i) => `Chatter opening, paragraph ${i + 1}.`).join('\n\n'));
     await wait(1500);
@@ -149,14 +149,14 @@ async function turn(prompt, said = prompt, uuid) {
     return finish('ok');
   }
   if (/\bSTEPS\b/.test(prompt)) {      // one slow step: what you write meanwhile waits for its end
-    record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: said } });
+    record({ type: 'user', uuid: turnUuid || randomUUID(), message: { role: 'user', content: said } });
     say([{ type: 'tool_use', id: 'toolu_slow', name: 'Bash', input: { command: 'make slowly', description: 'Build slowly' } }]);
     await new Promise(r => setTimeout(r, 4000)); stepDone('toolu_slow');
     text('Steps done.');
     return finish('ok');
   }
   if (/\bCOMMANDS\b/.test(prompt)) {   // a command that works, one that fails, then one that runs until you stop it on its own
-    record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: said } });
+    record({ type: 'user', uuid: turnUuid || randomUUID(), message: { role: 'user', content: said } });
     say([{ type: 'tool_use', id: 'toolu_ok', name: 'Bash', input: { command: 'npm ci', description: 'Install what it needs' } }]);
     stepDone('toolu_ok', { content: 'added 3 packages' });
     say([{ type: 'tool_use', id: 'toolu_fail', name: 'Bash', input: { command: 'node --test tests/ 2>&1 | grep "<fail>"', description: 'Run the tests' } }]);
@@ -173,7 +173,7 @@ async function turn(prompt, said = prompt, uuid) {
     return finish('ok');
   }
   if (/\bBACKGROUND\b/.test(prompt)) {   // an agent with steps of its own, then a dev server and a monitor left running after the turn
-    record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: said } });
+    record({ type: 'user', uuid: turnUuid || randomUUID(), message: { role: 'user', content: said } });
     const dir = path.join(home, '.tasks', sessionId); fs.mkdirSync(dir, { recursive: true });
     say([{ type: 'tool_use', id: 'toolu_fg', name: 'Agent', input: { description: 'Map the code', subagent_type: 'Explore', prompt: 'Find the readme.' } }]);
     sys('task_started', { task_id: 'task_fg', tool_use_id: 'toolu_fg', description: 'Map the code', task_type: 'local_agent', subagent_type: 'Explore', is_backgrounded: false });
@@ -217,7 +217,7 @@ async function turn(prompt, said = prompt, uuid) {
     return;
   }
   if (/\bQUEUE\b/.test(prompt)) {      // does not look up until the turn is over: what you write runs as the next turn
-    record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: said } });
+    record({ type: 'user', uuid: turnUuid || randomUUID(), message: { role: 'user', content: said } });
     say([{ type: 'tool_use', id: 'toolu_busy', name: 'Bash', input: { command: 'make part', description: 'Build one part' } }]);
     await new Promise(r => setTimeout(r, 900));
     text('First part done.');
@@ -246,7 +246,7 @@ async function turn(prompt, said = prompt, uuid) {
     else idle = setTimeout(() => process.exit(0), 400);
     return;
   }
-  record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: said } });
+  record({ type: 'user', uuid: turnUuid || randomUUID(), message: { role: 'user', content: said } });
   // the handoff writer: reads the session it was given and answers with the four sections (HANDOFF_FAILS: a limit instead)
   if (prompt.includes('<session>') && /Write the handoff\.$/.test(prompt.trim())) {
     log('writer ' + (prompt.includes('<previous-handoff>') ? 'with previous ' : '') + 'saw ' + JSON.stringify((prompt.match(/You: [^\n]*/g) || []).map(l => l.slice(5))));
@@ -294,6 +294,15 @@ async function turn(prompt, said = prompt, uuid) {
   if (/\bHUGE\b/.test(prompt)) {
     const r = await ask('Write', { file_path: path.join(cwd, 'huge.rb'), content: Array.from({ length: 400 }, (_, i) => `line ${i + 1} ` + 'x'.repeat(i % 7 ? 20 : 300)).join('\n') }, []);
     text(r.behavior === 'allow' ? 'WROTE' : 'DENIED ' + r.message);
+    return finish('ok');
+  }
+  if (/\bWRITES\b/.test(prompt)) {   // writes a file with the Write tool, and keeps a copy of it from before, as checkpointing does
+    const f = path.join(cwd, /\bWRITES\s+(\S+)/.exec(prompt)?.[1] || 'draft.md');
+    const before = fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null;
+    say([{ type: 'tool_use', id: 'toolu_w' + Date.now(), name: 'Write', input: { file_path: f, content: 'written for: ' + prompt } }]);
+    fs.writeFileSync(f, 'written for: ' + prompt);
+    fs.appendFileSync(transcript + '.copies', JSON.stringify({ uid: turnUuid, path: f, before }) + '\n');
+    text('Wrote ' + path.basename(f));
     return finish('ok');
   }
   if (/\bEDIT\b/.test(prompt)) {
@@ -390,6 +399,15 @@ readline.createInterface({ input: process.stdin }).on('close', () => setTimeout(
     if (m.request.subtype === 'get_context_usage') return ok({ model: 'claude-test', totalTokens: 51000, maxTokens: 167000, rawMaxTokens: 200000, percentage: 26, categories: [
       { name: 'Messages', tokens: 30000, kind: 'used' }, { name: 'System tools', tokens: 16000, kind: 'used' }, { name: 'System prompt', tokens: 5000, kind: 'used' },
       { name: 'Free space', tokens: 116000, kind: 'free' }, { name: 'Autocompact buffer', tokens: 33000, kind: 'buffer' }], mcp_tools: [] });
+    if (m.request.subtype === 'rewind_files') {   // the copies kept for the prompt named and every prompt after it
+      const order = fs.existsSync(transcript) ? fs.readFileSync(transcript, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)).filter(x => x.type === 'user').map(x => x.uuid) : [];
+      const from = order.indexOf(m.request.user_message_id), later = new Set(from < 0 ? [] : order.slice(from));
+      const copies = fs.existsSync(transcript + '.copies') ? fs.readFileSync(transcript + '.copies', 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)).filter(c => later.has(c.uid)) : [];
+      log(`rewind files ${copies.length}${m.request.dry_run ? ' dry' : ''}`);
+      if (from < 0) return ok({ canRewind: false, error: 'No such message.' });
+      if (!m.request.dry_run) for (const c of copies.reverse()) { if (c.before == null) fs.rmSync(c.path, { force: true }); else fs.writeFileSync(c.path, c.before); }
+      return ok({ canRewind: true, filesChanged: [...new Set(copies.map(c => c.path))], insertions: 0, deletions: 0 });
+    }
     if (m.request.subtype === 'set_permission_mode') { mode = m.request.mode; log('mode ' + mode); ok(); sys('status', { status: null, permissionMode: mode }); modeChanged?.(); return; }
     if (m.request.subtype === 'stop_task') { ok(); log('stopped task ' + m.request.task_id); const f = stopTask; if (f?.length) f(m.request.task_id); else { stopTask = null; f?.(); } return; }
     if (m.request.subtype === 'interrupt') { ok(); log('interrupted'); out({ type: 'result', subtype: 'error_during_execution', is_error: true, duration_ms: 500, num_turns: 1, session_id: sessionId, result: '', usage: {}, modelUsage: {}, uuid: randomUUID() }); return setTimeout(() => process.exit(0), 20); }
@@ -407,6 +425,6 @@ readline.createInterface({ input: process.stdin }).on('close', () => setTimeout(
     out({ type: 'system', subtype: 'init', session_id: sessionId, cwd, tools: [], mcp_servers: [], model: 'claude-test', permissionMode: mode, slash_commands: [], apiKeySource: 'none', output_style: 'default', uuid: randomUUID() });
     const c = m.message.content;
     if (Array.isArray(c) && c.some(b => b.type === 'image')) log(`pictures=${c.filter(b => b.type === 'image').length} readable=${args.filter((a, i) => a.startsWith('--add-dir') ).length ? 'yes' : 'no'}`);
-    turn(typeof c === 'string' ? c : c.map(b => b.text || '').join(''), c);
+    turn(typeof c === 'string' ? c : c.map(b => b.text || '').join(''), c, m.uuid);
   }
 });

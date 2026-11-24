@@ -82,7 +82,8 @@ const CORRECTION = /^(no\b|nope|not\b|don'?t|do not|stop|instead|actually|wrong|
  * One pass over a session's history. `facts`: what goes to the new session word for word. `digest`: the session as
  * lines a model can read, without the bulk of what tools printed. `stats`: how much went on, for picking a model.
  */
-export async function collect(file, cwd = null) {
+/** `stopAt`: a prompt's id; the conversation is read up to it, leaving it and all after it out (a handoff from an earlier point). */
+export async function collect(file, cwd = null, stopAt = null) {
   const facts = { messages: [], answers: [], files: [], failed: [] }, lines = [], files = new Set();
   const asks = new Map(), cmds = new Map(), commits = [], fails = [], wins = new Map(); let step = 0;
   // a path a command wrote, kept when it is a file of the project that exists
@@ -95,6 +96,7 @@ export async function collect(file, cwd = null) {
   for await (const line of rl) {
     if (!line.includes('"type":"user"') && !line.includes('"type":"assistant"')) continue;
     let m; try { m = JSON.parse(line); } catch { continue; }
+    if (stopAt && m.uuid === stopAt) break;
     if (m.isSidechain || m.isMeta || !m.message) continue;
     const ts = m.timestamp || null, c = m.message.content;
     if (m.type === 'user') {

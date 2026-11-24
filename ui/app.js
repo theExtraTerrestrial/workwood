@@ -19,6 +19,8 @@ const P={
   archive:'<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/>',
   trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   dots:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+  kebab:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
+  rewind:'<path d="M11 6.5v11L3.5 12z"/><path d="M20.5 6.5v11L13 12z"/>',
   file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
   cog:'<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
   gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
@@ -275,9 +277,9 @@ async function openSession(id,sending){
   if(V.sel!==id){V.qLocal=[];V.qNow=null}
   resetJump();
   V.isNew=false;V.sel=id;V.place=null;V.ans=null;V.skOpen=false;V.q.auto=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:'',mode:''};V.loading=true;V.dismissed=null;V.openTools.clear();V.shutTools.clear();V.codeOpen.clear();V.codeShut.clear();V.outOpen.clear();V.outFull.clear();V.cmdAll.clear();V.subAll.clear();V.repAll.clear();V.task=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
-  V.thread=null;V.handing=null;V.cont=null;V.older=new Map();V.shown=0;V.focus=null;V.hopen.clear();V.olOpen=new Set([id]);
+  V.thread=null;V.handing=null;V.rewound=null;V.rw=null;V.rp=null;V.cont=null;V.older=new Map();V.shown=0;V.focus=null;V.hopen.clear();V.olOpen=new Set([id]);
   render();
-  try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.thread=d.thread||null;V.handing=d.handing||null;V.cont=d.continued||null;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.place=d.place||null;V.used={model:d.model||'',effort:d.effort||'',mode:d.mode||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||'',mode:d.defaults?.mode||''}}
+  try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.thread=d.thread||null;V.handing=d.handing||null;V.rewound=d.rewound||null;V.cont=d.continued||null;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.place=d.place||null;V.used={model:d.model||'',effort:d.effort||'',mode:d.mode||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||'',mode:d.defaults?.mode||''}}
   catch(e){oops(e.message)}
   V.loading=false;render();toBottom(true);loadChanges();
   if(V.sel===id&&V.thread)showEarlier();   // the session before shows above this one, dimmed
@@ -391,19 +393,31 @@ function answeredCard(it){
   return `<div class="ans ${n>1?'stack':''}" data-ans="${esc(key)}"><div class="steps2">${qs.map((x,k)=>`<button class="qhd ${k===at?'':'off'}" data-astep="${k}">${esc(x.head||'Question '+(k+1))}</button>`).join('')}<span class="cnt">${n>1?`${at+1} of ${n} · `:''}Answered</span></div>
     ${qs.map((x,k)=>`<div class="apage" ${k===at?'':'hidden'}>${x.q?`<div class="aq">${esc(x.q)}</div>`:''}${answer(x)}</div>`).join('')}</div>`;
 }
+// A turn's answers, its text without the steps: what the Copy at the end of its foot line takes.
+const itemsOf=sid=>sid&&sid!==V.sel?V.older.get(sid)?.items||[]:V.items;
+function turnText(n,sid){const L=itemsOf(sid),i=L.findIndex(x=>x.n===n);if(i<0)return'';const out=[];
+  for(let k=i;k>=0&&L[k].kind!=='user';k--)if(L[k].kind==='assistant'&&L[k].text)out.unshift(L[k].text.trim());return out.join('\n\n')}
+// The last answer of a turn that has no foot line (Claude Code seldom writes the time a turn took) gets one, for its Copy.
+function lastWord(it,ix){const L=itemsOf(it.sid);if(L[ix]!==it)return false;
+  for(let k=ix+1;k<L.length&&L[k].kind!=='user';k++)if(L[k].kind==='assistant'||L[k].kind==='done')return false;return true}
+const cpTurn=it=>turnText(it.n,it.sid)?`<button data-cpturn="${it.n}"${it.sid?` data-sid="${esc(it.sid)}"`:''} data-tip="Copy" data-tip-d="This turn's answers, as Markdown">${svg('copy')}</button>`:'';
+// Copy, from your message or an answer: the icon turns into a check for a moment.
+$('thread').addEventListener('click',e=>{const b=e.target.closest('[data-cpmsg],[data-cpturn]');if(!b)return;e.stopPropagation();
+  const sid=b.dataset.sid,t=b.dataset.cpturn?turnText(+b.dataset.cpturn,sid):itemsOf(sid).find(x=>x.n===+b.dataset.cpmsg)?.text||'';
+  Promise.resolve(copyText(t)).then(()=>{b.classList.add('ok');b.innerHTML=svg('check');setTimeout(()=>{if(b.isConnected){b.classList.remove('ok');b.innerHTML=svg('copy')}},1200)}).catch(()=>{})});
 let lbx=null;   // the pictures of the message open in the large view, and which one shows
 // One item of the conversation as the thread draws it. `since`: where the turn in progress starts (its steps are open).
 function itemPart(it,ix,since,latest){
     let h='';
-    if(it.kind==='user'){const at=it.files||[];h=`<div class="me">${picCards((it.pics||[]).map(p=>({url:picUrl(p.id),name:p.name})),it.text||it.skill||(it.files||[]).length)}${it.skill?`<span class="chip">${svg('zap')}${esc(it.skill)}</span>`:''}${esc(it.text)}${at.length?`<div class="matt">${at.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`}
-    else if(it.kind==='assistant')h=`<div class="ai">${md(it.text)}</div>`;
+    if(it.kind==='user'){const at=it.files||[];h=`<div class="me"><span class="macts">${it.uid&&!it.sid&&canRewind()?`<button class="rwb" data-rw="${it.n}" data-tip="Rewind" data-tip-d="Take this message and all after it back" data-tip-k="Esc Esc">${svg('rewind')}</button>`:''}${it.text?`<button data-cpmsg="${it.n}"${it.sid?` data-sid="${esc(it.sid)}"`:''} data-tip="Copy">${svg('copy')}</button>`:''}</span>${picCards((it.pics||[]).map(p=>({url:picUrl(p.id),name:p.name})),it.text||it.skill||(it.files||[]).length)}${it.skill?`<span class="chip">${svg('zap')}${esc(it.skill)}</span>`:''}${esc(it.text)}${at.length?`<div class="matt">${at.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`}
+    else if(it.kind==='assistant')h=`<div class="ai">${md(it.text)}${ix>since||!lastWord(it,ix)?'':`<div class="tfoot afoot">${cpTurn(it)}</div>`}</div>`;
     else if(it.kind==='tools'){const live=ix>since,open=V.openTools.has(it.n)||live&&!V.shutTools.has(it.n);
       h=`<div class="acts ${open?'open':''}"><button class="act" data-tools="${it.n}" data-on="${open?1:''}">${svg('chev-r')}${esc(toolSummary(it.tools))}${stepsTime(it.tools,live)}</button>${open?`<div class="steps">${it.tools.map(x=>stepHtml(x,live)).join('')}</div>`:''}</div>`}
     else if(it.kind==='bg')h=`<div class="bgn ${esc(it.of||'')} ${it.bad?'bad':''}"><i></i>${it.event?`<b>${esc(it.name||'Monitor')}</b><span class="mono">${esc(it.event)}</span>`:`<span>${esc(it.text||'')}</span>`}<time>${clock(it.ts)}</time></div>`;
     else if(it.kind==='answers')h=answeredCard(it);
     else if(it.kind==='skill')h=`<div class="sknote">${svg('zap')}Loaded skill <b>${esc(it.name)}</b></div>`;
     else if(it.kind==='note')h=`<div class="sys">${esc(it.stop?`${it.stop==='auth'?'Paused':'Stopped'} at ${clock(it.ts)} · ${it.stop==='auth'?it.profile+' was signed out':it.stop==='limit'?'limit reached on '+it.profile:(it.text||'something went wrong')}`:it.text)}</div>`;
-    else if(it.kind==='done')h=`<div class="tfoot">Worked for ${dur(it.ms)}${it.ts?' · '+clock(it.ts):''}</div>`;
+    else if(it.kind==='done')h=`<div class="tfoot">Worked for ${dur(it.ms)}${it.ts?' · '+clock(it.ts):''}${cpTurn(it)}</div>`;
     else if(it.kind==='work'&&A.preview)h=workCards(it,latest);
     return h;
 }
@@ -463,7 +477,8 @@ function renderThread(){
   if(answered())parts.push(['working','<div class="w1"><i class="spin"></i><span class="shim">Working</span></div>']);
   else if(V.run?.status==='working')parts.push(['working',`<div class="w1"><i class="spin"></i><span class="shim">${esc(V.run.activity||'Working')}</span><span class="el" id="elapsed"></span></div>`]);
   if(!V.items.length&&!V.run&&!pd)parts.splice(0,parts.length,['empty','<div class="empty">Nothing in this session yet.</div>']);
-  patch(t,parts);tick();fitThumbs();markCards();renderRail();if(V.side==='outline')renderOutline();
+  if(V.rw&&!V.focus){const k=parts.findIndex(([key])=>key==='i'+V.rw.n),r=rwInfo(V.rw.n);if(k>=0&&r)parts.splice(k,0,['rwcut',`<div class="rwcut"><b>${plural(r.turns,'turn')}</b>${r.gain?' · −'+kTok(r.gain):''}</div>`])}
+  patch(t,parts);markGone();tick();fitThumbs();markCards();renderRail();if(V.side==='outline')renderOutline();
 }
 const markCards=()=>document.querySelectorAll('#thread [data-open]').forEach(c=>c.classList.toggle('on',c.dataset.open===V.pv));
 
@@ -531,12 +546,13 @@ function renderOutline(){
   $('olT').textContent=`Conversation · ${plural(all.length,'turn')}`;$('olQ').placeholder='Find in this conversation';$('bOutline').classList.toggle('on',V.side==='outline'&&!V.pv);
   let day=null;
   $('oll').innerHTML=hit.length?hit.map(t=>{const d=dayOf(t.ts),sep=d&&d!==day?`<div class="daysep">${d}</div>`:'';day=d||day;
-    return sep+`<button class="olrow ${t.n===curTurn?'cur':''}" data-turn="${t.n}"><time>${t.ts?clock(t.ts):''}</time><span class="tx2"><b>${esc(t.text.split('\n')[0])}</b><span class="mt">${turnMeta(t,true)}</span></span></button>`}).join('')
+    return sep+`<div class="olw"><button class="olrow ${t.n===curTurn?'cur':''}" data-turn="${t.n}"><time>${t.ts?clock(t.ts):''}</time><span class="tx2"><b>${esc(t.text.split('\n')[0])}</b><span class="mt">${turnMeta(t,true)}</span></span></button><button class="olk" data-olk="${t.n}" data-tip="More">${svg('kebab')}</button></div>`}).join('')
     :`<div class="skl" style="padding:14px 10px">${q?'Nothing in this conversation matches.':'Nothing here yet.'}</div>`}
 $('bOutline').onclick=()=>{V.side=V.side==='outline'&&!V.pv?null:'outline';V.pv=null;V.full=false;$('olQ').value='';renderPanel();if(V.side){markTurn();$('olQ').focus()}};
 $('olClose').onclick=()=>{V.side=null;renderPanel()};
 $('olQ').oninput=renderOutline;
 $('oll').onclick=e=>{
+  const k=e.target.closest('[data-olk]');if(k){e.stopPropagation();return openOlMenu(k)}
   const g=e.target.closest('[data-sg]');if(g){const id=g.dataset.sg;V.olOpen.has(id)?V.olOpen.delete(id):V.olOpen.add(id);if(V.olOpen.has(id)&&id!==V.sel)loadOlder(id).then(renderOutline);renderOutline();return}
   const b=e.target.closest('[data-turn]');if(!b)return;const sid=b.dataset.sid;
   if(!sid||sid===V.sel||threadShown().some(x=>x.id===sid)){if(V.focus){V.focus=null;renderThread()}goTurn(+b.dataset.turn);return}
@@ -633,7 +649,7 @@ function renderThreadOutline(){
     if(q&&ts&&!hits.length)return '';
     const open=!!q||V.olOpen.has(x.id),n=x.now?cur.length:x.turns||0;
     const head=`<button class="sgh" data-sg="${esc(x.id)}"><span class="cv">${svg('chev-r')}</span><span class="tx"><b>Session ${x.n}<time>${x.now?'now':esc(sessDay(x))}</time>${x.now?'<i class="nowdot"></i>':''}</b><small>${q&&hits?`<em>${plural(hits.length,'match')}</em> · `:''}${x.topic?esc(x.topic)+' · ':''}${plural(n,'turn')}</small></span></button>`;
-    const rows=!open?'':!ts?'<div class="skl" style="padding:6px 10px">Loading…</div>':hits.map(t=> `<button class="olrow ${t.n===curTurn?'cur':''}" data-turn="${t.n}" data-sid="${esc(x.id)}"><time>${t.ts?clock(t.ts):''}</time><span class="tx2"><b>${q?hlite(t.text.split('\n')[0],q):esc(t.text.split('\n')[0])}</b><span class="mt">${turnMeta(t,true)}</span></span></button>`).join('');
+    const rows=!open?'':!ts?'<div class="skl" style="padding:6px 10px">Loading…</div>':hits.map(t=> `<div class="olw"><button class="olrow ${t.n===curTurn?'cur':''}" data-turn="${t.n}" data-sid="${esc(x.id)}"><time>${t.ts?clock(t.ts):''}</time><span class="tx2"><b>${q?hlite(t.text.split('\n')[0],q):esc(t.text.split('\n')[0])}</b><span class="mt">${turnMeta(t,true)}</span></span></button><button class="olk" data-olk="${t.n}" data-sid="${esc(x.id)}" data-tip="More">${svg('kebab')}</button></div>`).join('');
     return `<div class="sg ${open?'open':''} ${x.now?'now':''} ${fid===x.id?'look':''}">${head}${open?`<div class="sgr">${rows}</div>`:''}</div>`}).join('');
   $('oll').innerHTML=html||`<div class="skl" style="padding:14px 10px">${q&&olWant?'Looking…':'Nothing in this thread matches.'}</div>`;
 }
@@ -666,10 +682,10 @@ $('mCtx').onclick=e=>{e.stopPropagation();
   else if(e.target.closest('[data-handoff]')&&!isWorking()&&!V.handing){closePops();handOff()}};
 
 /* ---------- handing off: a new session goes on from a handoff, and the old one stays to look back at ---------- */
-async function handOff(text=''){
-  const id=V.sel,p=hPick();if(!id||V.isNew)return false;
+async function handOff(text='',at=null){
+  const id=V.sel,p=hPick();if(!id||V.isNew)return false;V.rewound=null;
   V.handing={model:p.model,effort:p.effort};V.focus=null;renderThread();toBottom(true);renderComposer();
-  try{await api(`sessions/${id}/handoff`,{model:p.model,effort:p.effort,text,use:{model:curModel()||undefined,effort:curEffort()||undefined,mode:V.pick[id]?.mode||undefined}});delete V.hpick[id];return true}
+  try{await api(`sessions/${id}/handoff`,{model:p.model,effort:p.effort,text,...(at?{at}:{}),use:{model:curModel()||undefined,effort:curEffort()||undefined,mode:V.pick[id]?.mode||undefined}});delete V.hpick[id];return true}
   catch(e){if(V.sel===id){V.handing=null;render()}oops(e.message);return false}
 }
 // Who writes the handoff, for this one: picked from the line under the action, or the strip; Settings holds the default.
@@ -686,6 +702,112 @@ function openHPick(anchor){
 $('mHand').onclick=e=>{e.stopPropagation();const b=e.target.closest('[data-hm],[data-he]');if(!b)return;
   V.hpick[V.sel]={...V.hpick[V.sel],...(b.dataset.hm?{model:b.dataset.hm}:{effort:b.dataset.he})};
   const a=$('mHand')._a;$('mHand').hidden=true;renderComposer();if(!$('mCtx').hidden)renderCtx();if(a?.isConnected)openHPick(a)};
+/* ---------- rewind: take back a message of yours and all after it, so it stops filling the context ---------- */
+// Found three ways: the arrow beside a message, Esc Esc (or /rewind) in the message box, and ⋮ on a row of the outline.
+// Each ends in the same menu; every rewind ends in the strip above the box, with Undo until your next message.
+const canRewind=()=>!V.isNew&&!V.loading&&!busy()&&!V.handing&&!V.focus;
+// What rewinding to before message `n` takes out: how many turns, how much context, which files their turns edited.
+function rwInfo(n){
+  const i=V.items.findIndex(x=>x.n===n),it=V.items[i];if(!it?.uid)return null;
+  const later=V.items.slice(i).filter(x=>x.kind==='user'),edits=new Set(later.flatMap(x=>x.edits||[]));
+  return {it,turns:later.length,files:edits.size,gain:it.ctx&&V.context?.used>it.ctx?V.context.used-it.ctx:0};
+}
+// The messages a rewind can go back to, oldest first: this session's own, not the one a handoff began it with.
+const rwPrompts=()=>{const skip=firstAuto(V.items,V.thread?.handoff);return V.items.filter(x=>x.kind==='user'&&x.uid&&x.n!==skip)};
+// While a point is picked, what would go is dimmed under a dashed line.
+function markGone(){let on=false;const at=V.rw&&!V.focus?'i'+V.rw.n:null;
+  for(const el of $('thread').children){if(at&&el.dataset.k===at)on=true;el.classList.toggle('rwgone',on&&el.dataset.k!=='rwcut')}}
+const rwItems=r=>`<button class="item pri" data-rwgo><span class="ic">${svg('rewind')}</span><span class="nm"><b>Rewind to here</b></span>${r.gain?`<small>−${kTok(r.gain)}</small>`:''}</button>`
+  +`<button class="item" data-rwedit><span class="ic">${svg('pencil')}</span><span class="nm"><b>Rewind and edit</b></span></button>`
+  +`<button class="item" data-rwhand><span class="ic">${svg('arrow-r')}</span><span class="nm"><b>Hand off from here</b></span><small>new session</small></button>`
+  +(r.files?`<div class="sep"></div><button class="rwf" data-rwfiles><span class="sw ${V.rw.files?'on':''}"></span>Undo file edits<small>${plural(r.files,'file')}</small></button>`:'');
+// The menu beside the arrow, or beside the outline's ⋮ menu (`side`: open to the left of it).
+function openRw(n,anchor,side){
+  const r=rwInfo(n);if(!r||!canRewind())return;
+  const a=anchor.getBoundingClientRect();   // before the menus close: the anchor may be in one
+  closePops();V.rw={n,files:true};const m=$('rwm');m.innerHTML=rwItems(r);m.hidden=false;
+  const w=m.offsetWidth,h=m.offsetHeight;
+  if(side){m.style.left=Math.max(8,a.left-w-4)+'px';m.style.top=Math.max(8,Math.min(a.top,innerHeight-h-8))+'px'}
+  else{m.style.left=Math.max(8,Math.min(a.right-w,innerWidth-w-8))+'px';m.style.top=(a.top-h-6>8?a.top-h-6:Math.min(a.bottom+6,innerHeight-h-8))+'px'}
+  renderThread();
+}
+function rwAct(t,from){
+  if(t.closest('[data-rwfiles]')){V.rw.files=!V.rw.files;const r=rwInfo(V.rw.n);from.innerHTML=from===$('rwm')?rwItems(r):pickHtml();return}
+  const n=V.rw?.n,files=V.rw?.files!==false,it=rwInfo(n)?.it;if(!it)return;
+  if(t.closest('[data-rwgo]'))doRewind(it,files,false);
+  else if(t.closest('[data-rwedit]'))doRewind(it,files,true);
+  else if(t.closest('[data-rwhand]')){closePops();handOff('',it.uid)}
+}
+$('rwm').onclick=e=>{e.stopPropagation();rwAct(e.target,$('rwm'))};
+$('thread').addEventListener('click',e=>{const b=e.target.closest('[data-rw]');if(!b)return;e.stopPropagation();const n=+b.dataset.rw;if(V.rw?.n===n&&!$('rwm').hidden)return closePops();openRw(n,b)});
+// The session as the service has it now (after a rewind, or its undo): items, context and the strip.
+async function reread(){const id=V.sel;const d=await api('sessions/'+id);if(V.sel!==id)return;
+  V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.rewound=d.rewound||null;V.ctx=null;render();toBottom(true);loadChanges()}
+async function doRewind(it,files,edit){
+  closePops();if(V.rwing)return;V.rwing=true;oops('');
+  try{const r=await api(`sessions/${V.sel}/rewind`,{at:it.uid,files});await reread();V.rewound=r;renderStrip();if(edit)rwEdit(it.text)}
+  catch(e){oops(e.message)}finally{V.rwing=false}
+}
+// The message you took back, in the box to change and send again.
+function rwEdit(text){if(text==null)return;input.value=text;grow();fitSend();input.focus();input.setSelectionRange(input.value.length,input.value.length)}
+async function unRewind(){try{await api(`sessions/${V.sel}/unrewind`,{});await reread();V.rewound=null;renderStrip()}catch(e){oops(e.message)}}
+function rwStrip(el){const r=V.rewound;el.classList.add('cache','rw');
+  el.innerHTML=`<span class="t">${svg('rewind','ci')}<b>Rewound</b><span> · ${plural(r.turns,'turn')} out${r.undone?`, ${plural(r.undone,'file')} undone`:''}${r.filesError?' · the files were not undone':''}</span></span>`
+    +`${r.text?'<button class="hc2" data-rwtext>Edit that prompt</button>':''}<button class="hgo" data-hgo>Hand off</button><button class="hc2 u" data-unrw data-tip="Put back what was taken out" data-tip-d="Until your next message">${svg('rewind')}Undo</button><button class="ib hx" data-rwx data-tip="Close">${svg('x')}</button>`}
+
+// Esc Esc, or /rewind: your messages above the box, newest last; Enter on one gives the same menu for it.
+function openPick(){if(!canRewind()){oops(busy()?'Rewind once the turn is over.':'There is nothing to rewind here.');return}
+  const l=rwPrompts();if(!l.length){oops('There is nothing to rewind here.');return}
+  closePops();V.rp={sel:l.length-1,menu:false};renderPick()}
+function pickHtml(){const l=rwPrompts(),p=V.rp;
+  if(p.menu){const r=rwInfo(V.rw.n);return `<div class="bk"><button data-rpback data-tip="Back" data-tip-k="←">${svg('chev-l')}</button><b>${esc((r.it.text||'…').split('\n')[0])}</b><small>${r.it.ts?clock(r.it.ts):''}</small></div>${rwItems(r)}`}
+  return `<div class="rph"><b>Rewind to</b><span>↑↓ <kbd>Enter</kbd> <kbd>Esc</kbd></span></div><div class="rpl">`+l.map((it,i)=>{const f=new Set(l.slice(i).flatMap(x=>x.edits||[])).size;
+    return `<button class="item ${i===p.sel?'sel':''}" data-rpi="${i}"><span class="nm"><b>${esc((it.text||(it.skill?'/'+it.skill:'')||'Attachment').split('\n')[0])}</b></span>${f?`<span class="fc">${svg('file')}${f}</span>`:''}<span class="k">${it.ctx?kTok(it.ctx):''}</span></button>`}).join('')
+    +`<div class="item now"><span class="nm"><b>Now</b></span><span class="k">${V.context?.used?kTok(V.context.used):''}</span></div></div>`}
+function renderPick(){const m=$('rwpick');if(!V.rp){m.hidden=true;return}m.innerHTML=pickHtml();m.hidden=false;hydrate(m);m.querySelector('.item.sel')?.scrollIntoView({block:'nearest'})}
+function pickTo(i){const l=rwPrompts();if(!l[i])return;V.rp.sel=i;V.rp.menu=true;V.rw={n:l[i].n,files:true};renderPick();renderThread()}
+function pickBack(){V.rp.menu=false;V.rw=null;renderPick();renderThread()}
+$('rwpick').onclick=e=>{e.stopPropagation();const t=e.target;
+  if(t.closest('[data-rpback]'))return pickBack();
+  const r=t.closest('[data-rpi]');if(r)return pickTo(+r.dataset.rpi);
+  rwAct(t,$('rwpick'))};
+function rwPickKey(e){
+  if(!V.rp)return false;const l=rwPrompts(),p=V.rp,k=e.key;
+  if(k==='Escape'){e.preventDefault();e.stopPropagation();if(p.menu)pickBack();else closePops();return true}
+  if(p.menu){
+    if(k==='ArrowLeft'){e.preventDefault();pickBack();return true}
+    if(k==='ArrowDown'||k==='ArrowUp'){e.preventDefault();const b=[...$('rwpick').querySelectorAll('[data-rwgo],[data-rwedit],[data-rwhand],[data-rwfiles]')],i=b.indexOf(document.querySelector('#rwpick .hot'));
+      b.forEach(x=>x.classList.remove('hot'));b[(i+(k==='ArrowDown'?1:-1)+b.length)%b.length]?.classList.add('hot');return true}
+    if(k==='Enter'){e.preventDefault();rwAct($('rwpick').querySelector('.hot')||$('rwpick').querySelector('[data-rwgo]'),$('rwpick'));return true}
+    return false;
+  }
+  if(k==='ArrowDown'||k==='ArrowUp'){e.preventDefault();p.sel=Math.max(0,Math.min(l.length-1,p.sel+(k==='ArrowDown'?1:-1)));renderPick();return true}
+  if(k==='Enter'){e.preventDefault();pickTo(p.sel);return true}
+  return false;
+}
+// Esc twice within half a second: as in Claude Code, it first clears what you typed; in an empty box it opens the list.
+let lastEsc=0;
+function escEsc(e){
+  if(e.key!=='Escape'||e.repeat||V.isNew)return false;
+  const now=Date.now(),twice=now-lastEsc<500;lastEsc=twice?0:now;if(!twice)return false;
+  if(input.value){input.value='';V.att=[];renderAtt();grow();fitSend();renderSlash();return true}
+  if(!busy()){e.stopPropagation();setTimeout(openPick);return true}
+  return false;
+}
+// ⋮ on a row of the outline: Go to, Rewind (this session's messages only) and Copy.
+function olItem(n,sid){const items=!sid||sid===V.sel?V.items:V.older.get(sid)?.items||[];return items.find(x=>x.n===n)}
+function openOlMenu(k){
+  const n=+k.dataset.olk,sid=k.dataset.sid||null,here=!sid||sid===V.sel,it=olItem(n,sid),can=here&&it?.uid&&canRewind()&&rwPrompts().some(x=>x.n===n);
+  closePops();const m=$('olm');m._n=n;m._sid=sid;
+  m.innerHTML=`<button data-olgo>${svg('arrow-r')}Go to</button>${can?`<button data-olrw>${svg('rewind')}Rewind${svg('chev-r','cv')}</button>`:''}<button data-olcopy>${svg('copy')}Copy</button>`;
+  m.hidden=false;const a=k.getBoundingClientRect();m.style.left=Math.max(8,Math.min(a.right-m.offsetWidth,innerWidth-m.offsetWidth-8))+'px';
+  m.style.top=(a.bottom+4+m.offsetHeight<innerHeight?a.bottom+4:a.top-m.offsetHeight-4)+'px';k.classList.add('on');
+}
+$('olm').onclick=e=>{e.stopPropagation();const m=$('olm'),n=m._n,sid=m._sid,t=e.target;
+  if(t.closest('[data-olrw]')){const b=t.closest('[data-olrw]'),keep=m.innerHTML,pos=[m.style.left,m.style.top];openRw(n,b,true);m.innerHTML=keep;m.hidden=false;[m.style.left,m.style.top]=pos;m.querySelector('[data-olrw]')?.classList.add('on');return}
+  if(t.closest('[data-olcopy]')){const it=olItem(n,sid);navigator.clipboard?.writeText(it?.text||'').catch(()=>{});closePops();return}
+  if(t.closest('[data-olgo]')){closePops();const r=$('oll').querySelector(`.olrow[data-turn="${n}"]${sid?`[data-sid="${sid}"]`:''}`);r?.click()}};
+
 // From this many tokens a quiet strip above the message box offers the handoff: the setting, or ¾ of a smaller window.
 const offerAt=c=>Math.min(A.prefs?.handoff?.offer||400000,Math.round(c.window*.75));
 const hDismissed=()=>{try{return JSON.parse(localStorage.getItem('ww.hoff')||'{}')}catch{return {}}};
@@ -703,6 +825,8 @@ function coldStrip(el,c,id){
 function renderStrip(){
   const el=$('hstrip'),c=V.context,id=V.sel;el.classList.remove('cache','expired');
   const w=$('cWarm'),end=!V.isNew&&!isWorking()&&coldAt(c);w.innerHTML=end?warmDial(end,end-c.at):'';w.hidden=!w.innerHTML;
+  el.classList.remove('rw');
+  if(!V.isNew&&V.rewound&&!V.loading&&!isWorking()&&!V.handing&&!V.focus){rwStrip(el);el.hidden=false;return}
   if(!V.isNew&&c&&!V.loading&&!isWorking()&&!V.handing&&!V.focus&&coldStrip(el,c,id)){el.hidden=false;return}
   const on=!V.isNew&&!!c&&!V.loading&&!isWorking()&&!V.handing&&!V.focus&&c.used>=offerAt(c)&&!hDismissed()[id];
   el.hidden=!on;if(!on)return;
@@ -710,6 +834,9 @@ function renderStrip(){
 }
 $('hstrip').onclick=e=>{e.stopPropagation();const t=e.target;
   if(t.closest('[data-hpick]'))return openHPick(t.closest('[data-hpick]'));
+  if(t.closest('[data-unrw]'))return unRewind();
+  if(t.closest('[data-rwtext]'))return rwEdit(V.rewound?.text);
+  if(t.closest('[data-rwx]')){V.rewound=null;return renderStrip()}
   if(t.closest('[data-hgo]'))handOff();
   else if(t.closest('[data-hcompact]'))sendText('/compact');
   else if(t.closest('[data-cx]')){const d=coldOff();d[V.sel]=V.context?.at;const ks=Object.keys(d);if(ks.length>200)delete d[ks[0]];localStorage.setItem('ww.cold',JSON.stringify(d));renderStrip()}
@@ -962,7 +1089,7 @@ function renderSlash(){
   $('bSkills').classList.toggle('on',!!V.skOpen);
   if(!m){el.hidden=true;slHits=[];return}
   needSkills();const got=skillList(),q=m[1].toLowerCase();el.hidden=false;
-  const all=got&&!V.isNew?[{name:'handoff',about:'Continue in a new session; nothing is lost. Words after it become its first message.',from:'Workwood'},...got.filter(x=>x.name!=='handoff')]:got;
+  const all=got&&!V.isNew?[{name:'handoff',about:'Continue in a new session; nothing is lost. Words after it become its first message.',from:'Workwood'},{name:'rewind',about:'Take back a message of yours and all after it.',from:'Workwood'},...got.filter(x=>x.name!=='handoff'&&x.name!=='rewind')]:got;
   if(!all){slHits=[];el.innerHTML='<div class="note">Loading skills…</div>';return}
   slHits=all.filter(s=>s.name.toLowerCase().startsWith(q)).concat(q?all.filter(s=>{const n=s.name.toLowerCase();return !n.startsWith(q)&&n.includes(q)}):[]);
   slSel=Math.min(slSel,Math.max(slHits.length-1,0));
@@ -971,7 +1098,7 @@ function renderSlash(){
     :`<div class="skr none">${V.sk.err?esc(V.sk.err):q?`No skill matches "${esc(q)}"`:'No skills here'}</div>`);
   el.querySelector('.skr.on')?.scrollIntoView({block:'nearest'});
 }
-function useSkill(n){const i=$('input'),rest=/^\/[\w:-]*$/.test(i.value)?'':i.value;V.skOpen=false;i.value='/'+n+' '+rest;renderSlash();grow();fitSend();i.focus();i.setSelectionRange(i.value.length,i.value.length)}
+function useSkill(n){if(n==='rewind'&&!V.isNew){$('input').value='';V.skOpen=false;renderSlash();grow();fitSend();return openPick()}const i=$('input'),rest=/^\/[\w:-]*$/.test(i.value)?'':i.value;V.skOpen=false;i.value='/'+n+' '+rest;renderSlash();grow();fitSend();i.focus();i.setSelectionRange(i.value.length,i.value.length)}
 function slashKey(e){
   if($('slash').hidden)return false;
   if(e.key==='Escape'){e.preventDefault();if(V.skOpen)V.skOpen=false;else $('input').value='';renderSlash();return true}
@@ -1715,7 +1842,7 @@ function renderMenus(){
     +'<div class="sep"></div><div class="lab">Effort</div><div class="eseg">'+EFFORTS.filter(x=>x[0]||!de).map(([v,n,d])=>`<button class="${v===shownEffort()?'on':''}" data-e="${esc(v)}" data-tip="${esc(d+(v&&v===de?'. Your default.':''))}">${n}</button>`).join('')+'</div>'
     +`<div class="cap2" style="padding-top:6px">${de?`${esc(EFFORTS.find(x=>x[0]===de)?.[1]||de)} is your default effort. `:''}Applies from your next message.</div>`;
 }
-function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('mHand').hidden=true;$('pCtx').classList.remove('open');$('gmenu').hidden=true;$('emenu').hidden=true;$('smenu').hidden=true;V.menuFor=null;document.querySelectorAll('.sess.mopen').forEach(b=>b.classList.remove('mopen'));$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
+function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('rwm').hidden=true;$('olm').hidden=true;if(V.rw||V.rp){V.rw=null;V.rp=null;renderThread()}$('mHand').hidden=true;$('pCtx').classList.remove('open');$('gmenu').hidden=true;$('emenu').hidden=true;$('smenu').hidden=true;V.menuFor=null;document.querySelectorAll('.sess.mopen').forEach(b=>b.classList.remove('mopen'));$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
 const toggle=(btn,pop,then)=>e=>{e.stopPropagation();const was=$(pop).hidden;closePops();if(was){V.mk=false;V.find='';renderMenus();$(pop).hidden=false;$(btn).classList.add('open');then?.()}};
 $('pProject').onclick=toggle('pProject','mProject',()=>$('pFind').focus());
 $('pProfile').onclick=toggle('pProfile','mProfile');
@@ -1747,7 +1874,7 @@ input.addEventListener('input',grow);
 input.addEventListener('input',()=>{slSel=0;renderSlash()});
 input.addEventListener('input',fitSend);
 input.addEventListener('input',()=>{if(V.limBase){V.limBase=null;clearTimeout(limT);limT=null;renderComposer()}});
-input.addEventListener('keydown',e=>{if(slashKey(e))return;
+input.addEventListener('keydown',e=>{if(rwPickKey(e))return;if(slashKey(e))return;if(escEsc(e))return;
   if(e.key==='Tab'&&e.shiftKey&&!e.ctrlKey&&!e.altKey&&!e.metaKey){e.preventDefault();const l=modeList().map(x=>x[0]).filter(v=>v!=='bypassPermissions'),i=l.indexOf(shownMode());pickMode(l[(i+1)%l.length]);return}   // as in Claude Code
   if(e.key==='ArrowUp'&&!e.shiftKey&&!e.altKey&&!e.ctrlKey&&!e.metaKey&&queued().length&&input.selectionStart===0&&input.selectionEnd===0){e.preventDefault();takeBack();return}
   if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();if(!isWorking()||hasDraft()||R?.target==='input')$('send').click()}});   // Enter never stops a turn
@@ -1870,6 +1997,7 @@ async function sendText(text,asProfile,attachments){
     if(isWorking()){oops('Hand off once the turn is over.');return false}
     return handOff(text.trim().slice(8).trim());
   }
+  if(!V.isNew&&text.trim()==='/rewind'&&!attachments?.length){openPick();return true}
   if(V.handing&&!V.isNew){oops('The handoff is being written; the conversation goes on in the new session.');return false}
   if(V.focus)V.focus=null;
   if(V.busy)return false;V.busy=true;oops('');
@@ -1886,7 +2014,7 @@ async function sendText(text,asProfile,attachments){
       if(V.pick.new){V.pick[r.sessionId]=V.pick.new;delete V.pick.new}
       await openSession(r.sessionId,true);
     }else{
-      V.dismissed=null;
+      V.dismissed=null;if(V.rewound){V.rewound=null;renderStrip()}   // the strip goes at your next message, and so does Undo
       if(asProfile)V.pick[V.sel]={...V.pick[V.sel],profile:asProfile};   // continued on another profile: it is this conversation's profile from now on, over one picked before
       const req=api(`sessions/${V.sel}/send`,{text,attachments,profile:asProfile||V.pick[V.sel]?.profile,model:curModel(),effort:curEffort(),mode:V.pick[V.sel]?.mode||undefined});
       if(tmp)V.qSending=req.catch(()=>{});

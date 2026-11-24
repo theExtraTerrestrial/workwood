@@ -288,13 +288,16 @@ export class Builder {
   touchStep(id, change) { const h = this.steps.get(id); if (!h) return []; change(h.step); return [h.item]; }
   // Every item gets a number so the view can update one in place (text and tool lists grow during a turn).
   push(it) { it.n = this.seq++; this.items.push(it); return it; }
-  user(content, ts) {
+  /** `uid`: the message's id in the session's history, which a rewind names; `ctx`: how full the context was as it was sent. */
+  user(content, ts, uid = null) {
     const parts = typeof content === 'string' ? [{ type: 'text', text: content }] : (content || []);
     const out = [], images = parts.filter(p => p.type === 'image').map(keepPicture).filter(Boolean);
     let mine = null;
     const say = (text, skill) => {
       const m = /(?:^|\n+)Attached files:\n((?:- .+\n?)+)$/.exec(text), it = { kind: 'user', text: m ? text.slice(0, m.index) : text, ts };
       if (skill) it.skill = skill;
+      if (uid) it.uid = uid;
+      if (this.context?.used) it.ctx = this.context.used;
       if (m) it.files = m[1].trim().split('\n').map(l => path.basename(l.slice(2)));
       out.push(...this.flushWork()); out.push(mine = this.push(it)); this.turn = it;
     };
@@ -340,6 +343,8 @@ export class Builder {
         const d = describeTool(b.name, b.input);
         this.lastTool = d;
         const file = d.group === 'edit' && b.input?.file_path;
+        // the files each prompt's turn edited: what rewinding to before it would undo
+        if (file && this.turn && !(this.turn.edits ||= []).includes(file)) { this.turn.edits.push(file); out.push(this.turn); }
         if (file && path.isAbsolute(file) && previewKind(file)) this.fresh.set(file, this.lastTs || new Date().toISOString());
         // A picture or page the agent opens to look at, that a command of this turn wrote: made by a script that built
         // its path (a screenshot), so no command named it.
@@ -449,6 +454,8 @@ function earlyWork(file, upto, cwd) {
   early.set(file, next);
   return next.done;
 }
+/** A history file was cut short (a rewind): what was read of its early part no longer holds. */
+export const forgetEarly = file => { early.delete(file); };
 /** Files from the early part of a long session that are still there, newest first. */
 function earlyFiles(file) {
   const out = [];
@@ -536,7 +543,7 @@ export async function readTranscript(file, limit = 400, cwd = null) {
     let m; try { m = JSON.parse(line); } catch { continue; }
     if (m.isSidechain || m.isMeta) continue;
     if (m.type === 'user' && typeof m.permissionMode === 'string') mode = m.permissionMode;
-    if (m.type === 'user' && m.message) { b.closeText(); if (Array.isArray(m.message.content) && m.message.content.some(c => c?.type === 'tool_result')) b.toolsDone(m.timestamp); b.results(m.message.content, m.timestamp, { result: m.toolUseResult, denial: m.toolDenialKind }); b.user(m.message.content, m.timestamp); }
+    if (m.type === 'user' && m.message) { b.closeText(); if (Array.isArray(m.message.content) && m.message.content.some(c => c?.type === 'tool_result')) b.toolsDone(m.timestamp); b.results(m.message.content, m.timestamp, { result: m.toolUseResult, denial: m.toolDenialKind }); b.user(m.message.content, m.timestamp, m.uuid || null); }
     // A turn Claude Code could not run (signed out, a limit, an API error) is saved as an answer of its own: it reads back as the stop it was.
     else if (m.type === 'assistant' && m.error && m.isApiErrorMessage) { b.closeText(); b.flushWork(); b.push({ kind: 'note', stop: ERRORS[m.error] || 'error', ts: m.timestamp, ...(ERRORS[m.error] === 'auth' || ERRORS[m.error] === 'limit' ? {} : { text: textOfError(m.message) }) }); }
     else if (m.type === 'assistant' && m.message) b.assistant(m.message, m.timestamp, typeof m.effort === 'string' ? m.effort : null, m.cwd);

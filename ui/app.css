@@ -1444,3 +1444,65 @@
 .rcl{margin:4px 0 2px 22px;border-left:2px solid var(--accent);padding:4px 0 4px 12px;font-size:12px;color:var(--dim);white-space:pre-wrap;max-height:9.5em;overflow:hidden;position:relative}
 .rcl.all{max-height:none}
 .app.compact .sess>.wdial{display:none}
+
+/* rewind: the arrow beside your message, the menu it opens, what would go, the list from Esc Esc, the outline's ⋮ */
+.me{position:relative}
+/* under your message, on hover: Rewind and Copy, right-aligned */
+#thread .me{margin-bottom:30px}
+.macts{position:absolute;right:0;top:100%;padding-top:2px;display:flex;gap:1px;opacity:0;transition:opacity .12s;white-space:normal}
+.macts button,.tfoot button{width:24px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--faint)}
+.macts svg{width:13px;height:13px}
+.me:hover .macts,.macts:focus-within{opacity:1}
+.macts button:hover,.tfoot button:hover{color:var(--text);background:var(--surface2)}
+.macts button.ok,.tfoot button.ok{color:var(--accent)}
+/* an answer's Copy: at the end of the turn's foot line, always there, faint */
+.tfoot{display:flex;align-items:center;gap:6px}
+.tfoot button{width:22px;height:20px;margin-left:2px}
+.ai .afoot{margin:2px 0 0 -2px}.ai .afoot button{margin-left:0}.tfoot button svg{width:12.5px;height:12.5px}
+.rwcut{display:flex;align-items:center;gap:10px;margin:0 0 18px;font-size:11.5px;color:var(--faint)}
+.rwcut::before,.rwcut::after{content:"";flex:1;border-top:1px dashed var(--line2)}
+.rwcut b{color:var(--dim);font-weight:650}
+#thread .rwgone{opacity:.3;transition:opacity .15s}
+.fmenu.rwm{width:290px;padding:6px;font-size:13px}
+.fmenu.rwm button{white-space:normal}.fmenu.rwm button span{margin-left:0;color:inherit}.fmenu.rwm button svg{color:inherit}
+.fmenu.rwm .item .nm{flex:1}.fmenu.rwm small{margin-left:auto}
+.rwm .item,.rpk .item{gap:10px;padding:6px 8px}
+.rwm .item:hover,.rpk .item:hover,.rpk .item.hot,.rpk .item.sel{background:var(--surface2)}
+.rwm .item .ic,.rpk .item .ic{width:28px;height:28px;border-radius:8px;background:var(--surface2);display:grid;place-items:center;color:var(--dim);flex:none}
+.rwm .item .ic svg,.rpk .item .ic svg{width:14px;height:14px}
+.rwm .item.pri .ic,.rpk .item.pri .ic{background:var(--accent-soft);color:var(--accent)}
+.rwm .item .nm b,.rpk .item .nm b{font-weight:500}
+.rwm .item small,.rpk .item small{font-size:11px;color:var(--faint);white-space:nowrap}
+.rwf{display:flex;width:100%;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:12px;color:var(--dim);text-align:left}
+.rwf:hover,.rwf.hot{background:var(--surface2)}.rwf small{margin-left:auto;color:var(--faint);font-size:11px}
+.sw{width:24px;height:14px;border-radius:8px;background:var(--line2);position:relative;flex:none;transition:background .12s}
+.sw::after{content:"";position:absolute;left:2px;top:2px;width:10px;height:10px;border-radius:50%;background:var(--faint);transition:left .12s}
+.sw.on{background:color-mix(in srgb,var(--accent) 65%,transparent)}.sw.on::after{left:12px;background:#fff}
+/* the list is exactly as wide as the message box, never wider */
+.pop.rpk{left:24px;right:24px;width:auto;max-width:700px;margin:0 auto;bottom:calc(100% - 4px);max-height:none;padding:6px}
+.rph{display:flex;align-items:center;padding:4px 8px 6px;font-size:11.5px;color:var(--faint)}.rph b{color:var(--text);font-weight:650}
+.rph span{margin-left:auto}.rpk kbd{font:inherit;padding:0 5px;border-radius:4px;box-shadow:0 0 0 1px var(--line2);color:var(--dim)}
+.rpl{max-height:calc(8 * 34px);overflow:auto}
+.rpk .rpl .item{min-height:32px}
+.rpk .rpl .item .nm b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rpk .item.now{cursor:default}.rpk .item.now:hover{background:none}.rpk .item.now .nm b{color:var(--faint);font-style:italic}
+.rpk .fc{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--faint)}.rpk .fc svg{width:11px;height:11px}
+.rpk .k{width:40px;text-align:right;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums;flex:none}
+.rpk .bk{display:flex;align-items:center;gap:8px;padding:2px 4px 8px;border-bottom:1px solid var(--line);margin-bottom:5px;font-size:12px}
+.rpk .bk button{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--faint);background:var(--surface2);flex:none}.rpk .bk button svg{width:12px;height:12px}
+.rpk .bk b{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rpk .bk small{color:var(--faint);font-size:11px;white-space:nowrap}
+.rpk .item .ic{width:28px;height:28px}
+/* the strip after a rewind: the handoff strip, quiet */
+.hstrip.rw .ci{color:var(--accent)}
+.hstrip .hc2.u{background:none;color:var(--dim);display:inline-flex;align-items:center;gap:5px}.hstrip .hc2.u svg{width:12px;height:12px}
+.hstrip .hc2.u:hover{color:var(--text)}
+/* the outline: ⋮ on the row you point at */
+.olw{position:relative}
+.olw .olrow{padding-right:38px}
+.olk{position:absolute;right:6px;top:7px;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--dim);opacity:0}
+.olk svg{width:15px;height:15px}
+.olw:hover .olk,.olk.on,.olk:focus-visible{opacity:1}.olk:hover,.olk.on{background:var(--surface2);color:var(--text)}
+.fmenu.olm{width:170px}
+.olm button .cv{margin-left:auto;width:12px;height:12px}
+.olm button.on{background:rgba(128,128,128,.16)}

@@ -360,6 +360,55 @@ test('handoff: refused while the session works; a writer that fails leaves the s
   assert.ok(!st.sessions.some(s => s.thread && s.title === 'HANDOFF_FAILS here'));
 });
 
+test('rewind: a prompt and all after it leave the history, files they wrote go back, and Undo puts both back until the next message', async () => {
+  const id = await newSession('plan the export');
+  await idle(id);
+  await svc.call(`sessions/${id}/send`, { text: 'WRITES notes.md first try' }); await idle(id);
+  await svc.call(`sessions/${id}/send`, { text: 'and more' }); await idle(id);
+  const note = path.join(sb.projects.alpha, 'notes.md');
+  const p = (await session(id)).items.filter(i => i.kind === 'user');
+  assert.deepEqual(p.map(i => i.text), ['plan the export', 'WRITES notes.md first try', 'and more']);
+  assert.ok(p.every(i => /^[0-9a-f-]{36}$/.test(i.uid)), JSON.stringify(p));      // each prompt carries its id in the history
+  assert.deepEqual(p[1].edits, [note]); assert.ok(p[1].ctx > 0);                   // what its turn edited, and how full the context was
+  assert.ok(fs.existsSync(note));
+  // not to a message that is not there
+  assert.equal((await svc.call(`sessions/${id}/rewind`, { at: '00000000-0000-4000-8000-000000000000' })).status, 409);
+  let before = readLog(sb).length;
+  const r = await svc.call(`sessions/${id}/rewind`, { at: p[1].uid });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual([r.body.turns, r.body.undone, r.body.text], [2, 1, 'WRITES notes.md first try']);
+  assert.ok(readLog(sb).slice(before).includes('rewind files 1 dry') && readLog(sb).slice(before).includes('rewind files 1'), readLog(sb).slice(before).join('|'));
+  assert.ok(!fs.existsSync(note));                                                  // the file it wrote is gone again
+  assert.ok(!fs.readFileSync(fileOf(id), 'utf8').includes('first try'));            // cut out of the file, not only hidden
+  let s = await session(id);
+  assert.deepEqual(s.items.filter(i => i.kind === 'user').map(i => i.text), ['plan the export']);
+  assert.equal(s.rewound.turns, 2);
+  // Undo: the conversation and the file are back
+  assert.equal((await svc.call(`sessions/${id}/unrewind`, {})).status, 200);
+  s = await session(id);
+  assert.deepEqual(s.items.filter(i => i.kind === 'user').map(i => i.text), ['plan the export', 'WRITES notes.md first try', 'and more']);
+  assert.equal(s.rewound, null); assert.ok(fs.existsSync(note));
+  // without the files: the conversation goes, the file stays
+  assert.equal((await svc.call(`sessions/${id}/rewind`, { at: p[2].uid, files: false })).status, 200);
+  assert.ok(fs.existsSync(note));
+  // once the session goes on, the rewind stays: the next turn reads the shorter history
+  before = readLog(sb).length;
+  await svc.call(`sessions/${id}/send`, { text: 'second try' }); await idle(id);
+  assert.equal((await svc.call(`sessions/${id}/unrewind`, {})).status, 409);
+  s = await session(id);
+  assert.deepEqual(s.items.filter(i => i.kind === 'user').map(i => i.text), ['plan the export', 'WRITES notes.md first try', 'second try']);
+  assert.equal(s.rewound, null);
+  // a handoff from an earlier point is written from the conversation up to it; the session itself stays whole
+  before = readLog(sb).length;
+  const q = s.items.filter(i => i.kind === 'user');
+  assert.equal((await svc.call(`sessions/${id}/handoff`, { model: 'haiku', effort: 'low', at: q[1].uid })).status, 200);
+  const next = await until(async () => (await state()).sessions.find(x => x.thread === 2 && x.title === 'plan the export')?.id, 'the new session');
+  assert.ok(readLog(sb).slice(before).includes('writer saw ["plan the export"]'), readLog(sb).slice(before).join('|'));
+  assert.equal((await session(id)).items.filter(i => i.kind === 'user').length, 3);
+  await idle(next);
+  fs.rmSync(note, { force: true });
+});
+
 test('handoff: Auto picks the writer by how much went on; the facts are kept word for word', async () => {
   const ho = await import('../service/handoff.mjs');
   assert.equal(ho.pickModel('auto', { messages: 3, failed: 0, corrections: 0, chars: 9000 }), 'haiku');
@@ -2304,6 +2353,62 @@ ui('window: a long conversation has a rail of turns and an outline you can searc
   assert.equal(await page.locator('#rail').isHidden(), true);
   await page.click(`.sess[data-id="${id}"]`);
   await page.waitForFunction(() => document.querySelectorAll('#rail button').length === 3);
+});
+
+ui('window: rewind from the arrow beside a message, Esc Esc or /rewind, and the outline\'s ⋮; the strip offers Undo until the next message', async () => {
+  await startNew('WRITES plan.md first plan'); await page.waitForSelector('.ai:has-text("Wrote plan.md")');
+  const id = await page.locator('.sess.sel').getAttribute('data-id'), plan = path.join((await state()).sessions.find(s => s.id === id).cwd, 'plan.md');
+  assert.ok(fs.existsSync(plan));
+  for (const t of ['second step', 'third step']) { await idle(id); await page.waitForSelector('#send[data-tip="Send"]'); await send(t); await page.waitForSelector(`.ai:has-text("Echo: ${t}")`); }
+  await idle(id); await page.waitForSelector('#send[data-tip="Send"]');
+  // the arrow beside a message opens the menu; what would go is dimmed under a line
+  await page.hover('.me:has-text("second step")'); await page.click('.me:has-text("second step") .rwb');
+  await page.waitForSelector('#rwm:not([hidden])');
+  assert.deepEqual(await page.locator('#rwm .item b').allInnerTexts(), ['Rewind to here', 'Rewind and edit', 'Hand off from here']);
+  assert.equal(await page.locator('#rwm [data-rwfiles]').count(), 0);              // those turns edited nothing
+  await page.waitForSelector('.rwcut:has-text("2 turns")');
+  assert.equal(await page.locator('#thread .me.rwgone').count(), 2);
+  await page.click('#rwm [data-rwedit]');
+  await page.waitForSelector('#hstrip.rw:has-text("Rewound · 2 turns out")');
+  assert.equal(await page.inputValue('#input'), 'second step');                    // back in the box to change, not sent
+  assert.equal(await page.locator('#thread .me').count(), 1);
+  await page.click('#hstrip [data-unrw]'); await page.waitForSelector('.me:has-text("third step")');
+  await page.waitForFunction(() => !document.querySelector('#hstrip.rw'));
+  // Copy under your message and at the end of a turn's foot line; the icon turns into a check
+  await page.hover('.me:has-text("second step")'); await page.click('.me:has-text("second step") [data-cpmsg]');
+  await page.waitForSelector('.me:has-text("second step") [data-cpmsg].ok');
+  assert.equal(await page.locator('.tfoot [data-cpturn]').count(), 3);
+  await page.click('.tfoot [data-cpturn] >> nth=1'); await page.waitForSelector('.tfoot [data-cpturn].ok');
+  // Esc Esc first clears what you typed, as in Claude Code; in an empty box it opens the list, exactly as wide as the box
+  await page.fill('#input', 'draft'); await page.press('#input', 'Escape'); await page.press('#input', 'Escape');
+  assert.equal(await page.inputValue('#input'), '');
+  await page.press('#input', 'Escape'); await page.press('#input', 'Escape');
+  await page.waitForSelector('#rwpick:not([hidden])');
+  assert.deepEqual(await page.locator('#rwpick .rpl .item b').allInnerTexts(), ['WRITES plan.md first plan', 'second step', 'third step', 'Now']);
+  const [pk, bx] = [await page.locator('#rwpick').boundingBox(), await page.locator('#box').boundingBox()];
+  assert.deepEqual([Math.round(pk.x), Math.round(pk.width)], [Math.round(bx.x), Math.round(bx.width)]);
+  await page.press('#input', 'ArrowUp'); await page.press('#input', 'ArrowUp'); await page.press('#input', 'Enter');   // the same menu, for the first message
+  await page.waitForSelector('#rwpick .bk:has-text("WRITES plan.md first plan")');
+  await page.waitForSelector('#rwpick [data-rwfiles]:has-text("1 file")');
+  await page.press('#input', 'ArrowLeft'); await page.waitForSelector('#rwpick .rph');
+  await page.press('#input', 'Escape'); await page.waitForSelector('#rwpick', { state: 'hidden' });
+  // /rewind opens the same list; rewinding past a turn that wrote a file puts the file back as it was
+  await send('/rewind'); await page.waitForSelector('#rwpick:not([hidden])');
+  await page.click('#rwpick [data-rpi="0"]'); await page.click('#rwpick [data-rwgo]');
+  await page.waitForSelector('#hstrip.rw:has-text("3 turns out, 1 file undone")');
+  assert.ok(!fs.existsSync(plan));
+  await page.click('#hstrip [data-unrw]'); await page.waitForSelector('.me:has-text("third step")');
+  assert.ok(fs.existsSync(plan));
+  // the outline: ⋮ on a row has Go to, Rewind and Copy
+  await page.click('#bOutline'); await page.hover('#oll .olw >> nth=2'); await page.click('#oll .olw >> nth=2 >> .olk');
+  assert.deepEqual(await page.locator('#olm button').allInnerTexts(), ['Go to', 'Rewind', 'Copy']);
+  await page.click('#olm [data-olrw]'); await page.waitForSelector('#rwm:not([hidden])'); await page.click('#rwm [data-rwgo]');
+  await page.waitForSelector('#hstrip.rw:has-text("1 turn out")');
+  // the strip goes at your next message, and Undo with it
+  await send('a new direction'); await page.waitForSelector('.ai:has-text("Echo: a new direction")');
+  assert.equal(await page.locator('#hstrip.rw').count(), 0);
+  assert.deepEqual((await session(id)).items.filter(i => i.kind === 'user').map(i => i.text), ['WRITES plan.md first plan', 'second step', 'a new direction']);
+  await idle(id); await page.click('#olClose'); fs.rmSync(plan, { force: true });
 });
 
 ui('window: home shows where work was left and each profile\'s limits, with two other views a click away', async () => {

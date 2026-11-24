@@ -60,6 +60,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
     pending: null, stopped: null, model: model || existing?.model || null, effort: effort || existing?.effort || null, mode: mode || existing?.mode || null, context: existing?.context || null, q: null, builder: new Builder(liveSeq, cwd, { keepOutput: true }), tasks: new Map(),
     bg: new Map(), known: new Map(), lingering: false, turnOver: false };
   liveSeq += 100_000;
+  if (existing?.context) run.builder.context = existing.context;   // so the prompt knows how full the context was as it went
   if (sessionId) runs.set(sessionId, run);
 
   const say = (type, data = {}) => { if (run.sessionId) emit(type, { sessionId: run.sessionId, ...data }); };
@@ -179,10 +180,12 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
     const uuid = randomUUID(); run.sent.add(uuid);
     inbox.push({ type: 'user', message: { role: 'user', content: more }, parent_tool_use_id: null, uuid, priority: 'next' });
     wake?.();
-    sayItems(run.builder.user(more, new Date().toISOString())); sayState();
+    sayItems(run.builder.user(more, new Date().toISOString(), uuid)); sayState();
   };
+  // The prompt's id is chosen here, and Claude Code saves the message under it: a rewind names it.
+  const uid = randomUUID();
   async function* prompt() {
-    yield { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null };
+    yield { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, uuid: uid };
     while (!ended) {
       if (inbox.length) { yield inbox.shift(); continue; }
       await new Promise(r => { wake = r; }); wake = null;
@@ -194,6 +197,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
       try {
         run.q = query({ prompt: prompt(), options: {
           cwd, env, resume: sessionId || undefined, canUseTool, additionalDirectories: readable,
+          enableFileCheckpointing: true,   // a copy of each file before the agent edits it, so a rewind can undo the edits
           model: model || undefined, effort: effort || undefined,
           // what you picked; otherwise your own Claude Code setting decides
           permissionMode: run.mode || process.env.WORKWOOD_PERMISSION_MODE || undefined,
@@ -224,7 +228,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
           if (m.session_id && !run.sessionId) {
             run.sessionId = m.session_id; runs.set(run.sessionId, run);
             resolve(run.sessionId);
-            sayItems(run.builder.user(content, new Date().toISOString()));
+            sayItems(run.builder.user(content, new Date().toISOString(), uid));
             sayState();
           }
           // Claude Code says which mode it is in when a turn starts and whenever the mode changes (a plan approved, edits allowed)
@@ -332,7 +336,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
     })();
     if (sessionId) {
       resolve(sessionId);
-      sayItems(run.builder.user(content, new Date().toISOString()));
+      sayItems(run.builder.user(content, new Date().toISOString(), uid));
       sayState();
     }
   });
@@ -448,6 +452,27 @@ export async function contextOf({ sessionId, cwd, env, claude }) {
     settingSources: ['user', 'project', 'local'], stderr: () => {} } });
   try { return learn(await within(q.getContextUsage())); }
   finally { release(); try { q.close?.(); } catch {} }
+}
+
+/**
+ * Puts the files the agent edited from one prompt on back as they were before it (Claude Code's own copies, taken
+ * when checkpointing is on). The session is opened without sending anything and closed again. `before` is shown the
+ * files about to change first. Edits made by shell commands are not covered.
+ */
+export async function rewindFilesOf({ sessionId, cwd, env, claude, uid, before = null }) {
+  let release; const held = new Promise(r => { release = r; });
+  const q = query({ prompt: (async function* () { await held; })(), options: { cwd, env, resume: sessionId, pathToClaudeCodeExecutable: claude,
+    enableFileCheckpointing: true, settingSources: ['user', 'project', 'local'], stderr: () => {} } });
+  let t;
+  const within = p => Promise.race([p, new Promise((_, no) => { clearTimeout(t); t = setTimeout(() => no(new Error('Claude Code did not answer.')), 30000); })]);
+  try {
+    // first which files would change, so `before` can keep them as they are now; then the rewind itself
+    const dry = await within(q.rewindFiles(uid, { dryRun: true }));
+    if (!dry?.canRewind || !dry.filesChanged?.length) return { ...dry, filesChanged: [] };
+    if (before) await before(dry.filesChanged);
+    const done = await within(q.rewindFiles(uid));
+    return done?.canRewind ? { ...done, filesChanged: dry.filesChanged } : { ...done, filesChanged: [] };
+  } finally { clearTimeout(t); release(); try { q.close?.(); } catch {} }
 }
 
 /** Stops one command the agent is running, leaving the turn to carry on. */

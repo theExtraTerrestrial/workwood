@@ -402,10 +402,14 @@ function turnText(n,sid){const L=itemsOf(sid),i=L.findIndex(x=>x.n===n);if(i<0)r
 // The last answer of a turn that has no foot line (Claude Code seldom writes the time a turn took) gets one, for its Copy.
 function lastWord(it,ix){const L=itemsOf(it.sid);if(L[ix]!==it)return false;
   for(let k=ix+1;k<L.length&&L[k].kind!=='user';k++)if(L[k].kind==='assistant'||L[k].kind==='done')return false;return true}
-const cpTurn=it=>turnText(it.n,it.sid)?`<button data-cpturn="${it.n}"${it.sid?` data-sid="${esc(it.sid)}"`:''} data-tip="Copy" data-tip-d="This turn's answers, as Markdown">${svg('copy')}</button>`:'';
+// What Copy takes: the turn's last answer, not the lines it wrote on the way there.
+function lastAnswer(n,sid){const L=itemsOf(sid),i=L.findIndex(x=>x.n===n);if(i<0)return'';
+  let k=i;while(k+1<L.length&&L[k+1].kind!=='user')k++;
+  for(;k>=0&&L[k].kind!=='user';k--)if(L[k].kind==='assistant'&&L[k].text?.trim())return L[k].text.trim();return''}
+const cpTurn=it=>lastAnswer(it.n,it.sid)?`<button data-cpturn="${it.n}"${it.sid?` data-sid="${esc(it.sid)}"`:''} data-tip="Copy" data-tip-d="The last answer, as Markdown">${svg('copy')}</button>`:'';
 // Copy, from your message or an answer: the icon turns into a check for a moment.
 $('thread').addEventListener('click',e=>{const b=e.target.closest('[data-cpmsg],[data-cpturn]');if(!b)return;e.stopPropagation();
-  const sid=b.dataset.sid,t=b.dataset.cpturn?turnText(+b.dataset.cpturn,sid):itemsOf(sid).find(x=>x.n===+b.dataset.cpmsg)?.text||'';
+  const sid=b.dataset.sid,t=b.dataset.cpturn?lastAnswer(+b.dataset.cpturn,sid):itemsOf(sid).find(x=>x.n===+b.dataset.cpmsg)?.text||'';
   Promise.resolve(copyText(t)).then(()=>{b.classList.add('ok');b.innerHTML=svg('check');setTimeout(()=>{if(b.isConnected){b.classList.remove('ok');b.innerHTML=svg('copy')}},1200)}).catch(()=>{})});
 // A code block in an answer copies its code as written, from the button at its top right.
 document.addEventListener('click',e=>{const b=e.target.closest('[data-cpcode]');if(!b)return;e.stopPropagation();

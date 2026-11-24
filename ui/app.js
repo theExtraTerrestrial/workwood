@@ -1660,7 +1660,8 @@ function renderComposer(){
     meter=(k,v,was)=>v==null?'':`<span class="m ${lvl(v)} ${was!=null&&was!==v?'fresh':''} ${cool(k)?'cool':''}"><span class="wn">${k}</span><span class="bar"><i style="width:${Math.min(100,v)}%"></i></span>${was!=null&&was!==v?`<u>${was} →</u> `:''}${v}%</span>`;
   $('lim').innerHTML=cur?meter('5h',cur.h5,b?.h5)+meter('7d',cur.d7,b?.d7):'';
   if(b&&(cur.h5!==b.h5||cur.d7!==b.d7)&&!limT)limT=setTimeout(()=>{limT=null;V.limBase=null;renderComposer()},60000);   // what the turn cost stays readable for a minute
-  const full7=cur?.d7>=100,top=cur?Math.max(cur.h5||0,cur.d7||0):0,rs=cur&&(full7?cur.r7:cur.r5);
+  // The note speaks for the window that sets its colour: a full 7d one, else a full 5h one, else whichever is higher.
+  const h5=cur?.h5||0,d7=cur?.d7||0,full7=d7>=100||(h5<100&&d7>=h5),top=Math.max(h5,d7),rs=cur&&(full7?cur.r7:cur.r5);
   $('limNote').className='limnote '+lvl(top);
   // One row, always: the meter beside it already shows which limit is full, so the note only says when it clears, and it is the part that gives way when the row is tight.
   $('limNote').textContent=top>=100?(rs?`${full7?'7d':'5h'} limit clears in ${until(rs)}`:`${full7?'7d':'5h'} limit reached`):top>=80&&rs?`resets in ${until(rs)}`:'';

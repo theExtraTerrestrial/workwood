@@ -132,7 +132,7 @@ function oops(msg){const o=$('oops');o.textContent=msg||'';o.hidden=!msg;if(msg)
 
 // Just enough Markdown for agent replies. Everything is escaped first.
 function md(src){
-  const blocks=[];let s=String(src).replace(/```[^\n]*\n([\s\S]*?)```/g,(_,c)=>{blocks.push(`<pre><code>${esc(c.replace(/\n$/,''))}</code></pre>`);return `\u0000${blocks.length-1}\u0000`});
+  const blocks=[];let s=String(src).replace(/```[^\n]*\n([\s\S]*?)```/g,(_,c)=>{blocks.push(`<div class="cdb"><pre><code>${esc(c.replace(/\n$/,''))}</code></pre><button class="cpy" data-cpcode data-tip="Copy">${svg('copy')}</button></div>`);return `\u0000${blocks.length-1}\u0000`});
   // A code span opens with a run of backticks and closes on a run of the same length, so `` a`b `` holds a backtick;
   // one space either side is padding. Its text is set aside first so bold and links never reach inside it.
   const inline=t=>{const cs=[];
@@ -405,6 +405,9 @@ const cpTurn=it=>turnText(it.n,it.sid)?`<button data-cpturn="${it.n}"${it.sid?` 
 $('thread').addEventListener('click',e=>{const b=e.target.closest('[data-cpmsg],[data-cpturn]');if(!b)return;e.stopPropagation();
   const sid=b.dataset.sid,t=b.dataset.cpturn?turnText(+b.dataset.cpturn,sid):itemsOf(sid).find(x=>x.n===+b.dataset.cpmsg)?.text||'';
   Promise.resolve(copyText(t)).then(()=>{b.classList.add('ok');b.innerHTML=svg('check');setTimeout(()=>{if(b.isConnected){b.classList.remove('ok');b.innerHTML=svg('copy')}},1200)}).catch(()=>{})});
+// A code block in an answer copies its code as written, from the button at its top right.
+document.addEventListener('click',e=>{const b=e.target.closest('[data-cpcode]');if(!b)return;e.stopPropagation();
+  Promise.resolve(copyText(b.parentElement.querySelector('code')?.textContent||'')).then(()=>{b.classList.add('done');b.innerHTML=svg('check');setTimeout(()=>{if(b.isConnected){b.classList.remove('done');b.innerHTML=svg('copy')}},1200)}).catch(()=>{})});
 let lbx=null;   // the pictures of the message open in the large view, and which one shows
 // One item of the conversation as the thread draws it. `since`: where the turn in progress starts (its steps are open).
 function itemPart(it,ix,since,latest){

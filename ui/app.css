@@ -648,6 +648,11 @@
   .ai code{font-family:"Cascadia Code","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;background:rgba(128,128,128,.16);padding:1px 5px;border-radius:5px}
   .ai pre{margin:0 0 10px;padding:10px 12px;border-radius:10px;background:var(--surface);overflow:auto;font-size:12.5px;line-height:1.55}
   .ai pre code{background:none;padding:0}
+  .ai .cdb{position:relative;margin:0 0 10px}.ai .cdb pre{margin:0;padding-right:38px}
+  .cdb .cpy{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--faint);background:var(--surface);border:0;cursor:pointer;opacity:0;transition:opacity .12s}
+  .cdb:hover .cpy,.cdb .cpy.done,.cdb .cpy:focus-visible{opacity:1}.cdb .cpy:hover{color:var(--text)}.cdb .cpy.done{color:var(--go)}
+  .cdb .cpy svg{width:13px;height:13px}
+  @media (hover:none){.cdb .cpy{opacity:1}}
   .ai table{border-collapse:collapse;margin:0 0 10px;font-size:13px}.ai th,.ai td{border-bottom:1px solid var(--line);padding:4px 12px 4px 0;text-align:left;vertical-align:top}.ai td code,.ai th code{overflow-wrap:anywhere}
   /* a table never widens the conversation: long code in a cell breaks, and anything still too wide scrolls inside its own box */
   .ai .tw{max-width:100%;overflow-x:auto;margin:0 0 10px}.ai .tw table{margin:0}

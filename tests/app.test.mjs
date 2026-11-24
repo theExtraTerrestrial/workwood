@@ -2355,6 +2355,15 @@ ui('window: a long conversation has a rail of turns and an outline you can searc
   await page.waitForFunction(() => document.querySelectorAll('#rail button').length === 3);
 });
 
+ui('window: a code block in an answer copies just its code, from the button that shows when you point at it', async () => {
+  await startNew('run this\n```sh\nls -la\necho "<b>"\n```'); await page.waitForSelector('.ai .cdb');
+  await page.evaluate(() => { window.copied = null; navigator.clipboard.writeText = t => { window.copied = t; return Promise.resolve(); }; });
+  assert.equal(await page.locator('.ai .cdb [data-cpcode]').evaluate(b => getComputedStyle(b).opacity), '0');
+  await page.hover('.ai .cdb'); await page.click('.ai .cdb [data-cpcode]');
+  await page.waitForSelector('.ai .cdb [data-cpcode].done');
+  assert.equal(await page.evaluate(() => window.copied), 'ls -la\necho "<b>"');
+});
+
 ui('window: rewind from the arrow beside a message, Esc Esc or /rewind, and the outline\'s ⋮; the strip offers Undo until the next message', async () => {
   await startNew('WRITES plan.md first plan'); await page.waitForSelector('.ai:has-text("Wrote plan.md")');
   const id = await page.locator('.sess.sel').getAttribute('data-id'), plan = path.join((await state()).sessions.find(s => s.id === id).cwd, 'plan.md');

@@ -6,7 +6,7 @@ const P={
   term:'<path d="m4 17 6-6-6-6M12 19h8"/>',
   diff:'<path d="M12 4v8M8 8h8M8 18h8"/>',
   code:'<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>',
-  clip:'<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+  clip:'<path transform="translate(12 12) scale(.8) translate(-12 -12)" stroke-width="2.19" d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',   // drawn edge to edge, so shrunk to sit at the size of the composer's other marks
   up:'<path d="M12 19V5M5 12l7-7 7 7"/>','arrow-down':'<path d="M12 5v14M6 13l6 6 6-6"/>',
   max:'<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
   min:'<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>',
@@ -42,7 +42,7 @@ const P={
   panel:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
   spark:'<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" fill="currentColor"/>',
   tree:'<circle cx="6" cy="5" r="2.5"/><circle cx="18" cy="5" r="2.5"/><circle cx="12" cy="19" r="2.5"/><path d="M6 7.5v2a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-2M12 12.5v4"/>',
-  slash:'<rect x="4" y="4" width="16" height="16" rx="4"/><path d="m14 8.5-4 7"/>',
+  slash:'<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="m14.2 8.2-4.4 7.6"/>',
   done:'<circle cx="12" cy="12" r="9"/><path d="m8 12.5 3 3 5-6"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
   monitor:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',

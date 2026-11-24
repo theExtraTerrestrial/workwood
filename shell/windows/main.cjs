@@ -85,6 +85,7 @@ async function open() {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!/^http:\/\/127\.0\.0\.1:\d+\//.test(url)) { e.preventDefault(); shell.openExternal(url); } else ours(url).then(ok => { if (!ok) win?.webContents.stop(); }); });
   ipcMain.on('env:get', e => { e.returnValue = { current, list: envs }; });
+  require('./page-store.cjs')();
   // Open at login: Windows starts this same program with the app folder, as the Start-menu shortcut does.
   const atLogin = { path: process.execPath, args: [`"${__dirname}"`] };
   ipcMain.on('login:get', e => { try { e.returnValue = !!app.getLoginItemSettings(atLogin).openAtLogin; } catch { e.returnValue = null; } });

@@ -42,6 +42,7 @@ export function writeApp(appDir, dir, config) {
   fs.copyFileSync(path.join(dir, 'shell', 'windows', 'main.cjs'), path.join(appDir, 'main.cjs'));
   fs.copyFileSync(path.join(dir, 'shell', 'preload.cjs'), path.join(appDir, 'preload.cjs'));
   fs.copyFileSync(path.join(dir, 'shell', 'window-state.cjs'), path.join(appDir, 'window-state.cjs'));
+  fs.copyFileSync(path.join(dir, 'shell', 'page-store.cjs'), path.join(appDir, 'page-store.cjs'));
   fs.copyFileSync(path.join(dir, 'shell', 'icon.ico'), path.join(appDir, 'workwood.ico'));
   const version = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version;
   fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify({ name: 'workwood', productName: 'Workwood', version, main: 'main.cjs' }));

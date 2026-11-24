@@ -130,14 +130,16 @@ const startProfile=()=>A.profiles.find(p=>p.name===A.prefs?.defaultProfile)||glo
 const globalProfile=()=>A.profiles.find(p=>p.global)||A.profiles[0];
 function oops(msg){const o=$('oops');o.textContent=msg||'';o.hidden=!msg;if(msg)setTimeout(()=>{if(o.textContent===msg)o.hidden=true},8000)}
 
+// A path to a page, picture, video or PDF, as an answer writes it in code or a link: one you can open in the preview.
+const PVPATH=/^(?:~?\/|\.{1,2}\/)?[^\s:`'"<>|*?]+\.(?:html?|svg|png|jpe?g|gif|webp|avif|mp4|webm|mov|m4v|pdf)$/i;
 // Just enough Markdown for agent replies. Everything is escaped first.
 function md(src){
   const blocks=[];let s=String(src).replace(/```[^\n]*\n([\s\S]*?)```/g,(_,c)=>{blocks.push(`<div class="cdb"><pre><code>${esc(c.replace(/\n$/,''))}</code></pre><button class="cpy" data-cpcode data-tip="Copy">${svg('copy')}</button></div>`);return `\u0000${blocks.length-1}\u0000`});
   // A code span opens with a run of backticks and closes on a run of the same length, so `` a`b `` holds a backtick;
   // one space either side is padding. Its text is set aside first so bold and links never reach inside it.
   const inline=t=>{const cs=[];
-    t=String(t).replace(/(?<!`)(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g,(_,f,c)=>{if(/^ [\s\S]* $/.test(c)&&c.trim())c=c.slice(1,-1);cs.push(`<code>${esc(c)}</code>`);return `\u0001${cs.length-1}\u0001`});
-    return esc(t).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,'$1').replace(/\u0001(\d+)\u0001/g,(_,i)=>cs[i])};
+    t=String(t).replace(/(?<!`)(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g,(_,f,c)=>{if(/^ [\s\S]* $/.test(c)&&c.trim())c=c.slice(1,-1);cs.push(PVPATH.test(c)?`<code class="fl" data-fpath="${esc(c)}">${esc(c)}</code>`:`<code>${esc(c)}</code>`);return `\u0001${cs.length-1}\u0001`});
+    return esc(t).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(_,t,h)=>PVPATH.test(h)?`<a class="fl" data-fpath="${h}">${t}</a>`:t).replace(/\u0001(\d+)\u0001/g,(_,i)=>cs[i])};
   const out=[];let list=null,para=[],table=null;
   // A list keeps each item's indent, so items written under another become a list inside it.
   const listHtml=items=>{let h='';const stack=[];
@@ -483,7 +485,15 @@ function renderThread(){
   if(V.rw&&!V.focus){const k=parts.findIndex(([key])=>key==='i'+V.rw.n),r=rwInfo(V.rw.n);if(k>=0&&r)parts.splice(k,0,['rwcut',`<div class="rwcut"><b>${plural(r.turns,'turn')}</b>${r.gain?' · −'+kTok(r.gain):''}</div>`])}
   patch(t,parts);markGone();tick();fitThumbs();markCards();renderRail();if(V.side==='outline')renderOutline();
 }
-const markCards=()=>document.querySelectorAll('#thread [data-open]').forEach(c=>c.classList.toggle('on',c.dataset.open===V.pv));
+const markCards=()=>{document.querySelectorAll('#thread [data-open]').forEach(c=>c.classList.toggle('on',c.dataset.open===V.pv));
+  document.querySelectorAll('#thread [data-fpath]').forEach(c=>{const f=FP.get(V.sel+'|'+c.dataset.fpath);c.classList.toggle('miss',f===null);c.classList.toggle('on',!!f&&f.path===V.pv)})};
+// What a named path turned out to be, per session: the file, null when it is not there. Asked when you point at it,
+// and again when you click it (it may have been made, or gone, since).
+const FP=new Map();
+function fpath(raw,open){const sid=V.sel,k=sid+'|'+raw;if(!sid||V.isNew)return Promise.resolve(undefined);
+  if(!open&&FP.has(k))return Promise.resolve(FP.get(k));
+  return api(`sessions/${sid}/file?path=${encodeURIComponent(raw)}${open?'&open=1':''}`).then(f=>f,e=>/Not found/.test(e.message)?null:undefined)
+    .then(f=>{if(f!==undefined)FP.set(k,f);markCards();return f})}
 
 /* ---------- side panel: what the agent made ---------- */
 let staged=null;
@@ -977,6 +987,9 @@ $('thread').onclick=e=>{const st=e.target.closest('[data-astep]');if(st){const c
     const cnt=c.querySelector('.cnt');if(cnt)cnt.textContent=`${k+1} of ${c.querySelectorAll('.apage').length} · Answered`;return}
   const pc=e.target.closest('.mpic');if(pc){const all=[...pc.parentNode.querySelectorAll('.mpic')];lbx={list:all.map(b=>b.querySelector('img').src),i:all.indexOf(pc)};hideTip();showPic();return}
   const o=e.target.closest('[data-open]');if(o){showWork(o.dataset.open,!V.run?.pending);return}
+  const fp=e.target.closest('[data-fpath]');if(fp){if(getSelection().toString())return;e.preventDefault();hideTip();const sid=V.sel;
+    fpath(fp.dataset.fpath,true).then(f=>{if(!f||V.sel!==sid){if(f===null&&fp.isConnected&&fp.matches(':hover')){tipFor=fp;showTip(fp)}return}
+      if(!V.work.some(w=>w.path===f.path))V.work=V.work.concat(f);showWork(f.path)});return}
   const t=e.target.closest('[data-copy],[data-cmdall],[data-out],[data-stopstep],[data-suball],[data-repall],[data-code]');
   if(t){const d=t.dataset;
     if(d.code){if(getSelection().toString())return;if(d.on){V.codeOpen.delete(d.code);V.codeShut.add(d.code)}else{V.codeOpen.add(d.code);V.codeShut.delete(d.code)}renderThread();return}
@@ -1545,11 +1558,15 @@ addEventListener('resize',fitSide);
    data-tip-k    its keys, shown as keys ("Ctrl K")
    data-tip-path a file's path, its folder dimmed
    data-tip-full the element's own text, only while it is cut off */
-const TIPSEL='[data-tip],[data-tip-path],[data-tip-full]';
+const TIPSEL='[data-tip],[data-tip-path],[data-tip-full],[data-fpath]';
 let tipFor=null,tipTimer,tipShown=false,tipWarm=0;
 function hideTip(){clearTimeout(tipTimer);if(tipShown)tipWarm=Date.now()+500;tipShown=false;tipFor=null;const t=$('tip');t.hidden=true;t.classList.remove('on')}
 function tipHtml(el){
   const d=el.dataset;
+  if(d.fpath!=null){const f=FP.get(V.sel+'|'+d.fpath),p=x=>{const i=x.lastIndexOf('/')+1;return `<span class="dir">${esc(x.slice(0,i)).replace(/\//g,'/<wbr>')}</span>${esc(x.slice(i))}`};
+    if(f===undefined)return null;
+    if(!f)return['path',`<span class="tipn"><span><b class="nf">Not found</b> · ${p(d.fpath)}</span></span>`];
+    return['path',`${f.kind==='image'?`<span class="tthm"><img src="${esc(fileUrl(f))}" alt=""></span>`:''}<span class="tipn"><span class="tipp">${p(f.path)}</span><span class="tiph">Click to preview</span></span>`]}
   if(d.tipPath){const i=d.tipPath.lastIndexOf('/')+1;return['path',`<span class="dir">${esc(d.tipPath.slice(0,i))}</span>${esc(d.tipPath.slice(i))}`]}
   if(d.tipFull!=null)return el.scrollWidth>el.clientWidth+1&&el.textContent.trim()?['',esc(el.textContent)]:null;
   if(!d.tip)return null;
@@ -1568,7 +1585,8 @@ function showTip(el){
 // The first note waits a moment; moving straight on to the next one shows it at once.
 document.addEventListener('mouseover',e=>{
   const el=e.target.closest?.(TIPSEL);if(el===tipFor)return;
-  hideTip();if(!el)return;tipFor=el;tipTimer=setTimeout(()=>{if(tipFor===el)showTip(el)},Date.now()<tipWarm?0:450);
+  hideTip();if(!el)return;tipFor=el;const ready=el.dataset.fpath!=null&&fpath(el.dataset.fpath);   // a named path is looked up while the note waits
+  tipTimer=setTimeout(()=>{if(tipFor!==el)return;if(ready)ready.then(()=>{if(tipFor===el)showTip(el)});else showTip(el)},Date.now()<tipWarm?0:450);
 });
 for(const ev of ['pointerdown','keydown','wheel','blur'])addEventListener(ev,()=>{hideTip();tipWarm=0},true);
 

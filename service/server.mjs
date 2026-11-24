@@ -9,7 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as src from './sources.mjs';
-import { readTranscript, outputFromTranscript, forgetEarly, PICTURE_ROOT, PICTURE_ID } from './transcript.mjs';
+import { readTranscript, outputFromTranscript, forgetEarly, PICTURE_ROOT, PICTURE_ID, previewKind, fileEntry } from './transcript.mjs';
 import { runs, startTurn, answer, setMode, stop, stopStep, liveOutput, taskOutput, publicRun, listCommands, addToTurn, unqueue, sendNow, contextOf, rewindFilesOf } from './runs.mjs';
 import { terms, openTerm, attach, typeInto, resize, closeTerm, closeAll } from './terminals.mjs';
 import { changesFor, changeOf } from './changes.mjs';
@@ -429,6 +429,17 @@ async function api(req, res, url) {
   }
   if (req.method === 'GET' && parts[0] === 'home' && parts[1] === 'activity') return send(res, 200, await home.activity(state.sessions));
   if (req.method === 'GET' && parts[0] === 'home') return send(res, 200, await homeNow());
+  if (req.method === 'GET' && parts[0] === 'sessions' && parts[2] === 'file') {
+    // A path an answer names, that you point at or click: found, checked, and that one file made showable. A click
+    // (open) lets it load its neighbours too, as a page the agent wrote may.
+    const s = state.sessions.find(x => x.id === parts[1]);
+    if (!s) return send(res, 404, { error: 'No such session.' });
+    const f = await namedFile(s, url.searchParams.get('path') || '');
+    if (!f) return send(res, 404, { error: 'Not found.' });
+    const r = await real(f.path); if (r) pointedAt(s.id).add(r);
+    if (url.searchParams.has('open')) { previewDirs(s.id).add(path.dirname(f.path)); knownWork(s.id).add(f.path); }
+    return send(res, 200, f);
+  }
   if (req.method === 'GET' && parts[0] === 'sessions' && parts[2] === 'work') {
     // When each previewable file last changed, so the window can reload one that was edited, by anyone.
     const all = knownWork(parts[1]);
@@ -817,6 +828,20 @@ function openEditor(dir) {
 // anything inside the session's project folder or next to a file the session wrote.
 const dirsBySession = new Map();
 function previewDirs(id) { let d = dirsBySession.get(id); if (!d) dirsBySession.set(id, d = new Set()); return d; }
+const pointed = new Map();   // session -> files you pointed at or clicked in what it wrote (real paths)
+function pointedAt(id) { let p = pointed.get(id); if (!p) pointed.set(id, p = new Set()); return p; }
+// A path as an answer wrote it: a full one, ~/…, or one from the folder the session works in or its project.
+async function namedFile(s, raw) {
+  raw = raw.trim().replace(/^file:\/\//, '');
+  if (!raw || raw.length > 1000 || /[\0\n]/.test(raw) || !previewKind(raw)) return null;
+  const p = raw.replace(/^~(?=$|[\\/])/, os.homedir());
+  const bases = path.isAbsolute(p) ? [''] : [...new Set([s.file ? await src.lastCwd(s.file, s.cwd).catch(() => null) : null, s.cwd].filter(Boolean))];
+  for (const b of bases) {
+    const f = b ? path.resolve(b, p) : path.resolve(p);
+    try { const st = await fs.stat(f); if (st.isFile()) return fileEntry(f, st, new Date().toISOString()); } catch {}
+  }
+  return null;
+}
 const inside = (file, dir) => file === dir || file.startsWith(dir.endsWith(path.sep) ? dir : dir + path.sep);
 const real = async p => { try { return await fs.realpath(p); } catch { return null; } };
 
@@ -834,7 +859,7 @@ const previews = http.createServer(async (req, res) => {
     if (!file) return deny(404);
     const roots = (await Promise.all([s.cwd, ...previewDirs(id)].map(real))).filter(Boolean);
     const parts = file.split(path.sep);
-    if (!roots.some(r => inside(file, r)) || parts.includes('.git') || /^\.env/.test(parts[parts.length - 1])) return deny();
+    if (!(roots.some(r => inside(file, r)) || pointed.get(id)?.has(file)) || parts.includes('.git') || /^\.env/.test(parts[parts.length - 1])) return deny();
     const st = await fs.stat(file);
     if (!st.isFile()) return deny(404);
     const head = { 'content-type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'accept-ranges': 'bytes' };

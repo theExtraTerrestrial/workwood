@@ -859,6 +859,28 @@ test('previews: files the agent wrote are listed, and served with their neighbou
   assert.deepEqual(later.work.map(f => f.name), ['light.html', 'shot.png']);
 });
 
+test('previews: a path an answer names is found from the project or as written, and only that file is shown until you click it', async () => {
+  const id = await newSession('build a MOCKUP');
+  await idle(id);
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'ww-named-')), shot = path.join(out, 'r.png'), near = path.join(out, 'near.css');
+  fs.writeFileSync(shot, 'png'); fs.writeFileSync(near, 'b{}'); fs.writeFileSync(path.join(out, 'notes.json'), '{}');
+  fs.mkdirSync(path.join(sb.home, 'pics'), { recursive: true }); fs.writeFileSync(path.join(sb.home, 'pics', 'a.webp'), 'w');
+  const base = (await state()).preview, get = p => fetch(`${base}/${id}${p}`), ask = (p, open) => svc.call(`sessions/${id}/file?path=${encodeURIComponent(p)}${open ? '&open=1' : ''}`);
+  try {
+    assert.equal((await get(shot)).status, 403);   // not before you point at it
+    const r = await ask(shot);
+    assert.equal(r.status, 200); assert.deepEqual([r.body.path, r.body.kind], [shot, 'image']);
+    assert.equal((await get(shot)).status, 200);
+    assert.equal((await get(near)).status, 403);   // its neighbours wait for a click
+    assert.equal((await ask(shot, true)).status, 200);
+    assert.equal((await get(near)).status, 200);
+    assert.equal((await ask('mockups/light.html')).body.path, path.join(sb.projects.alpha, 'mockups', 'light.html'));   // from the project
+    assert.equal((await ask('~/pics/a.webp')).body.path, path.join(sb.home, 'pics', 'a.webp'));
+    for (const p of [path.join(out, 'gone.png'), path.join(out, 'notes.json'), '/etc/passwd', '', 'mockups/'])
+      assert.equal((await ask(p)).status, 404, p);
+  } finally { fs.rmSync(out, { recursive: true, force: true }); }
+});
+
 test('previews: cards are there by the time the agent asks about them', async () => {
   const id = await newSession('a MOCKUP then ASK');
   await pending(id);

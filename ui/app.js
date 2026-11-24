@@ -280,7 +280,6 @@ async function openSession(id,sending){
   try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.thread=d.thread||null;V.handing=d.handing||null;V.cont=d.continued||null;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.place=d.place||null;V.used={model:d.model||'',effort:d.effort||'',mode:d.mode||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||'',mode:d.defaults?.mode||''}}
   catch(e){oops(e.message)}
   V.loading=false;render();toBottom(true);loadChanges();
-  if(V.sel===id&&V.context)countCtx(id);
   if(V.sel===id&&V.thread)showEarlier();   // the session before shows above this one, dimmed
 }
 
@@ -648,7 +647,9 @@ $('pCtx').onclick=e=>{e.stopPropagation();const was=$('mCtx').hidden;closePops()
   const id=V.sel;
   if(V.ctx?.id!==id||Date.now()-V.ctx.at>30000)countCtx(id);
   renderCtx()};
-// Claude Code's own count: the figure from the last reply is wrong after /compact, and an old session's model may hold more than its name says.
+// Claude Code's own count, asked only when the breakdown is opened: it starts Claude Code on the session for a moment
+// (about a second and a few hundred MB), too much for every session clicked in passing. Until then the meter shows the
+// last reply's size, which a turn here brings up to date when it ends, /compact included.
 function countCtx(id){V.ctx={id,at:Date.now()};
   api(`sessions/${id}/context`).then(r=>{V.ctx={id,at:Date.now(),rows:r.rows};if(V.sel===id&&r.window&&!isWorking()){V.context={...V.context,used:r.used,window:r.window};renderComposer()}},
     err=>{V.ctx={id,at:0,err:'The breakdown is not available ('+err.message+')'}}).then(()=>{if(V.sel===id&&!$('mCtx').hidden)renderCtx()})}

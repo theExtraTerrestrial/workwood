@@ -1439,9 +1439,11 @@ ui('window: shows the inbox by project, the opened conversation, and limits unde
   assert.match(await page.locator('.tfoot').innerText(), /Worked for 3m 12s/);
   assert.equal(await page.locator('#pProfile').innerText(), 'live');
   assert.match((await page.locator('#lim').innerText()).replace(/\s+/g, ' '), /5h ?34% ?7d ?41%/);
-  // first the last reply's size, then Claude Code's own count of what the context holds
-  await page.waitForFunction(() => document.querySelector('#pCtx').innerText.trim() === '26%');
-  assert.match(await page.locator('#pCtx').getAttribute('data-tip'), /51k of 200k/);
+  // the last reply's size; opening a session does not start Claude Code to count it (that waits for the breakdown)
+  await page.waitForFunction(() => document.querySelector('#pCtx').innerText.trim() === '21%');
+  assert.match(await page.locator('#pCtx').getAttribute('data-tip'), /42k of 200k/);
+  await sleep(500);
+  assert.ok(!readLog(sb).some(l => l.includes(`resume=${sb.sessions.alphaLive}`)), readLog(sb).join('|'));
   await page.waitForSelector('.sess .xb');
   assert.equal(await page.locator('.sess .xb').count(), 1);
   assert.equal(await page.locator(`.sess[data-id="${sb.sessions.alphaOutside}"] .st .spin`).count(), 1);
@@ -2412,8 +2414,15 @@ ui('window: at the end, a long new reply is brought in with its first line at th
 });
 
 ui('window: the context figure opens what fills it, and can compact the conversation', async () => {
+  const id = await page.locator('.sess.sel').getAttribute('data-id'), asked = () => readLog(sb).filter(l => l.includes(`resume=${id}`) && l.includes('model=default')).length;
+  const before = asked();
   await page.click('#pCtx');
   await page.waitForSelector('#mCtx .crow:has-text("Messages")');
+  await page.waitForFunction(() => document.querySelector('#pCtx').innerText.trim() === '26%');   // Claude Code's own count, now asked
+  // asked again (past the window's own 30 s) with no reply since: the service's answer holds, Claude Code is not started again
+  await page.keyboard.press('Escape'); await page.evaluate(() => { V.ctx.at = 0; });
+  await page.click('#pCtx'); await page.waitForSelector('#mCtx .crow:has-text("Messages")'); await sleep(300);
+  assert.equal(asked() - before, 1);
   assert.deepEqual(await page.locator('#mCtx .crow').allInnerTexts().then(a => a.map(t => t.replace(/\s+/g, ' '))), ['Messages 30k', 'System tools 16k', 'System prompt 5k']);
   await page.click('#mCtx [data-compact]');
   await page.waitForSelector('.me:has(.chip:has-text("compact"))');

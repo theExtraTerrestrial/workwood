@@ -78,7 +78,7 @@ const renamed = new Map();   // session -> [when, name], for a list that was bei
 const deleted = new Set();   // gone, but a list read a moment earlier may still name them
 const clients = new Set();
 const workPaths = new Map(); // session -> every previewable file it is known to have made
-const counted = new Map();  // session -> { mt, out }: what fills its context, as of the transcript's last change
+const counted = new Map();  // session -> { mt, out }: what fills its context, as of its last reply
 function knownWork(id) { let w = workPaths.get(id); if (!w) workPaths.set(id, w = new Set()); return w; }
 const emit = (type, data) => {
   const msg = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -426,8 +426,9 @@ async function api(req, res, url) {
     const s = state.sessions.find(x => x.id === parts[1]);
     if (!s) return send(res, 404, { error: 'No such session.' });
     const run = runs.get(s.id);
-    // A session at rest is opened to be asked, which takes a moment: the answer holds until its transcript changes.
-    const mt = run?.q ? null : await fs.stat(s.file || '').then(st => st.mtimeMs, () => null), kept = counted.get(s.id);
+    // A session at rest is opened to be asked, which takes a moment: the answer holds until its next reply. Not until
+    // the file changes: Claude Code adds lines to it when it closes, the asking included, so that would never hold.
+    const mt = run?.q ? null : s.reply?.at || null, kept = counted.get(s.id);
     if (mt && kept?.mt === mt) return send(res, 200, kept.out);
     try {
       const env = run?.q ? null : await src.envForProfile(run?.profile || s.profile, state.profiles);

@@ -27,21 +27,29 @@ if (process.argv.includes('--remove')) {
   console.log('Removed Workwood from the Start menu and from ' + home); process.exit(0);
 }
 const afterUpdate = process.argv.includes('--after-update');
+const running = `Get-Process electron -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '${home.replace(/'/g, "''")}\\*' }`;   // this window's processes
 const exe = `${home}\\electron-${version}\\electron.exe`;
 if (afterUpdate) {
   console.log(`${new Date().toISOString()} Updating the Windows copy in ${home}`);
   // The closing window still holds its files (and the service's native parts) for a moment.
-  const mine = `Get-Process electron -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '${home.replace(/'/g, "''")}\\*' }`;
-  for (let i = 0; i < 30 && ps(`@(${mine}).Count`) !== '0'; i++) await new Promise(r => setTimeout(r, 1000));
+  for (let i = 0; i < 30 && ps(`@(${running}).Count`) !== '0'; i++) await new Promise(r => setTimeout(r, 1000));
   process.on('exit', code => {   // open the window again, updated or not; the log says what went wrong
     try { ps(`Start-Process -FilePath '${exe.replace(/'/g, "''")}' -ArgumentList '"${home.replace(/'/g, "''")}\\app"' -WorkingDirectory '${home.replace(/'/g, "''")}'`); } catch (e) { console.error(e.message); }
     if (code) console.error('The Windows copy was not fully updated. Run "npm run shortcut" in WSL to make it again.');
   });
 }
+// Windows keeps the files of a running program: with the window open, the copy cannot be made again.
+if (!afterUpdate && ps(`@(${running}).Count`) !== '0') {
+  console.error('The Workwood window is open, and Windows keeps its files while it runs. Close it, then run "npm run shortcut" again.');
+  process.exit(1);
+}
 const runtime = path.join(H, 'electron-' + version);
 if (!fs.existsSync(path.join(runtime, 'electron.exe'))) {
   const zip = electronZip();
-  for (const old of fs.existsSync(H) ? fs.readdirSync(H).filter(n => n.startsWith('electron-')) : []) fs.rmSync(path.join(H, old), { recursive: true, force: true });
+  // An older Electron still in use (or held by Windows for a moment) is left for a later run to take away.
+  for (const old of fs.existsSync(H) ? fs.readdirSync(H).filter(n => n.startsWith('electron-')) : []) {
+    try { fs.rmSync(path.join(H, old), { recursive: true, force: true }); } catch { console.log(`Could not remove ${old} yet (still in use); a later run takes it away.`); }
+  }
   fs.mkdirSync(runtime, { recursive: true });
   execFileSync('unzip', ['-q', '-o', zip, '-d', runtime]);
 }

@@ -10,9 +10,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { electronVersion as version, electronZip, stageNative, writeApp } from './windows-parts.mjs';
+import { electronVersion as version, electronZip, stageNative, writeApp, wslDistro } from './windows-parts.mjs';
 
-const distro = process.env.WSL_DISTRO_NAME;
+const distro = wslDistro();
 if (!distro) { console.error('This is for Windows with WSL. Run it inside your WSL distribution.'); process.exit(1); }
 const win = (file, args) => execFileSync(file, args, { cwd: '/mnt/c', encoding: 'utf8' }).replace(/\r/g, '').trim();
 const ps = script => win('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script]);
@@ -45,6 +45,12 @@ if (!fs.existsSync(path.join(runtime, 'electron.exe'))) {
   fs.mkdirSync(runtime, { recursive: true });
   execFileSync('unzip', ['-q', '-o', zip, '-d', runtime]);
 }
+// Pinned to the taskbar, Windows may start electron.exe with nothing after it, which shows Electron's own start
+// page. Electron opens resources\app before that page, so a small app there starts Workwood all the same.
+const stub = path.join(runtime, 'resources', 'app');
+fs.mkdirSync(stub, { recursive: true });
+fs.writeFileSync(path.join(stub, 'package.json'), JSON.stringify({ name: 'workwood', productName: 'Workwood', main: 'main.cjs' }));
+fs.writeFileSync(path.join(stub, 'main.cjs'), "// Written by \"npm run shortcut\": starts Workwood when electron.exe is opened on its own.\nrequire(require('node:path').join(__dirname, '..', '..', '..', 'app', 'main.cjs'));\n");
 // The Windows copy of the service: this project's service and page, with the Windows builds of what they need.
 // Built here, then unpacked on the Windows side in one go (copying thousands of small files across is slow).
 const lockSum = createHash('sha256').update(fs.readFileSync(path.join(dir, 'package-lock.json'))).digest('hex');
@@ -72,6 +78,9 @@ const appDir = path.join(H, 'app');
 fs.rmSync(path.join(H, 'Workwood.vbs'), { force: true });
 fs.mkdirSync(path.join(os.homedir(), '.cache', 'workwood'), { recursive: true });
 writeApp(appDir, dir, { distro, dir });
+// An earlier install that missed WSL left a Linux launcher entry, which WSLg shows in the Start menu too.
+const linuxEntry = path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'applications', 'workwood.desktop');
+if (fs.existsSync(linuxEntry)) { fs.rmSync(linuxEntry, { force: true }); console.log('Removed the Linux launcher entry, so the Start menu has only the Windows window.'); }
 const q = s => `'${s.replace(/'/g, "''")}'`;
 ps(`$s=(New-Object -ComObject WScript.Shell).CreateShortcut(${q(link)});$s.TargetPath=${q(exe)};$s.Arguments=${q(`"${home}\\app"`)};$s.IconLocation=${q(`${home}\\app\\workwood.ico`)};$s.Description='Workwood';$s.WorkingDirectory=${q(home)};$s.Save()`);
 console.log(`Workwood is in the Start menu.\n  shortcut: ${link}\n  window:   ${home}\n  log:      ~/.cache/workwood/workwood.log (in WSL)`);

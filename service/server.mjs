@@ -739,8 +739,8 @@ async function api(req, res, url) {
     if (!s) return send(res, 404, { error: 'No such session.' });
     // Where it is working now: an agent that moved into a worktree is opened there, at the worktree's top.
     const now = s.file ? await src.lastCwd(s.file, s.cwd) : s.cwd, pl = await src.placeOf(now);
-    spawn('code', [pl.worktree ? pl.top : s.cwd], { detached: true, stdio: 'ignore', env: src.cleanEnv(), shell: process.platform === 'win32', windowsHide: true }).on('error', () => {}).unref();
-    return send(res, 200, { ok: true });
+    const err = await openEditor(pl.worktree ? pl.top : s.cwd);
+    return err ? send(res, 500, { error: err }) : send(res, 200, { ok: true });
   }
   send(res, 404, { error: 'Not found.' });
 }
@@ -749,6 +749,22 @@ async function api(req, res, url) {
 // Files an agent made are shown from a second address, so a previewed page is a different
 // site from the app and cannot reach it. A page may load its neighbours (styles, images):
 // anything inside the session's project folder or next to a file the session wrote.
+// VS Code's `code` command hands the folder to VS Code and ends. On Windows it is code.cmd, which only cmd runs:
+// the folder is quoted for cmd, as a space in it (C:\Users\Jane Doe) would split it in two. A `code` that is
+// missing or fails says so, instead of the button doing nothing.
+function openEditor(dir) {
+  const win = process.platform === 'win32';
+  return new Promise(resolve => {
+    const child = win
+      ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"code "${dir.replace(/"/g, '')}""`], { windowsVerbatimArguments: true, detached: true, stdio: 'ignore', env: src.cleanEnv(), windowsHide: true })
+      : spawn('code', [dir], { detached: true, stdio: 'ignore', env: src.cleanEnv() });
+    const missing = 'VS Code was not found. In VS Code, run "Shell Command: Install \'code\' command in PATH" (on Windows, reinstall it with "Add to PATH" ticked), then try again.';
+    const timer = setTimeout(() => { child.unref(); resolve(null); }, 8000);   // still going: it is opening
+    child.on('error', e => { clearTimeout(timer); resolve(e.code === 'ENOENT' ? missing : `VS Code could not be opened (${e.message}).`); });
+    child.on('exit', code => { clearTimeout(timer); resolve(!code ? null : (win && code === 1) || code === 127 ? missing : `VS Code could not be opened (code exited with ${code}).`); });
+  });
+}
+
 const dirsBySession = new Map();
 function previewDirs(id) { let d = dirsBySession.get(id); if (!d) dirsBySession.set(id, d = new Set()); return d; }
 const inside = (file, dir) => file === dir || file.startsWith(dir.endsWith(path.sep) ? dir : dir + path.sep);

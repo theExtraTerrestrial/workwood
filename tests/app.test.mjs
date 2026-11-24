@@ -924,6 +924,14 @@ test('open in terminal: resumes under the session\'s own profile, and not while 
   assert.equal((await svc.call(`sessions/${id}/terminal`, {})).status, 409);
   await svc.call(`sessions/${id}/stop`, {}); await idle(id);
 });
+  // a `code` that fails says so, rather than the button doing nothing
+  const stub = path.join(sb.bin, 'code'), kept = fs.readFileSync(stub, 'utf8');
+  fs.writeFileSync(stub, '#!/usr/bin/env bash\nexit 3\n');
+  try {
+    const r = await svc.call('open-editor', { sessionId: sb.sessions.betaOther });
+    assert.equal(r.status, 500);
+    assert.match(r.body.error, /VS Code could not be opened/);
+  } finally { fs.writeFileSync(stub, kept); }
 
 test('delete: removes the history for good, but never a session that is in use', async () => {
   const busy = await svc.call(`sessions/${sb.sessions.alphaOutside}/delete`, {});

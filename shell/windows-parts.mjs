@@ -7,6 +7,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
+/** The WSL distribution this runs in, or null outside WSL. WSL_DISTRO_NAME is missing under sudo and in some
+ *  shells started without WSL's environment, so the kernel and wslpath are asked too. */
+export function wslDistro() {
+  if (process.env.WSL_DISTRO_NAME) return process.env.WSL_DISTRO_NAME;
+  if (process.platform !== 'linux') return null;
+  let kernel = ''; try { kernel = fs.readFileSync('/proc/sys/kernel/osrelease', 'utf8'); } catch {}
+  if (!/microsoft|wsl/i.test(kernel)) return null;
+  try { const m = /^\\\\[^\\]+\\([^\\]+)/.exec(execFileSync('wslpath', ['-w', '/'], { encoding: 'utf8' }).trim()); if (m) return m[1]; } catch {}
+  return null;
+}
+
 export const electronVersion = createRequire(import.meta.url)('electron/package.json').version;
 
 /** The Electron for Windows download, kept in ~/.cache/workwood so it is fetched once per version. */

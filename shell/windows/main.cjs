@@ -46,12 +46,13 @@ async function startWindows() {
 }
 const address = id => started[id] || (started[id] = (id === 'wsl' ? startWsl() : startWindows()).catch(e => { delete started[id]; throw e; }));
 
-async function show(id) {
+async function show(id, chosen = false) {
   let url;
   try { url = await address(id); }
   catch (e) { dialog.showErrorBox('Workwood could not start', `${e.message}${id === 'wsl' ? '\n\nSee ~/.cache/workwood/workwood.log in WSL.' : ''}`); if (!current) app.quit(); return; }
   current = id;
-  try { fs.writeFileSync(remembered, JSON.stringify({ env: id })); } catch {}
+  // Only a place you picked is kept: the one opened by default is not a choice (and once wrongly was Windows).
+  if (chosen) try { fs.writeFileSync(remembered, JSON.stringify({ env: id, chosen: true })); } catch {}
   // Windows needs a moment before it can reach a port that WSL has only just opened: keep trying for a while.
   for (let i = 0; ; i++) {
     try { await win.loadURL(url); break; }
@@ -71,6 +72,8 @@ async function open() {
     title: 'Workwood', backgroundColor: '#18191c', autoHideMenuBar: true, icon: path.join(__dirname, 'workwood.ico'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, spellcheck: true },
   });
+  // What a pin to the taskbar starts: this program with this folder, not electron.exe on its own.
+  win.setAppDetails({ appId: 'Workwood', appIconPath: path.join(__dirname, 'workwood.ico'), relaunchDisplayName: 'Workwood', relaunchCommand: `"${process.execPath}" "${__dirname}"` });
   win.once('ready-to-show', () => { if (place.maximized) win.maximize(); win.show(); });
   place.track(win);
   win.on('closed', () => { win = null; });
@@ -101,7 +104,7 @@ async function open() {
     } else app.relaunch();
     app.quit();
   });
-  ipcMain.handle('env:set', (e, id) => { if (envs.some(x => x.id === id) && id !== current) show(id); });
+  ipcMain.handle('env:set', (e, id) => { if (envs.some(x => x.id === id) && id !== current) show(id, true); });
   // While you look at one side, ask the other (if it was started) whether an agent there is working or waiting for you.
   setInterval(async () => {
     if (!win || quitting) return;
@@ -112,7 +115,8 @@ async function open() {
     }
     try { win?.webContents.send('env:status', out); } catch {}
   }, 4000);
-  let first = envs[0]?.id; try { const want = JSON.parse(fs.readFileSync(remembered, 'utf8')).env; if (envs.some(x => x.id === want)) first = want; } catch {}
+  // Set up from WSL, sessions run there unless you chose Windows before.
+  let first = (envs.find(x => x.id === 'wsl') || envs[0])?.id; try { const kept = JSON.parse(fs.readFileSync(remembered, 'utf8')); if (kept.chosen && envs.some(x => x.id === kept.env)) first = kept.env; } catch {}
   if (!first) { dialog.showErrorBox('Workwood could not start', 'Nothing is installed to run sessions with. Run "npm run shortcut" again.'); return app.quit(); }
   await show(first);
 }

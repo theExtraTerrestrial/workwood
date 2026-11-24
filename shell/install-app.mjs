@@ -18,7 +18,10 @@ const run = (file, args, opts = {}) => execFileSync(file, args, { encoding: 'utf
 const dist = path.join(dir, 'node_modules', 'electron', 'dist');
 const needElectron = file => { const p = path.join(dist, file); if (!fs.existsSync(p)) stop(`The window program is missing (${p}).\nRun "npm install" in ${dir} first.`); return p; };
 
-if (process.env.WSL_DISTRO_NAME) await import('./windows-shortcut.mjs');
+// Inside WSL the Linux window would open through WSLg, as a Linux app: the Windows window is what belongs there.
+// WSL_DISTRO_NAME alone misses WSL under sudo and in shells started without WSL's environment.
+const inWsl = process.platform === 'linux' && (!!process.env.WSL_DISTRO_NAME || (() => { try { return /microsoft|wsl/i.test(fs.readFileSync('/proc/sys/kernel/osrelease', 'utf8')); } catch { return false; } })());
+if (inWsl) await import('./windows-shortcut.mjs');
 else if (process.platform === 'darwin') mac();
 else if (process.platform === 'win32') await windows();
 else if (process.platform === 'linux') linux();

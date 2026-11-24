@@ -143,13 +143,19 @@ const isNoise = t => /^\s*(<|Caveat:|\[Request interrupted|This session is being
  *   {kind:'skill', name} {kind:'note', text} {kind:'done', ms, ts}
  *   {kind:'work', files:[{path,name,kind,v,ts}]}   previewable files written since the last one
  */
-// How much a model can hold. Sizes a finished turn reported win; otherwise the model's name tells, and as a
-// last resort a conversation already longer than 200k must be on the large window.
-const learned = new Map();
-export function learnWindow(model, size) { if (model && size > 0) learned.set(model, size); }
+// How much a model can hold. What Claude Code reported wins, kept on disk so it holds after a restart too; otherwise
+// the model's name tells (the Claude 5 models hold a million under Claude Code, older ones 200k unless named [1m]),
+// and as a last resort a conversation already longer than 200k must be on the large window.
+const WINDOWS = path.join(os.homedir(), '.cache', 'workwood', 'windows.json');
+const learned = new Map((() => { try { return Object.entries(JSON.parse(fs.readFileSync(WINDOWS, 'utf8'))).filter(([, n]) => n > 0); } catch { return []; } })());
+export function learnWindow(model, size) {
+  if (!model || !(size > 0) || learned.get(model) === size) return;
+  learned.set(model, size);
+  try { fs.mkdirSync(path.dirname(WINDOWS), { recursive: true }); fs.writeFileSync(WINDOWS, JSON.stringify(Object.fromEntries(learned))); } catch {}
+}
 export function windowFor(model, used = 0) {
   if (learned.has(model)) return Math.max(learned.get(model), used > 200000 ? 1000000 : 0);
-  return /\[1m\]/i.test(model || '') || /^claude-(fable|mythos)-/.test(model || '') || used > 200000 ? 1000000 : 200000;
+  return /\[1m\]/i.test(model || '') || /^claude-(opus|sonnet|haiku|fable|mythos)-([5-9]|\d\d)/.test(model || '') || used > 200000 ? 1000000 : 200000;
 }
 
 // A picture in a message you wrote is kept once, named by what is in it, so the window can show it again later

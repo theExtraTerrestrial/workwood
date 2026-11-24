@@ -548,6 +548,16 @@ test('a command step carries its text, its time, how it ended and its output; on
   assert.equal(await outputFromTranscript(fileOf(id), 'toolu_fail'), full);
 });
 
+test('a model\'s context window: the Claude 5 models hold a million, older ones 200k; what Claude Code reported is kept on disk', async () => {
+  const { windowFor } = await import('../service/transcript.mjs');
+  for (const m of ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-2', 'claude-sonnet-4-5[1m]']) assert.equal(windowFor(m), 1000000, m);
+  for (const m of ['claude-sonnet-4-5', 'claude-3-5-haiku-20241022']) assert.equal(windowFor(m), 200000, m);
+  assert.equal(windowFor('claude-sonnet-4-5', 250000), 1000000);
+  // the service learns claude-test's window from a finished turn (the stand-in reports 200k) and keeps it for the next start
+  const kept = path.join(sb.home, '.cache', 'workwood', 'windows.json');
+  await until(() => fs.existsSync(kept) && JSON.parse(fs.readFileSync(kept, 'utf8'))['claude-test'] === 200000, 'the learned window on disk', 20000);
+});
+
 test('the prompt cache: each reply says when it was written and for how long it is kept', async () => {
   const { readTranscript } = await import('../service/transcript.mjs');
   const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ww-cache-')), 's.jsonl');

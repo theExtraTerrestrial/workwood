@@ -2481,6 +2481,25 @@ ui('window: hand off from the context menu or with /handoff; the thread reads as
   const third = await page.evaluate(() => A.sessions.find(s => s.thread === 3).id); await idle(third);
 });
 
+ui('window: an earlier session of a thread shows its files from where it may: a picture it made outside the project loads, and opens', async () => {
+  await startNew('MOCKUP OUTSIDE');
+  await page.waitForSelector('.ai:has-text("Both directions are ready")');
+  const first = await page.locator('.sess.sel').getAttribute('data-id'); await idle(first);
+  const had = new Set((await state()).sessions.map(s => s.id));
+  assert.equal((await svc.call(`sessions/${first}/handoff`, { model: 'haiku', effort: 'low' })).status, 200);
+  const next = await until(async () => (await state()).sessions.find(s => s.thread === 2 && !had.has(s.id))?.id, 'the new session of the thread');
+  await idle(next);
+  await page.evaluate(id => openSession(id), next);
+  await page.waitForSelector('.chain:has-text("2 sessions")');
+  const card = page.locator('#thread .hc:has-text("shot.png")');
+  await card.waitFor();
+  await page.waitForFunction(() => [...document.querySelectorAll('#thread .hc .ht img')].some(i => i.complete && i.naturalWidth > 0), null, { timeout: 8000 });
+  assert.ok((await card.locator('img').getAttribute('src')).includes('/' + first + '/'));   // asked for as the session that made it
+  await card.click();
+  await page.waitForFunction(() => { const i = document.querySelector('#stage img'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 8000 });
+  assert.equal(await page.locator('#pName').innerText(), 'shot.png');
+});
+
 ui('window: small things on the cards: skip a question, approve a plan but be asked, see a whole edit, wait out a limit', async () => {
   await startNew('just ASK me');
   await page.waitForSelector('#qcard:has-text("Which direction")');

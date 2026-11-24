@@ -344,7 +344,8 @@ async function turn(prompt, said = prompt, uuid) {
   }
   if (/\bMOCKUP\b/.test(prompt)) {
     // writes two pages that share a stylesheet, and a picture; MOCKUP ASK then stops to ask about them
-    const dir = path.join(cwd, 'mockups'); fs.mkdirSync(dir, { recursive: true });
+    // MOCKUP OUTSIDE writes them outside the project, where only this session may show them from
+    const dir = /\bOUTSIDE\b/.test(prompt) ? fs.mkdtempSync(path.join(fs.realpathSync(process.env.TMPDIR || '/tmp'), 'ww-out-')) : path.join(cwd, 'mockups'); fs.mkdirSync(dir, { recursive: true });
     const page = name => `<!doctype html><link rel="stylesheet" href="style.css"><h1>${name} direction</h1><img src="shot.png">`;
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8Dwn4GBgYGJAQoAHxcCAr7WqXkAAAAASUVORK5CYII=', 'base64');
     const files = [['light.html', page('Light')], ['dark.html', page('Dark')], ['style.css', 'h1{color:rgb(1, 2, 3)}'], ['shot.png', png]];

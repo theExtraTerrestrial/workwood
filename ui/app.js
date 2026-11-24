@@ -413,7 +413,8 @@ $('lbx').onclick=closePic;
 document.addEventListener('keydown',e=>{if(!lbx)return;e.stopPropagation();
   if(e.key==='Escape'){e.preventDefault();closePic()}
   else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&lbx.list.length>1){e.preventDefault();lbx.i=(lbx.i+(e.key==='ArrowRight'?1:-1)+lbx.list.length)%lbx.list.length;showPic()}},true);
-const fileUrl=f=>`${A.preview}/${V.sel}/${f.path.split(/[\\/]/).filter(Boolean).map(encodeURIComponent).join('/')}?v=${f.v}`;
+// a file an earlier session of the thread made is asked for as that session's: the folders it may show from are its own
+const fileUrl=f=>`${A.preview}/${f.sid||V.sel}/${f.path.split(/[\\/]/).filter(Boolean).map(encodeURIComponent).join('/')}?v=${f.v}`;
 const folderOf=f=>{const cwd=selSession()?.cwd||'',d=f.path.slice(0,f.path.lastIndexOf('/'));return d===cwd?'':d.startsWith(cwd+'/')?d.slice(cwd.length+1):d.replace(/^\/home\/[^/]+/,'~')};
 const SANDBOX='allow-scripts allow-forms allow-same-origin allow-popups allow-modals';
 function thumb(f,url=fileUrl(f)){
@@ -468,18 +469,23 @@ const markCards=()=>document.querySelectorAll('#thread [data-open]').forEach(c=>
 
 /* ---------- side panel: what the agent made ---------- */
 let staged=null;
+// What the preview steps through: this session's files, then those of the earlier sessions shown above it, newest first
+function pvList(){const out=[...V.work],has=new Set(out.map(f=>f.path));
+  for(const x of [...(V.thread?.sessions||[])].reverse()){const o=V.older.get(x.id);if(!o)continue;
+    for(let j=o.items.length-1;j>=0;j--)if(o.items[j].kind==='work')for(const f of o.items[j].files)if(!has.has(f.path)){has.add(f.path);out.push(f)}}
+  return out}
 function renderPanel(){
-  const i=V.work.findIndex(f=>f.path===V.pv),f=V.work[i],open=!V.isNew&&!!f&&!!A.preview,ch=!V.isNew&&V.side==='changes'&&!!V.ch?.repo,ol=!open&&!V.isNew&&V.side==='outline',cm=!open&&V.side==='compare'?compareSet():null;
-  const pb=$('bPreview');pb.hidden=V.isNew||!A.preview||!V.work.length;$('pvN').textContent=V.work.length>1?V.work.length:'';pb.classList.toggle('on',open);
+  const W=pvList(),i=W.findIndex(f=>f.path===V.pv),f=W[i],open=!V.isNew&&!!f&&!!A.preview,ch=!V.isNew&&V.side==='changes'&&!!V.ch?.repo,ol=!open&&!V.isNew&&V.side==='outline',cm=!open&&V.side==='compare'?compareSet():null;
+  const pb=$('bPreview');pb.hidden=V.isNew||!A.preview||!W.length;$('pvN').textContent=W.length>1?W.length:'';pb.classList.toggle('on',open);
   const tk=!open&&!V.isNew&&V.side==='tasks'&&bgList().length>0;$('tkw').hidden=!tk;if(tk)renderTasks();else clearTimeout(tkTimer);
   $('panel').hidden=!open&&!ch&&!cm&&!ol&&!tk;$('pvw').hidden=!open;$('cmw').hidden=!cm;renderCompare(cm);$('olw').hidden=!ol;renderOutline();$('chw').hidden=open||!ch;renderChanges();
   $('split').classList.toggle('full',!!(open||cm)&&V.full);markCards();fitSide();
   if(!open){if(staged){staged=null;$('stage').innerHTML=''}$('menu').hidden=true;return}
-  $('pName').textContent=f.name;$('pCnt').textContent=V.work.length>1?`${i+1} of ${V.work.length}`:'';
-  $('pPrev').disabled=$('pNext').disabled=V.work.length<2;
-  $('menu').innerHTML=V.work.map(w=>`<button data-pick="${esc(w.path)}" class="${w.path===V.pv?'cur':''}" data-tip-path="${esc(w.path)}"><b>${esc(w.name)}</b><span>${w.ts?ago(Date.parse(w.ts)/1000)==='now'?'just now':ago(Date.parse(w.ts)/1000)+' ago':''}</span></button>`).join('');
+  $('pName').textContent=f.name;$('pCnt').textContent=W.length>1?`${i+1} of ${W.length}`:'';
+  $('pPrev').disabled=$('pNext').disabled=W.length<2;
+  $('menu').innerHTML=W.map(w=>`<button data-pick="${esc(w.path)}" class="${w.path===V.pv?'cur':''}" data-tip-path="${esc(w.path)}"><b>${esc(w.name)}</b><span>${w.ts?ago(Date.parse(w.ts)/1000)==='now'?'just now':ago(Date.parse(w.ts)/1000)+' ago':''}</span></button>`).join('');
   $('bFull').dataset.i=V.full?'min':'max';$('bFull').dataset.tip=V.full?'Show conversation':'Full width';$('bFull').classList.toggle('on',V.full);hydrate($('bFull').parentNode);
-  const key=f.path+'|'+f.v;
+  const key=f.path+'|'+f.v+'|'+(f.sid||'');
   if(key!==staged){staged=key;$('stage').innerHTML=stageOf(f)}
   fitThumbs();
 }
@@ -584,7 +590,7 @@ function loadOlder(id){
   if(V.older.has(id))return Promise.resolve(V.older.get(id));
   if(olderReq.has(id))return olderReq.get(id);
   const sel=V.sel,k=V.thread?.sessions.findIndex(x=>x.id===id)??-1,base=-(k+1)*1e8;
-  const p=api('sessions/'+id).then(d=>{const o={items:d.items.map(it=>({...it,n:base+it.n,sid:id})),handoff:d.thread?.handoff||null};if(V.sel===sel)V.older.set(id,o);return o})
+  const p=api('sessions/'+id).then(d=>{const o={items:d.items.map(it=>({...it,n:base+it.n,sid:id,...(it.kind==='work'?{files:it.files.map(f=>({...f,sid:id}))}:{})})),handoff:d.thread?.handoff||null};if(V.sel===sel)V.older.set(id,o);return o})
     .catch(e=>{oops(e.message);return null}).finally(()=>olderReq.delete(id));
   olderReq.set(id,p);return p;
 }
@@ -596,6 +602,7 @@ async function showEarlier(){
   const sc=$('scroll'),h0=sc.scrollHeight,top0=sc.scrollTop,end=!awayNow();
   if(o)V.shown++;renderThread();
   sc.scrollTop=end?sc.scrollHeight:top0+(sc.scrollHeight-h0);
+  if(o)renderPanel();   // its files join what the preview steps through
 }
 async function look(id,n){
   const sel=V.sel;await loadOlder(id);if(V.sel!==sel||!V.older.has(id))return;
@@ -823,7 +830,7 @@ $('bRefresh').onclick=async()=>{staged=null;await checkWork();if(!staged)renderP
 // A card clicked in the conversation opens at full width (beside it while a question or permission waits there);
 // the header button opens beside the conversation.
 const showWork=(p,full)=>{V.pv=V.lastPv=p;V.side=null;if(full!==undefined)V.full=full;renderPanel();if(V.run?.pending?.kind==='question')renderCard()};
-const step=d=>()=>{const i=V.work.findIndex(f=>f.path===V.pv),n=V.work.length;if(n)showWork(V.work[(i+d+n)%n].path)};
+const step=d=>()=>{const W=pvList(),i=W.findIndex(f=>f.path===V.pv),n=W.length;if(n)showWork(W[(i+d+n)%n].path)};
 $('pPrev').onclick=step(-1);$('pNext').onclick=step(1);
 $('moreBtn').onclick=e=>{e.stopPropagation();const was=$('menu').hidden;closePops();$('menu').hidden=!was};
 $('menu').onclick=e=>{const b=e.target.closest('[data-pick]');if(b){closePops();showWork(b.dataset.pick)}};
@@ -831,8 +838,8 @@ $('bFull').onclick=()=>{V.full=!V.full;renderPanel()};
 $('bClose').onclick=()=>{V.pv=null;V.full=false;renderPanel()};
 // the header button opens the preview on what you last looked at (or the newest), and closes it again
 $('bPreview').onclick=()=>{if(V.pv){V.pv=null;V.full=false;renderPanel();return}
-  const p=(V.work.find(f=>f.path===V.lastPv)||V.work[0])?.path;if(p)showWork(p,false)};
-$('bExt').onclick=()=>{const f=V.work.find(w=>w.path===V.pv);if(f)window.open(fileUrl(f),'_blank','noopener')};
+  const W=pvList(),p=(W.find(f=>f.path===V.lastPv)||W[0])?.path;if(p)showWork(p,false)};
+$('bExt').onclick=()=>{const f=pvList().find(w=>w.path===V.pv);if(f)window.open(fileUrl(f),'_blank','noopener')};
 // A turn's new files go to the top of the list; a file written again replaces its older entry.
 function addWork(files){const has=new Set(files.map(f=>f.path));V.work=files.concat(V.work.filter(f=>!has.has(f.path)))}
 $('thread').onclick=e=>{const st=e.target.closest('[data-astep]');if(st){const c=st.closest('.ans'),k=+st.dataset.astep;ansAt.set(c.dataset.ans,k);
@@ -1443,7 +1450,7 @@ document.addEventListener('keydown',e=>{
   if(k==='b'){e.preventDefault();toggleSide()}
   else if(k==='n'&&(V.pv||!$('bPreview').hidden)){e.preventDefault();$('bPreview').click()}
   else if(k==='m'&&V.pv){e.preventDefault();$('bFull').click()}
-  else if((k==='arrowleft'||k==='arrowright')&&V.pv&&V.work.length>1&&!e.target.closest?.('video,audio')){e.preventDefault();$(k==='arrowleft'?'pPrev':'pNext').click()}   // a playing video keeps its own arrows
+  else if((k==='arrowleft'||k==='arrowright')&&V.pv&&pvList().length>1&&!e.target.closest?.('video,audio')){e.preventDefault();$(k==='arrowleft'?'pPrev':'pNext').click()}   // a playing video keeps its own arrows
 });
 
 /* ---------- terminal view: the session's real Claude Code terminal ---------- */

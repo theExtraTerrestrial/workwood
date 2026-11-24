@@ -44,9 +44,12 @@ const kept = src.readKept(), nowS = () => Math.floor(Date.now() / 1000);
 const done = new Map(Object.entries(kept.done || {})); for (const id of kept.archived || []) if (!done.has(id)) done.set(id, nowS());
 let own = Array.isArray(kept.own) ? new Set(kept.own) : null;   // null until the first list is read: then everything recent is yours
 const unread = new Set(kept.unread || []);
+const CACHE_MINUTES = [0, 5, 30, 60, 120];
 const prefs = { defaultProfile: kept.defaultProfile || null, language: kept.language || null, folders: Array.isArray(kept.folders) ? kept.folders : [],
   doneDays: Number.isInteger(kept.doneDays) ? kept.doneDays : 7, bypass: kept.bypass === true, autoContinue: kept.autoContinue === true,
   speech: kept.speech === 'turbo' ? 'turbo' : 'small',
+  // how long a session's prompt cache is taken to last after its last reply (0: no warning); a reply that wrote a shorter one counts that
+  cacheMinutes: CACHE_MINUTES.includes(kept.cacheMinutes) ? kept.cacheMinutes : 60,
   // handing off: who writes the handoff (Auto picks by how much went on), and from how many tokens of context it is offered
   handoff: { model: ho.MODELS.includes(kept.handoff?.model) ? kept.handoff.model : 'auto', effort: ho.EFFORTS.includes(kept.handoff?.effort) ? kept.handoff.effort : 'medium',
     offer: ho.OFFERS.includes(kept.handoff?.offer) ? kept.handoff.offer : 400000 } };   // your choices in the settings dialog
@@ -519,6 +522,7 @@ async function api(req, res, url) {
       if ('effort' in h) prefs.handoff.effort = ho.EFFORTS.includes(h.effort) ? h.effort : 'medium';
       if ('offer' in h) prefs.handoff.offer = ho.OFFERS.includes(+h.offer) ? +h.offer : 400000;
     }
+    if ('cacheMinutes' in b) prefs.cacheMinutes = CACHE_MINUTES.includes(+b.cacheMinutes) ? +b.cacheMinutes : 60;
     if ('speech' in b) { prefs.speech = b.speech === 'turbo' ? 'turbo' : 'small'; voice.choose(prefs.speech); }
     if ('language' in b) prefs.language = /^[a-z]{3,20}$/.test(b.language || '') ? b.language : null;
     if ('folders' in b) {
@@ -745,10 +749,6 @@ async function api(req, res, url) {
   send(res, 404, { error: 'Not found.' });
 }
 
-// ---- previews ----
-// Files an agent made are shown from a second address, so a previewed page is a different
-// site from the app and cannot reach it. A page may load its neighbours (styles, images):
-// anything inside the session's project folder or next to a file the session wrote.
 // VS Code's `code` command hands the folder to VS Code and ends. On Windows it is code.cmd, which only cmd runs:
 // the folder is quoted for cmd, as a space in it (C:\Users\Jane Doe) would split it in two. A `code` that is
 // missing or fails says so, instead of the button doing nothing.
@@ -765,6 +765,10 @@ function openEditor(dir) {
   });
 }
 
+// ---- previews ----
+// Files an agent made are shown from a second address, so a previewed page is a different
+// site from the app and cannot reach it. A page may load its neighbours (styles, images):
+// anything inside the session's project folder or next to a file the session wrote.
 const dirsBySession = new Map();
 function previewDirs(id) { let d = dirsBySession.get(id); if (!d) dirsBySession.set(id, d = new Set()); return d; }
 const inside = (file, dir) => file === dir || file.startsWith(dir.endsWith(path.sep) ? dir : dir + path.sep);

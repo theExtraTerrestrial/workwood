@@ -361,7 +361,11 @@ export class Builder {
     const u = message.usage;
     if (u) {
       const used = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.output_tokens || 0);
-      if (used) this.context = { used, window: windowFor(message.model, used) };
+      // The prompt cache this reply wrote, and for how long Claude Code asked it be kept (an hour on a subscription,
+      // five minutes once usage runs into overage). A reply that only read the cache keeps it for the same time again.
+      const c = u.cache_creation || {};
+      if (c.ephemeral_1h_input_tokens > 0) this.cacheTtl = 3600; else if (c.ephemeral_5m_input_tokens > 0) this.cacheTtl = 300;
+      if (used) this.context = { used, window: windowFor(message.model, used), at: (ts && Date.parse(ts)) || Date.now(), ...(this.cacheTtl ? { ttl: this.cacheTtl } : {}) };
     }
     return out;
   }

@@ -172,7 +172,7 @@ test('starts a session on the global profile without touching Claudius', async (
   // Claude Code's own instructions, with Workwood's note on how to ask about files after them
   assert.ok(log.some(l => l.startsWith('appended This session runs in Workwood') && l.includes('`preview`')), log.join('|'));
   // when the turn ends, the context is Claude Code's own count, not the last reply's size (which /compact leaves behind)
-  assert.deepEqual(s.context, { used: 51000, window: 200000 });
+  assert.deepEqual({ used: s.context.used, window: s.context.window }, { used: 51000, window: 200000 });
 });
 
 test('starts a session on another profile without Claudius: wired to the shared history, and listed under that profile', async () => {
@@ -548,6 +548,22 @@ test('a command step carries its text, its time, how it ended and its output; on
   assert.equal(await outputFromTranscript(fileOf(id), 'toolu_fail'), full);
 });
 
+test('the prompt cache: each reply says when it was written and for how long it is kept', async () => {
+  const { readTranscript } = await import('../service/transcript.mjs');
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ww-cache-')), 's.jsonl');
+  const A = (ts, cache) => JSON.stringify({ type: 'assistant', timestamp: ts, message: { role: 'assistant', model: 'claude-test', content: [{ type: 'text', text: 'ok' }],
+    usage: { input_tokens: 2, cache_read_input_tokens: 90000, cache_creation_input_tokens: 1000, output_tokens: 10, ...(cache ? { cache_creation: cache } : {}) } } });
+  fs.writeFileSync(f, A('2026-11-24T10:00:00.000Z', { ephemeral_1h_input_tokens: 1000, ephemeral_5m_input_tokens: 0 }) + '\n');
+  assert.deepEqual(pick((await readTranscript(f)).context), { at: Date.parse('2026-11-24T10:00:00.000Z'), ttl: 3600 });
+  // a reply that only read the cache keeps the length it had; one written for five minutes (overage) shortens it
+  fs.appendFileSync(f, A('2026-11-24T10:20:00.000Z', null) + '\n');
+  assert.deepEqual(pick((await readTranscript(f)).context), { at: Date.parse('2026-11-24T10:20:00.000Z'), ttl: 3600 });
+  fs.appendFileSync(f, A('2026-11-24T10:30:00.000Z', { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 800 }) + '\n');
+  assert.deepEqual(pick((await readTranscript(f)).context), { at: Date.parse('2026-11-24T10:30:00.000Z'), ttl: 300 });
+  fs.rmSync(path.dirname(f), { recursive: true, force: true });
+  function pick(c) { return { at: c.at, ttl: c.ttl }; }
+});
+
 test('work left in the background keeps the session open: an agent with its own steps, a monitor and its events, a failure that marks it unread, a stop', async () => {
   const id = await newSession('start BACKGROUND work');
   let s = await until(async () => { const s = await session(id); return s.run?.lingering && s.run.bg.length === 2 && s; }, 'the turn to end with work left running');
@@ -767,7 +783,8 @@ test('previews: cards are there by the time the agent asks about them', async ()
 test('a session reports the model and effort it last ran on, and the context window that model has', async () => {
   const s = await session(sb.sessions.betaFable);
   assert.equal(s.model, 'claude-fable-5-2'); assert.equal(s.effort, 'xhigh');
-  assert.deepEqual(s.context, { used: 42000, window: 1000000 });
+  assert.deepEqual({ used: s.context.used, window: s.context.window }, { used: 42000, window: 1000000 });
+  assert.ok(s.context.at > 0, 'the time of the last reply, for the cache');
   const plain = await session(sb.sessions.betaOther);
   assert.equal(plain.model, 'claude-test'); assert.equal(plain.effort, null); assert.equal(plain.context.window, 200000);
 });
@@ -907,6 +924,14 @@ test('worktrees: a session in a worktree belongs to its project, and reports the
   await until(() => readLog(sb).includes(`code ${wt}`), 'VS Code in the worktree');
   assert.equal((await svc.call('open-editor', { sessionId: sb.sessions.betaOther })).status, 200);
   await until(() => readLog(sb).includes(`code ${sb.projects.beta}`), 'VS Code in the project');
+  // a `code` that fails says so, rather than the button doing nothing
+  const stub = path.join(sb.bin, 'code'), kept = fs.readFileSync(stub, 'utf8');
+  fs.writeFileSync(stub, '#!/usr/bin/env bash\nexit 3\n');
+  try {
+    const r = await svc.call('open-editor', { sessionId: sb.sessions.betaOther });
+    assert.equal(r.status, 500);
+    assert.match(r.body.error, /VS Code could not be opened/);
+  } finally { fs.writeFileSync(stub, kept); }
 });
 
 test('open in terminal: resumes under the session\'s own profile, and not while it is in use', async () => {
@@ -924,14 +949,6 @@ test('open in terminal: resumes under the session\'s own profile, and not while 
   assert.equal((await svc.call(`sessions/${id}/terminal`, {})).status, 409);
   await svc.call(`sessions/${id}/stop`, {}); await idle(id);
 });
-  // a `code` that fails says so, rather than the button doing nothing
-  const stub = path.join(sb.bin, 'code'), kept = fs.readFileSync(stub, 'utf8');
-  fs.writeFileSync(stub, '#!/usr/bin/env bash\nexit 3\n');
-  try {
-    const r = await svc.call('open-editor', { sessionId: sb.sessions.betaOther });
-    assert.equal(r.status, 500);
-    assert.match(r.body.error, /VS Code could not be opened/);
-  } finally { fs.writeFileSync(stub, kept); }
 
 test('delete: removes the history for good, but never a session that is in use', async () => {
   const busy = await svc.call(`sessions/${sb.sessions.alphaOutside}/delete`, {});
@@ -1189,11 +1206,11 @@ test('dictation: the GPU model is downloaded only when asked, then used, and can
 
 test('settings: default profile and dictation language are kept; sign-in again runs Claudius in a terminal', async () => {
   const handoff = { model: 'auto', effort: 'medium', offer: 400000 };
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', handoff });
-  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', handoff });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', cacheMinutes: 60, handoff });
+  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', cacheMinutes: 60, handoff });
   const kept = JSON.parse(fs.readFileSync(path.join(sb.home, '.config', 'workwood', 'state.json'), 'utf8'));
   assert.deepEqual([kept.defaultProfile, kept.language, typeof kept.done], ['other', 'latvian', 'object']);
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', handoff });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', cacheMinutes: 60, handoff });
   const a = (await svc.call('about')).body;
   assert.deepEqual([a.version, a.claude, typeof a.speech.model], ['0.1.0', '2.1.322', 'string']);
   assert.equal((await svc.call('profiles/nobody/login', {})).status, 404);
@@ -1814,7 +1831,7 @@ ui('window: limit card continues on another profile, and goes the moment you pre
   assert.equal(await page.locator('#pProfile').innerText(), 'live');       // a new session starts on the global profile again
   assert.equal(await page.locator('#qcard .qbtn.off').innerText().then(t => /full/.test(t)), true);
   await page.click('#pProfile'); await page.click('#mProfile [data-prof="live"]');   // picked before: the card's choice still wins
-  await page.route('**/api/sessions/*/send', async r => { await sleep(600); await r.continue(); });
+  await page.route('**/api/sessions/*/send', async r => { await sleep(600); await r.continue().catch(() => {}); });   // the test may have moved on (and unrouted) by then
   await page.click('#qcard .qbtn:has-text("Continue on other")');
   await page.waitForSelector('#qcard', { state: 'hidden', timeout: 400 });
   await page.waitForSelector('.ai:has-text("Echo: Continue where you left off.")');
@@ -2655,7 +2672,7 @@ ui('window: a session whose history ends signed out offers the sign-in, though n
 ui('window: a sent message shows at once, before the service answers, and comes back to the box if it could not be sent', async () => {
   await page.keyboard.press('Escape');
   await startNew('quick first'); await page.waitForSelector('.ai:has-text("Echo: quick first")'); await page.waitForSelector('#send[data-tip="Send"]');
-  await page.route('**/api/sessions/*/send', async r => { await sleep(700); await r.continue(); });
+  await page.route('**/api/sessions/*/send', async r => { await sleep(700); await r.continue().catch(() => {}); });   // the test may have moved on (and unrouted) by then
   await send('shown straight away');
   await page.waitForSelector('#thread [data-k="pend"]:has-text("shown straight away")', { timeout: 400 });
   assert.equal(await page.inputValue('#input'), '');
@@ -2679,7 +2696,7 @@ ui('window: an answered card goes at once, and comes back if the answer could no
   await page.waitForSelector('#oops:has-text("The service is not answering.")');
   await page.waitForSelector('#qcard .qopt');                                // back, with nothing lost
   await page.unroute('**/api/sessions/*/answer');
-  await page.route('**/api/sessions/*/answer', async r => { await sleep(700); await r.continue(); });
+  await page.route('**/api/sessions/*/answer', async r => { await sleep(700); await r.continue().catch(() => {}); });   // the test may have moved on (and unrouted) by then
   await page.click('#qcard [data-act=send]');
   await page.waitForSelector('#qcard', { state: 'hidden', timeout: 400 });
   await page.waitForSelector('#thread [data-k="working"]');
@@ -2690,4 +2707,60 @@ ui('window: an answered card goes at once, and comes back if the answer could no
 test('sandbox containment', () => {
   assert.deepEqual(assertContained(sb), []);
   assert.ok(sb.home.startsWith(fs.realpathSync(os.tmpdir())));
+});
+
+ui('window: a warm cache shows as a small clock by the session and in the composer; past it, a countdown and then a warning above the message box', async () => {
+  const shots = process.env.WORKWOOD_SHOTS, shot = async (n, clip) => { if (shots) { fs.mkdirSync(shots, { recursive: true }); await page.screenshot({ path: path.join(shots, n + '.png'), ...(clip ? { clip } : {}) }); } };
+  await page.keyboard.press('Escape');
+  await page.mouse.move(700, 400);
+  const id = await page.evaluate(() => A.sessions.find(s => s.status === 'idle' && !s.done && !s.outside && !s.term && document.querySelector(`.sess[data-id="${s.id}"]`))?.id);
+  assert.ok(id, 'an idle session in the inbox');
+  const row = `.sess[data-id="${id}"]`;
+  await page.click(row); await page.mouse.move(700, 400);
+  await page.waitForFunction(id => V.sel === id && V.context && !V.loading, id);
+  // as if its last reply came `min` minutes ago (applied again until it shows: a state pushed in between brings the real time back)
+  const at = (min, sel) => page.waitForFunction(([id, min, sel]) => { const t = Date.now() - min * 60000, s = A.sessions.find(x => x.id === id);
+    let set = true;
+    if (Math.abs(s.mts * 1000 - t) > 60000) { s.mts = t / 1000; renderList(); set = false; }
+    if (Math.abs(V.context.at - t) > 60000) { V.context.at = t; renderStrip(); set = false; }
+    return set && !!document.querySelector(sel); }, [id, min, sel], { polling: 200 });
+  // warm: a clock by the session and in the composer, its tooltip saying what it means; no strip
+  await at(22, `${row} .wdial`);
+  await page.waitForSelector('#cWarm .wdial');
+  assert.equal(await page.isHidden('#hstrip'), true);
+  assert.match(await page.getAttribute(`${row} .wdial`, 'data-tip'), /^Cache warm · 38 min left$/);
+  await page.hover(`${row} .wdial`);
+  await page.waitForTimeout(700);
+  const list = await page.locator('#list').boundingBox();
+  await shot('warm-list', { x: list.x, y: list.y, width: list.width, height: Math.min(list.height, 360) });
+  await page.mouse.move(700, 400);
+  await page.hover('#cWarm .wdial'); await page.waitForTimeout(700);
+  const sup = await page.locator('#box').boundingBox();
+  await shot('warm-composer', { x: sup.x - 30, y: sup.y - 90, width: sup.width + 60, height: sup.height + 140 });
+  await page.mouse.move(700, 400);
+  // eight minutes left: the quiet countdown too
+  await at(52, '#hstrip.cache:not(.expired)');
+  assert.match(await page.locator('#hstrip').innerText(), /Cache cools in 8 min/);
+  assert.equal(await page.locator('#hstrip [data-hgo]').count(), 0);
+  await page.waitForTimeout(400);
+  const box = await page.locator('#hstrip').boundingBox(), clip = { x: box.x - 30, y: box.y - 20, width: box.width + 60, height: box.height + 140 };
+  await shot('countdown-strip', clip);
+  // two hours: no clock anywhere (cold is the usual state), and the warning with the handoff
+  await at(120, '#hstrip.expired');
+  assert.equal(await page.locator(`${row} .wdial`).count(), 0);
+  assert.equal(await page.isHidden('#cWarm'), true);
+  assert.match(await page.locator('#hstrip').innerText(), /Cache likely expired\s*· idle 2 h · your next message re-reads \d+k tokens/);
+  assert.equal(await page.locator('#hstrip [data-hgo]').count(), 1);
+  await page.waitForTimeout(400);
+  await shot('expired-strip', clip);
+  // × hides it until the next reply
+  await page.click('#hstrip [data-cx]');
+  assert.equal(await page.isHidden('#hstrip'), true);
+  // the setting: no warning and no clock at all
+  await svc.call('settings', { cacheMinutes: 0 });
+  await page.waitForFunction(() => A.prefs.cacheMinutes === 0);
+  await at(22, 'body');
+  await page.waitForFunction(r => !document.querySelector(r + ' .wdial') && !document.querySelector('#cWarm .wdial'), row);
+  await svc.call('settings', { cacheMinutes: 60 });
+  await page.waitForFunction(() => A.prefs.cacheMinutes === 60);
 });

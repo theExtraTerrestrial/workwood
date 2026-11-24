@@ -1,0 +1,90 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 45 — A warm cache, quietly</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap"><style>
+:root{--hue:168;--bg:#1f2024;--side:#1a1b1e;--surface:#292b2f;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.14);--text:#ecedf0;--dim:#c4c7cd;--faint:#9397a0;
+  --accent:hsl(var(--hue) 62% 62%);--warn:#ffb955;--go:#4fd6a4;--sel:rgba(255,255,255,.075);--hov:rgba(255,255,255,.04);--tl:62%;--tc:74%;--ta:.17}
+[data-theme=light]{--bg:#ffffff;--side:#f5f6f8;--surface:#f2f3f6;--line:rgba(0,0,0,.085);--line2:rgba(0,0,0,.16);--text:#17191d;--dim:#5a5f69;--faint:#9a9fa9;
+  --accent:hsl(var(--hue) 70% 34%);--warn:#b97400;--go:#0f9d77;--sel:rgba(0,0,0,.065);--hov:rgba(0,0,0,.035);--tl:42%;--tc:32%;--ta:.14}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:13px/1.5 Manrope,"Segoe UI",system-ui,sans-serif;padding:36px 24px 80px;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+.top{max-width:1320px;margin:0 auto 8px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top span{color:var(--faint);font-size:12.5px}
+.tg{margin-left:auto;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:8px;box-shadow:0 0 0 1px var(--line2)}
+.lede{max-width:1320px;margin:0 auto 26px;color:var(--faint);font-size:12.5px}
+.grid{max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:22px}
+.opt h2{font-size:13px;margin:0 0 2px;font-weight:700;display:flex;gap:8px;align-items:center}
+.opt h2 em{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);padding:1px 6px;border-radius:5px}
+.opt p{margin:0 0 10px;color:var(--faint);font-size:12px;min-height:36px}
+
+/* the sidebar, as the app draws it */
+.side{background:var(--side);border-radius:14px;padding:4px 8px 10px;box-shadow:0 0 0 1px var(--line)}
+.grp{display:flex;align-items:center;gap:8px;padding:13px 9px 5px;font-size:12.5px;font-weight:600}
+.tile{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:8.5px;font-weight:800;letter-spacing:.02em;
+  background:hsl(var(--h) var(--tc) var(--tl)/var(--ta));color:hsl(var(--h) var(--tc) var(--tl))}
+.sess{position:relative;display:flex;align-items:center;width:100%;padding:6px 9px 6px 37px;border-radius:8px;margin-bottom:1px}
+.sess:hover{background:var(--hov)}.sess.sel{background:var(--sel)}
+.l1{flex:1;min-width:0;display:flex;gap:8px;align-items:center}
+.l1 b{flex:1;min-width:0;font-weight:500;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sess.sel b,.sess.wait b,.sess.work b{color:var(--text)}.sess.unread b{color:var(--text);font-weight:700}.sess.isdone b{color:var(--faint)}
+.st{display:inline-flex;align-items:center;gap:7px;flex:none;position:relative}
+.st time{font-size:11px;color:var(--faint)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.askl{font-size:10.5px;font-weight:600;color:var(--warn);background:color-mix(in srgb,var(--warn) 15%,transparent);padding:1px 6px;border-radius:5px}
+.spin{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--line2);border-top-color:var(--go);animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* A — the time is a shade brighter while warm */
+.A .warm time{color:var(--dim)}
+
+/* B — a hairline under the time, shortening as the cache cools */
+.B .warm .st::after{content:"";position:absolute;right:0;bottom:-3px;height:1.5px;border-radius:1px;width:calc(var(--left) * 100%);max-width:100%;
+  background:color-mix(in srgb,var(--faint) 70%,transparent)}
+.B .warm .st{--w:1}
+
+/* C — a sliver at the row's left edge, fading as the cache cools */
+.C .warm::before{content:"";position:absolute;left:24px;top:9px;bottom:9px;width:2px;border-radius:2px;background:var(--faint);opacity:calc(.15 + var(--left) * .45)}
+
+/* D — a small clock face before the time, emptying as the cache cools */
+.D .ring{width:9px;height:9px;border-radius:50%;flex:none;
+  background:conic-gradient(color-mix(in srgb,var(--faint) 75%,transparent) calc(var(--left) * 360deg),transparent 0);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--faint) 55%,transparent)}
+
+/* E — nothing in the list; the time says it when you point at it */
+.E .tipwrap{position:relative}
+.tip{position:absolute;right:-4px;top:calc(100% + 7px);white-space:nowrap;background:var(--surface);box-shadow:0 0 0 1px var(--line2),0 8px 22px rgba(0,0,0,.35);
+  border-radius:8px;padding:5px 9px;font-size:11.5px;color:var(--dim);z-index:2}
+.tip b{color:var(--text);font-weight:650}
+
+.legend{max-width:1320px;margin:22px auto 0;display:flex;gap:18px;flex-wrap:wrap;color:var(--faint);font-size:11.5px}
+.legend i{font-style:normal;color:var(--dim)}
+.note{max-width:1320px;margin:40px auto 0;border-top:1px solid var(--line);padding-top:18px;font-size:13px;color:var(--dim)}
+.note h3{font-size:13px;margin:0 0 6px;color:var(--text)}.note ol{margin:0;padding-left:18px}.note li{margin:3px 0}
+</style></head><body>
+<div class="top"><h1>A warm cache, quietly</h1><span>round 45 · the list marks the few warm sessions, never the many cold ones</span><button class="tg" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<div class="lede">No amber, nothing on cold or done sessions. Each list below has the same sessions: three warm (4, 22 and 51 minutes since the last reply), the rest cold.</div>
+<div class="grid" id="grid"></div>
+<div class="legend"><span><i>Teal dot</i> unread (today)</span><span><i>Amber</i> waiting for you (today)</span><span><i>Spinner</i> working (today)</span></div>
+<div class="note"><h3>Open questions</h3><ol>
+<li>Which one: A, B (recommended), C, D or E?</li>
+<li>Should the time show the hint from E as well, whatever the choice?</li>
+</ol></div>
+<script>
+const OPTS=[
+ ['A','Brighter time','The time is a shade lighter while the cache is warm. Nothing added.',false],
+ ['B','Draining hairline','A faint line under the time, shortening as the cache cools: the strip’s countdown, in small.',true],
+ ['C','Edge sliver','A short grey mark at the row’s left, fading as the cache cools.',false],
+ ['D','Tiny clock','A small grey dial before the time, emptying as the cache cools.',false],
+ ['E','Only on hover','Nothing in the list; pointing at the time says it.',false]];
+// [title, minutes since the last reply (null: not idle), state, project]
+const ROWS=[['alpha','AL',28,[['Refactor the alpha parser',null,'work'],['Tidy the alpha readme',4,'sel'],['Fix the login redirect',22,'unread'],['Alpha notes from last week',8*1440,'']]],
+            ['beta','BE',250,[['Plan the beta launch',null,'wait'],['Add a beta changelog',51,''],['Write the release email',190,''],['Old spike: drop jQuery',3*1440,'isdone']]]];
+const ago=m=>m<60?m+'m':m<1440?Math.round(m/60)+'h':Math.round(m/1440)+'d';
+const row=(k,[t,m,s])=>{
+  const warm=m!=null&&m<60&&s!=='isdone',left=warm?(60-m)/60:0;
+  const st=s==='work'?'<i class="spin"></i>':s==='wait'?'<span class="askl">Question</span>':
+    `${s==='unread'?'<i class="dot"></i>':''}${k==='D'&&warm?'<i class="ring"></i>':''}<time>${ago(m)}</time>`;
+  const tip=k==='E'&&warm&&m===22?`<span class="tip"><b>Cache warm</b> · ${60-m} min left</span>`:'';
+  return `<div class="sess ${s} ${warm?'warm':''}" style="--left:${left.toFixed(2)}"><span class="l1"><b>${t}</b><span class="st tipwrap">${tip}${st}</span></span></div>`};
+document.getElementById('grid').innerHTML=OPTS.map(([k,n,d,rec])=>`<div class="opt ${k}"><h2>${k} · ${n}${rec?'<em>Recommended</em>':''}</h2><p>${d}</p><div class="side">`+
+  ROWS.map(([g,ab,h,rs])=>`<div class="grp"><span class="tile" style="--h:${h}">${ab}</span>${g}</div>`+rs.map(r=>row(k,r)).join('')).join('')+'</div></div>').join('');
+</script>
+</body></html>

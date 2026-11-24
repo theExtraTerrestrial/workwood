@@ -290,7 +290,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
             if (win && run.context) run.context = { ...run.context, window: win };
             // What the context holds now, as Claude Code counts it: after /compact the last reply's size is no longer it.
             const exact = await Promise.race([run.q.getContextUsage().catch(() => null), sleep(3000).then(() => null)]);
-            if (exact?.rawMaxTokens) { learnWindow(exact.model, exact.rawMaxTokens); run.context = { used: exact.totalTokens, window: exact.rawMaxTokens }; }
+            if (exact?.rawMaxTokens) { learnWindow(exact.model, exact.rawMaxTokens); run.context = { ...run.context, used: exact.totalTokens, window: exact.rawMaxTokens }; }
             if (m.is_error && !run.stopped) run.stopped = { reason: /limit/i.test(m.result || '') ? 'limit' : 'error', text: m.result || 'The turn ended with an error.' };
             sayItems(run.stopped ? run.builder.flushWork() : run.builder.done(m.duration_ms, new Date().toISOString()));
             for (const u of m.user_message_uuids || []) run.sent.delete(u);

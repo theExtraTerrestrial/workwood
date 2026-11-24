@@ -1,0 +1,80 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 44 — A cache that has likely expired</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap"><style>
+:root{--hue:168;--bg:#1f2024;--surface:#292b2f;--surface2:#33363b;--line:rgba(255,255,255,.075);--line2:rgba(255,255,255,.14);--text:#ecedf0;--dim:#c4c7cd;--faint:#9397a0;
+  --accent:hsl(var(--hue) 62% 62%);--accent-soft:hsl(var(--hue) 62% 60%/.14);--warn:#ffb955;--warn-soft:rgba(255,185,85,.12);--warn-line:rgba(255,185,85,.30)}
+[data-theme=light]{--bg:#f4f5f7;--surface:#fff;--surface2:#eceef1;--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.14);--text:#1b1c1f;--dim:#4a4d55;--faint:#7c808a;
+  --accent:hsl(var(--hue) 70% 32%);--accent-soft:hsl(var(--hue) 60% 40%/.11);--warn:#b86e00;--warn-soft:rgba(184,110,0,.09);--warn-line:rgba(184,110,0,.35)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 Manrope,"Segoe UI",system-ui,sans-serif;padding:36px 20px 80px}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.top{max-width:720px;margin:0 auto 28px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top span{color:var(--faint);font-size:12.5px}
+.tg{margin-left:auto;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:8px;box-shadow:0 0 0 1px var(--line2)}
+.th{max-width:720px;margin:0 auto}
+.cap{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:34px 0 12px}
+
+/* the session list */
+.list{width:300px;background:var(--surface);border-radius:14px;padding:6px}
+.row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;font-size:13px}
+.row.sel{background:var(--surface2)}
+.row .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
+.row .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .ago{font-size:11.5px;color:var(--faint)}
+.cold{width:15px;height:15px;color:var(--warn);flex:none}
+.row .ago.w{color:var(--warn)}
+
+/* the message box and the line above it */
+.box{max-width:640px}
+.warn{display:flex;align-items:center;gap:9px;margin:0 14px;padding:7px 12px;border-radius:12px 12px 0 0;background:var(--warn-soft);box-shadow:inset 0 0 0 1px var(--warn-line);font-size:12.5px;color:var(--dim)}
+.warn .cold{width:14px;height:14px}
+.warn b{color:var(--warn);font-weight:650}
+.warn .act{margin-left:auto;font-size:12px;font-weight:650;color:var(--text);padding:2px 9px;border-radius:7px;box-shadow:0 0 0 1px var(--line2)}
+.warn .x{color:var(--faint);width:14px;height:14px;display:grid;place-items:center}
+.warn.soon{background:transparent;box-shadow:inset 0 0 0 1px var(--line2);position:relative;overflow:hidden}
+.warn.soon b{color:var(--dim)}
+.warn.soon .cold{color:var(--faint)}
+.drain{position:absolute;left:0;bottom:0;height:2px;background:var(--warn);width:var(--left);animation:drain 60s linear infinite}
+@keyframes drain{from{width:var(--left)}to{width:0}}
+.comp{background:var(--surface);border-radius:16px;box-shadow:0 0 0 1px var(--line2);padding:12px 14px 9px}
+.ph{color:var(--faint);font-size:13.5px;min-height:40px}
+.sup{display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--faint)}
+.sup .pick{padding:2px 8px;border-radius:7px;background:var(--surface2)}.sup .g{flex:1}
+
+.note{max-width:720px;margin:44px auto 0;border-top:1px solid var(--line);padding-top:18px;font-size:13px;color:var(--dim)}
+.note h3{font-size:13px;margin:0 0 6px;color:var(--text)}.note ol{margin:0;padding-left:18px}.note li{margin:3px 0}
+details{margin-top:14px;font-size:12.5px;color:var(--faint)}summary{cursor:pointer}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><symbol id="cold" viewBox="0 0 24 24"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"/></symbol></svg>
+<div class="top"><h1>Cache likely expired</h1><span>round 44 · issue #2</span><button class="tg" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<div class="th">
+
+<div class="cap">In the list — idle over an hour</div>
+<div class="list">
+  <div class="row"><span class="dot"></span><span class="t">Fix the login redirect</span><span class="ago">12 m</span></div>
+  <div class="row sel"><span class="dot"></span><span class="t">Plan the beta launch</span><svg class="cold"><use href="#cold"/></svg><span class="ago w">2 h</span></div>
+  <div class="row"><span class="dot"></span><span class="t">Add a beta changelog</span><svg class="cold"><use href="#cold"/></svg><span class="ago w">yesterday</span></div>
+</div>
+
+<div class="cap">Over the message box — when you open it</div>
+<div class="box">
+  <div class="warn"><svg class="cold"><use href="#cold"/></svg><span><b>Cache likely expired</b> · idle 2 h · your next message re-reads 142k tokens</span><button class="act">Hand off</button><button class="x"><svg width="12" height="12" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="comp"><div class="ph">Reply…</div><div class="sup"><span class="pick">Max · work</span><span class="g"></span><span class="pick">Opus 5.5 · high</span><span>142k</span></div></div>
+</div>
+
+<div class="cap">The last ten minutes — a quiet countdown</div>
+<div class="box">
+  <div class="warn soon" style="--left:20%"><svg class="cold"><use href="#cold"/></svg><span><b>Cache cools in 8 min</b> · send now to keep it warm</span><span class="drain"></span></div>
+  <div class="comp"><div class="ph">Reply…</div><div class="sup"><span class="pick">Max · work</span><span class="g"></span><span class="pick">Opus 5.5 · high</span><span>142k</span></div></div>
+</div>
+
+<details><summary>Under the hood</summary>
+<p>Claude Code keeps a conversation's prompt cache for an hour on a subscription (five minutes once usage runs into overage or on an API key). Workwood has no reading of the cache itself; it counts from the session's last turn in its history file, which the service already reads for "ago". The token count is the context meter's. Hidden while the agent is working, and gone after the first new reply.</p>
+</details>
+</div>
+<div class="note"><h3>Open questions</h3><ol>
+<li>Fixed at 60 minutes (shown), or 5 minutes for API-key profiles?</li>
+<li>Keep the countdown before it expires, or show only the expired line?</li>
+<li>Offer "Hand off" in the line as the cheaper way on (shown), or no action?</li>
+</ol></div>
+</body></html>

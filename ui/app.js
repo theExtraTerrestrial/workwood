@@ -1,5 +1,6 @@
 // Workwood window. Draws what the service reports and sends back what you do.
 const P={
+  cold:'<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   chat:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   term:'<path d="m4 17 6-6-6-6M12 19h8"/>',
@@ -171,6 +172,17 @@ const needsYou=s=>s.status==='wait'?2:s.unread?1:0;
 const askLabel=l=>{const m=/^(\d+) question/.exec(l);return m?m[1]+' question'+(m[1]>1?'s':''):/plan/i.test(l)?'Plan':/^Wants/.test(l)?'Approve':/sign-in/.test(l)?'Sign in':/^Stopped|^Paused/.test(l)?'Stopped':'Waiting'};
 const stateOf=s=>(s.bg&&s.status==='idle'?`<span class="bgc" data-tip="${plural(s.bg,'task')} running in the background"><i></i>${s.bg}</span>`:'')+stateOf1(s);
 const stateOf1=s=>s.status==='work'?'<i class="spin"></i>':s.status==='wait'?`<span class="askl">${esc(askLabel(s.line))}</span>`:`${s.unread?'<i class="dot"></i>':''}<time>${ago(s.mts)}</time>`;
+// The prompt cache: kept for a while after each reply (an hour on a subscription), then the next message reads the
+// whole conversation again, at full price against your limits. Settings sets how long; a reply that wrote a shorter
+// cache (five minutes, once usage runs into overage) counts that. In the list, the last change to the session counts.
+const cacheMin=()=>A.prefs?.cacheMinutes??60;
+// A small clock marks the few sessions whose cache is still warm, emptying as it cools; cold ones (most) show nothing.
+const hm=ms=>{const m=Math.max(1,Math.round(ms/60000));return m<60?m+' min':Math.floor(m/60)+' h'+(m%60?' '+m%60+' min':'')};
+const warmLeft=end=>{const l=end-Date.now();return l>0?l:0};
+function warmDial(end,total){const l=warmLeft(end);if(!l)return'';
+  return `<span class="wdial" style="--left:${Math.min(1,l/total).toFixed(3)}" data-tip="Cache warm · ${hm(l)} left" data-tip-d="A reply sent within this time reads the conversation from Claude's cache, which costs far less of your limits. After it, the next message reads it all again."></span>`}
+const listWarm=s=>!cacheMin()||s.done||s.status!=='idle'||!s.mts?'':warmDial(s.mts*1000+cacheMin()*60000,cacheMin()*60000);
+const coldAt=c=>!c?.at||!cacheMin()?null:c.at+Math.min(cacheMin()*60,c.ttl||Infinity)*1000;
 let drawing=false;
 function renderList(){drawing=true;try{drawList()}finally{drawing=false}renderBgs()
   const r=$('renIn');if(r){r.value=V.renameText;r.focus();r.setSelectionRange(V.caret,V.caret)}}
@@ -186,7 +198,7 @@ function drawList(){
     return `<div class="grp ${shut?'shut':''}" data-grp="${esc(k)}" data-tip-path="${esc(short(k))}">${tile(g.name,'s')}</span><b>${esc(g.name)}</b>${shut?`<small>${n?`<i class="dot"></i>`:''}${g.list.length}</small>`:''}<span class="gnew" data-gnew data-tip="New session in ${esc(g.name)}">${svg('plus')}</span></div>`+(shut?'':
       g.list.map(s=>{const sel=!V.isNew&&s.id===V.sel,tip=V.compact||s.line?` data-tip="${esc(s.title+' — '+s.project+(s.line?' · '+s.line:''))}"`:'';
         return s.id===V.renaming?`<div class="sess ren ${sel?'sel':''}" data-id="${s.id}">${tile(s.project)}</span><input id="renIn" maxlength="120" autocomplete="off" spellcheck="false" aria-label="Session name"></div>`
-        :`<button class="sess ${s.status} ${sel?'sel':''} ${s.unread?'unread':''} ${s.done?'isdone':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}"${tip}>${tile(s.project,s.thread?'stack':'')}${s.status==='work'?'<u class="go"></u>':needsYou(s)?`<u class="${s.status==='wait'?'warn':'new'}"></u>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b>${s.thread?`<span class="thr" data-tip="${s.thread} sessions, one thread">${s.thread<=4?'<i></i>'.repeat(s.thread):s.thread}</span>`:''}${s.outside||s.term?`<em class="xb">${svg('term')}</em>`:''}<span class="st">${stateOf(s)}</span><span class="sact"><span data-done data-tip="${s.done?'Back to the inbox':'Mark done'}"${s.done?'':' data-tip-k="Ctrl D"'}>${svg(s.done?'refresh':'check')}</span><span data-dots>${svg('dots')}</span></span></span>${s.status==='work'&&!s.outside&&!s.term&&s.line?`<span class="l2">${esc(s.line)}</span>`:''}</span></button>`}).join(''));
+        :`<button class="sess ${s.status} ${sel?'sel':''} ${s.unread?'unread':''} ${s.done?'isdone':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}"${tip}>${listWarm(s)}${tile(s.project,s.thread?'stack':'')}${s.status==='work'?'<u class="go"></u>':needsYou(s)?`<u class="${s.status==='wait'?'warn':'new'}"></u>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b>${s.thread?`<span class="thr" data-tip="${s.thread} sessions, one thread">${s.thread<=4?'<i></i>'.repeat(s.thread):s.thread}</span>`:''}${s.outside||s.term?`<em class="xb">${svg('term')}</em>`:''}<span class="st">${stateOf(s)}</span><span class="sact"><span data-done data-tip="${s.done?'Back to the inbox':'Mark done'}"${s.done?'':' data-tip-k="Ctrl D"'}>${svg(s.done?'refresh':'check')}</span><span data-dots>${svg('dots')}</span></span></span>${s.status==='work'&&!s.outside&&!s.term&&s.line?`<span class="l2">${esc(s.line)}</span>`:''}</span></button>`}).join(''));
   }).join('')||`<div class="none inbox0">Nothing needs you.<br>Older sessions are under Done.</div>`;
 }
 $('list').onclick=e=>{
@@ -638,7 +650,7 @@ $('pCtx').onclick=e=>{e.stopPropagation();const was=$('mCtx').hidden;closePops()
   renderCtx()};
 // Claude Code's own count: the figure from the last reply is wrong after /compact, and an old session's model may hold more than its name says.
 function countCtx(id){V.ctx={id,at:Date.now()};
-  api(`sessions/${id}/context`).then(r=>{V.ctx={id,at:Date.now(),rows:r.rows};if(V.sel===id&&r.window&&!isWorking()){V.context={used:r.used,window:r.window};renderComposer()}},
+  api(`sessions/${id}/context`).then(r=>{V.ctx={id,at:Date.now(),rows:r.rows};if(V.sel===id&&r.window&&!isWorking()){V.context={...V.context,used:r.used,window:r.window};renderComposer()}},
     err=>{V.ctx={id,at:0,err:'The breakdown is not available ('+err.message+')'}}).then(()=>{if(V.sel===id&&!$('mCtx').hidden)renderCtx()})}
 $('mCtx').onclick=e=>{e.stopPropagation();
   if(e.target.closest('[data-hpick]'))return openHPick(e.target.closest('[data-hpick]'));
@@ -669,8 +681,21 @@ $('mHand').onclick=e=>{e.stopPropagation();const b=e.target.closest('[data-hm],[
 // From this many tokens a quiet strip above the message box offers the handoff: the setting, or ¾ of a smaller window.
 const offerAt=c=>Math.min(A.prefs?.handoff?.offer||400000,Math.round(c.window*.75));
 const hDismissed=()=>{try{return JSON.parse(localStorage.getItem('ww.hoff')||'{}')}catch{return {}}};
+const coldOff=()=>{try{return JSON.parse(localStorage.getItem('ww.cold')||'{}')}catch{return {}}};
+// The cache line: a quiet countdown in the last ten minutes, then a warning once it has likely expired. Its × hides it
+// until the next reply. It takes the strip's place, with the same handoff on offer.
+function coldStrip(el,c,id){
+  const end=coldAt(c);if(!end||coldOff()[id]===c.at)return false;
+  const left=end-Date.now(),soon=Math.min(10*60000,(c.ttl||3600)*1000/3);if(left>soon)return false;
+  el.classList.add('cache');el.classList.toggle('expired',left<=0);el.style.setProperty('--left',Math.max(0,left/soon*100)+'%');
+  el.innerHTML=(left>0?`<span class="t">${svg('cold','ci')}<b>Cache cools in ${hm(left)}</b><span> · send now to keep it warm</span></span>`
+    :`<span class="t">${svg('cold','ci')}<b>Cache likely expired</b><span> · idle ${hm(Date.now()-c.at)} · your next message re-reads ${kTok(c.used)} tokens</span></span><span class="by">by <u data-hpick>${esc(hLabel(hPick()))}</u>${svg('chev-d','cv')}</span><button class="hgo" data-hgo>Hand off</button>`)
+    +`<button class="ib hx" data-cx data-tip="Not now">${svg('x')}</button>`+(left>0?'<span class="drain"></span>':'');
+  return true}
 function renderStrip(){
-  const el=$('hstrip'),c=V.context,id=V.sel;
+  const el=$('hstrip'),c=V.context,id=V.sel;el.classList.remove('cache','expired');
+  const w=$('cWarm'),end=!V.isNew&&!isWorking()&&coldAt(c);w.innerHTML=end?warmDial(end,end-c.at):'';w.hidden=!w.innerHTML;
+  if(!V.isNew&&c&&!V.loading&&!isWorking()&&!V.handing&&!V.focus&&coldStrip(el,c,id)){el.hidden=false;return}
   const on=!V.isNew&&!!c&&!V.loading&&!isWorking()&&!V.handing&&!V.focus&&c.used>=offerAt(c)&&!hDismissed()[id];
   el.hidden=!on;if(!on)return;
   el.innerHTML=`<span class="t"><b>Context ${kTok(c.used)}</b> · earlier turns start to blur</span><span class="by">by <u data-hpick>${esc(hLabel(hPick()))}</u>${svg('chev-d','cv')}</span><button class="hgo" data-hgo>Hand off</button><button class="hc2" data-hcompact>Compact</button><button class="ib hx" data-hx data-tip="Not now" data-tip-d="It is still in the context menu and as /handoff.">${svg('x')}</button>`;
@@ -679,6 +704,7 @@ $('hstrip').onclick=e=>{e.stopPropagation();const t=e.target;
   if(t.closest('[data-hpick]'))return openHPick(t.closest('[data-hpick]'));
   if(t.closest('[data-hgo]'))handOff();
   else if(t.closest('[data-hcompact]'))sendText('/compact');
+  else if(t.closest('[data-cx]')){const d=coldOff();d[V.sel]=V.context?.at;const ks=Object.keys(d);if(ks.length>200)delete d[ks[0]];localStorage.setItem('ww.cold',JSON.stringify(d));renderStrip()}
   else if(t.closest('[data-hx]')){const d=hDismissed();d[V.sel]=Date.now();const ks=Object.keys(d);if(ks.length>200)delete d[ks[0]];localStorage.setItem('ww.hoff',JSON.stringify(d));renderStrip()}};
 
 /* ---------- compare: a question about things the agent just made, with those things next to it ---------- */
@@ -828,6 +854,7 @@ function tick(){const el=$('elapsed');if(el&&V.run?.startedAt)el.textContent=dur
   const now=Date.now();for(const c of document.querySelectorAll('[data-from]'))c.textContent=sdur(now-c.dataset.from)}
 setInterval(tick,200);
 setInterval(()=>{if(A.ready){renderList();renderHome()}},60000);
+setInterval(()=>{if(!V.isNew&&V.context?.at)renderStrip()},20000);   // the cache countdown
 const FOLLOW=160;   // the thread follows the agent while you are within this much of its end
 const awayNow=()=>{const s=$('scroll');return s.scrollHeight-s.scrollTop-s.clientHeight>=FOLLOW};
 function toBottom(force){const s=$('scroll');if(force||!awayNow())s.scrollTop=s.scrollHeight;paintJump()}
@@ -1119,6 +1146,7 @@ function renderSettings(){
     <div class="srow"><span>Offer Bypass mode<small>A permission mode that never asks before edits or commands. Only for work you trust completely.</small></span><i class="stog ${pf.bypass?'on':''}" data-set="bypass"></i></div>
     ${A.profiles.length>1?`<div class="srow"><span>Continue on another profile at a limit<small>When a session hits a limit, it goes on with the profile that has the most room after 5 minutes. The card counts down, so you can cancel.</small></span><i class="stog ${pf.autoContinue?'on':''}" data-set="auto"></i></div>`:''}
     <div class="srow"><span>Handoff written by<small>Auto picks by how much went on: Haiku for short sessions, Sonnet for most, Opus for long or intricate ones.</small></span><select class="sval" id="sHModel">${[['auto','Auto'],['haiku','Haiku'],['sonnet','Sonnet'],['opus','Opus']].map(([v,n])=>`<option value="${v}" ${(pf.handoff?.model||'auto')===v?'selected':''}>${n}</option>`).join('')}</select><select class="sval" id="sHEffort">${['low','medium','high'].map(v=>`<option value="${v}" ${(pf.handoff?.effort||'medium')===v?'selected':''}>${cap(v)}</option>`).join('')}</select></div>
+    <div class="srow"><span>Cache lasts<small>How long Claude keeps a conversation cached after a reply. While it lasts, a small clock shows by the session; in its last ten minutes a countdown shows above the message box, and after it a warning.</small></span><select class="sval" id="sCache">${[[0,'No warning'],[5,'5 minutes'],[30,'30 minutes'],[60,'1 hour'],[120,'2 hours']].map(([v,n])=>`<option value="${v}" ${cacheMin()===v?'selected':''}>${n}</option>`).join('')}</select></div>
     <div class="srow"><span>Offer a handoff at<small>A strip above the message box offers it from here, or at ¾ of a smaller window.</small></span><select class="sval" id="sHOffer">${[100000,200000,300000,400000,600000].map(v=>`<option value="${v}" ${(pf.handoff?.offer||400000)===v?'selected':''}>${v/1000}k tokens</option>`).join('')}</select></div>
     <div class="srow"><span>Dictation language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>${speechRow()}
     <div class="srow"><span>Project folders<small>Folders that hold your projects. Separate several with a semicolon.</small></span><input class="sval sin mono" id="sFolders" spellcheck="false" autocomplete="off" value="${esc((pf.folders||[]).map(short).join('; '))}" placeholder="${esc(short((A.folders||[])[0]||''))}">${window.workwood?.pickFolder?'<button class="sval" id="sBrowse" data-tip="Choose a folder to add">Add…</button>':''}</div>`;
@@ -1339,6 +1367,7 @@ $('spage').onchange=async e=>{
     if(pk&&PD){const name=PD.name;PD={name,d:await api(`profiles/${name}/defaults`,{[pk]:e.target.value})};e.target.blur();renderSettings();if(V.isNew&&V.profile===name)loadDefaults()}
     if(e.target.id==='sDays')A.prefs=await api('settings',{doneDays:+e.target.value});
     if(e.target.id==='sLang')A.prefs=await api('settings',{language:e.target.value});
+    if(e.target.id==='sCache'){A.prefs=await api('settings',{cacheMinutes:+e.target.value});renderList();renderStrip()}
     if(e.target.id==='sHModel'||e.target.id==='sHEffort'||e.target.id==='sHOffer')A.prefs=await api('settings',{handoff:{[{sHModel:'model',sHEffort:'effort',sHOffer:'offer'}[e.target.id]]:e.target.id==='sHOffer'?+e.target.value:e.target.value}});
     if(e.target.id==='sFolders'){A.prefs=await api('settings',{folders:e.target.value.split(';').map(x=>x.trim()).filter(Boolean)});e.target.value=(A.prefs.folders||[]).map(short).join('; ')}}catch(err){oops(err.message);renderSettings()}
   e.target.blur();

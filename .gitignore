@@ -2,3 +2,12 @@ node_modules/
 *.log
 dist/
 _site/
+
+# Node version pins from your own version manager (asdf, mise, nvm, nodenv, fnm)
+.tool-versions
+.nvmrc
+.node-version
+mise.toml
+.mise.toml
+mise.local.toml
+.mise.local.toml

@@ -77,14 +77,16 @@ export async function loadNext() {
 }
 
 // What a transcript says about its session: which account last ran it (the newest "session-owner" record)
-// and the name it was given by hand, if any (the newest "custom-title" record, as Claude Code's /rename writes).
-const metaCache = new Map(); // file -> {mts, account, title}
+// and the name it was given by hand, if any (the newest "custom-title" record, as Claude Code's /rename writes),
+// and when its last reply was and for how long that reply's prompt cache is kept. The file's own time is no guide to
+// that: Claude Code adds bookkeeping lines to it (cost-state and the like) when a session is only opened.
+const metaCache = new Map(); // file -> {mts, account, title, reply}
 const OWNER = /"type":"session-owner","accountUuid":"([0-9a-f-]+)"/g;
 const TITLE = /"type":"custom-title","customTitle":("(?:[^"\\]|\\.)*")/g;
 async function metaOf(file, mts) {
   const hit = metaCache.get(file);
   if (hit && hit.mts === mts) return hit;
-  let account = null, title = null;
+  let account = null, title = null, reply = null;
   try {
     const fh = await fs.open(file, 'r');
     try {
@@ -93,17 +95,38 @@ async function metaOf(file, mts) {
         const buf = Buffer.alloc(len);
         const { bytesRead } = await fh.read(buf, 0, len, pos);
         const text = buf.toString('utf8', 0, bytesRead), last = re => { const all = [...text.matchAll(re)]; return all.length ? all[all.length - 1][1] : null; };
-        return [last(OWNER), last(TITLE)];
+        return [last(OWNER), last(TITLE), text];
       };
       const tail = Math.min(size, 512 * 1024);
-      [account, title] = await find(size - tail, tail);
+      let text;
+      [account, title, text] = await find(size - tail, tail);
+      reply = lastReply(text);
       if ((!account || !title) && size > tail) { const [a, t] = await find(0, Math.min(size, 256 * 1024)); account ||= a; title ||= t; }
     } finally { await fh.close(); }
   } catch {}
   try { title = title && (JSON.parse(title).trim() || null); } catch { title = null; }
-  const meta = { mts, account, title };
+  const meta = { mts, account, title, reply };
   metaCache.set(file, meta);
   return meta;
+}
+
+// The newest reply that used the prompt cache: when it came, and the kind of cache last written (1 h or 5 min), which
+// a reply that only read the cache keeps for the same time again.
+export function lastReply(text) {
+  const lines = text.split('\n');
+  let at = null;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const l = lines[i];
+    if (!l.includes('"type":"assistant"') || !l.includes('"usage"')) continue;
+    let o; try { o = JSON.parse(l); } catch { continue; }
+    const u = o.message?.usage, t = Date.parse(o.timestamp);
+    if (!u || !t || o.isSidechain) continue;
+    at ??= t;
+    const c = u.cache_creation || {};
+    if (c.ephemeral_1h_input_tokens > 0) return { at, ttl: 3600 };
+    if (c.ephemeral_5m_input_tokens > 0) return { at, ttl: 300 };
+  }
+  return at ? { at } : null;
 }
 
 /** Names a session the way Claude Code's own /rename does, so the name shows everywhere the session does. */
@@ -231,10 +254,10 @@ export async function tagSessions(list, profiles) {
   const keep = list.filter(s => s.exists && !/[\\/]scratchpad[\\/]/.test(s.cwd)); // folders that are gone, and throwaway test runs
   return Promise.all(keep.map(async s => {
     const file = path.join(PROJECTS_ROOT, s.dirkey, s.id + '.jsonl');
-    const { account, title } = await metaOf(file, s.mts);
+    const { account, title, reply } = await metaOf(file, s.mts);
     const place = await placeOf(s.cwd);   // a session in a worktree belongs to the project the worktree was made from
     return { id: s.id, title: title || s.label || 'Untitled session', cwd: s.cwd, project: path.basename(place.root), root: place.root,
-      branch: s.branch && s.branch !== 'HEAD' ? s.branch : null, mts: s.mts, file, profile: byAccount.get(account) || fallback };
+      branch: s.branch && s.branch !== 'HEAD' ? s.branch : null, mts: s.mts, ...(reply ? { reply } : {}), file, profile: byAccount.get(account) || fallback };
   }));
 }
 

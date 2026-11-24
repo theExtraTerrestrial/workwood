@@ -560,6 +560,12 @@ test('the prompt cache: each reply says when it was written and for how long it 
   assert.deepEqual(pick((await readTranscript(f)).context), { at: Date.parse('2026-11-24T10:20:00.000Z'), ttl: 3600 });
   fs.appendFileSync(f, A('2026-11-24T10:30:00.000Z', { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 800 }) + '\n');
   assert.deepEqual(pick((await readTranscript(f)).context), { at: Date.parse('2026-11-24T10:30:00.000Z'), ttl: 300 });
+  // the list reads the same from the file's tail; lines Claude Code adds when a session is only opened change nothing
+  const { lastReply } = await import('../service/sources.mjs');
+  const opened = fs.readFileSync(f, 'utf8') + JSON.stringify({ type: 'cost-state', sessionId: 's', totalCostUSD: 1 }) + '\n';
+  assert.deepEqual(lastReply(opened), { at: Date.parse('2026-11-24T10:30:00.000Z'), ttl: 300 });
+  assert.deepEqual(lastReply(A('2026-11-24T10:00:00.000Z', { ephemeral_1h_input_tokens: 1000 }) + '\n' + A('2026-11-24T10:20:00.000Z', null)), { at: Date.parse('2026-11-24T10:20:00.000Z'), ttl: 3600 });
+  assert.equal(lastReply(JSON.stringify({ type: 'cost-state' })), null);
   fs.rmSync(path.dirname(f), { recursive: true, force: true });
   function pick(c) { return { at: c.at, ttl: c.ttl }; }
 });
@@ -2721,7 +2727,7 @@ ui('window: a warm cache shows as a small clock by the session and in the compos
   // as if its last reply came `min` minutes ago (applied again until it shows: a state pushed in between brings the real time back)
   const at = (min, sel) => page.waitForFunction(([id, min, sel]) => { const t = Date.now() - min * 60000, s = A.sessions.find(x => x.id === id);
     let set = true;
-    if (Math.abs(s.mts * 1000 - t) > 60000) { s.mts = t / 1000; renderList(); set = false; }
+    if (!s.reply || Math.abs(s.reply.at - t) > 60000) { s.reply = { at: t, ttl: 3600 }; renderList(); set = false; }
     if (Math.abs(V.context.at - t) > 60000) { V.context.at = t; renderStrip(); set = false; }
     return set && !!document.querySelector(sel); }, [id, min, sel], { polling: 200 });
   // warm: a clock by the session and in the composer, its tooltip saying what it means; no strip

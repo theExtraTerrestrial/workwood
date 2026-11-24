@@ -174,15 +174,15 @@ const stateOf=s=>(s.bg&&s.status==='idle'?`<span class="bgc" data-tip="${plural(
 const stateOf1=s=>s.status==='work'?'<i class="spin"></i>':s.status==='wait'?`<span class="askl">${esc(askLabel(s.line))}</span>`:`${s.unread?'<i class="dot"></i>':''}<time>${ago(s.mts)}</time>`;
 // The prompt cache: kept for a while after each reply (an hour on a subscription), then the next message reads the
 // whole conversation again, at full price against your limits. Settings sets how long; a reply that wrote a shorter
-// cache (five minutes, once usage runs into overage) counts that. In the list, the last change to the session counts.
+// cache (five minutes, once usage runs into overage) counts that. In the list too, the last reply counts, not the file's time: opening a session adds lines to it.
 const cacheMin=()=>A.prefs?.cacheMinutes??60;
 // A small clock marks the few sessions whose cache is still warm, emptying as it cools; cold ones (most) show nothing.
 const hm=ms=>{const m=Math.max(1,Math.round(ms/60000));return m<60?m+' min':Math.floor(m/60)+' h'+(m%60?' '+m%60+' min':'')};
 const warmLeft=end=>{const l=end-Date.now();return l>0?l:0};
 function warmDial(end,total){const l=warmLeft(end);if(!l)return'';
   return `<span class="wdial" style="--left:${Math.min(1,l/total).toFixed(3)}" data-tip="Cache warm · ${hm(l)} left" data-tip-d="A reply sent within this time reads the conversation from Claude's cache, which costs far less of your limits. After it, the next message reads it all again."></span>`}
-const listWarm=s=>!cacheMin()||s.done||s.status!=='idle'||!s.mts?'':warmDial(s.mts*1000+cacheMin()*60000,cacheMin()*60000);
 const coldAt=c=>!c?.at||!cacheMin()?null:c.at+Math.min(cacheMin()*60,c.ttl||Infinity)*1000;
+const listWarm=s=>{const end=s.done||s.status!=='idle'?null:coldAt(s.reply);return end?warmDial(end,end-s.reply.at):''};
 let drawing=false;
 function renderList(){drawing=true;try{drawList()}finally{drawing=false}renderBgs()
   const r=$('renIn');if(r){r.value=V.renameText;r.focus();r.setSelectionRange(V.caret,V.caret)}}

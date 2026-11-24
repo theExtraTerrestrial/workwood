@@ -200,7 +200,7 @@ function decorate(s) {
     status = 'wait'; line = { auth: 'Paused · sign-in needed', limit: autos.has(s.id) ? `Limit reached · continuing on ${autos.get(s.id).to} soon` : 'Stopped · limit reached' }[run.stopped.reason] || 'Stopped · something went wrong';
   } else if (outside) elsewhere('In a terminal');
   if (handing.has(s.id)) { status = 'work'; line = 'Writing the handoff'; }
-  return { id: s.id, title: s.title, project: s.project, cwd: s.cwd, branch: s.branch, mts: s.mts,
+  return { id: s.id, title: s.title, project: s.project, cwd: s.cwd, branch: s.branch, mts: s.mts, reply: s.reply || null,
     root: s.root || s.cwd, profile: run?.profile || s.profile, status, line, outside, term, locked: (outside || term) && !!live && live.status !== 'idle',
     unread: status === 'idle' && unread.has(s.id), done: isDone(s, status), bg: run?.bg?.size || 0,
     auto: autos.has(s.id) ? { to: autos.get(s.id).to, at: autos.get(s.id).at, wait: AUTO_WAIT } : null, ...(prevOf.has(s.id) ? { thread: chainOf(s.id).length } : {}) };

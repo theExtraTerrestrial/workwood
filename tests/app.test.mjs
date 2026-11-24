@@ -785,6 +785,27 @@ test('previews: a named file rewritten later in the turn by a command that does 
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('previews: a page a script wrote under a path no command names is offered from what Claude Code saw the command change', async () => {
+  const { readTranscript } = await import('../service/transcript.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ww-diff-')), page = path.join(dir, 'design', 'round9.html'), note = path.join(dir, 'notes.md');
+  fs.mkdirSync(path.dirname(page)); fs.writeFileSync(page, '<p>hi</p>'); fs.writeFileSync(note, 'x');
+  const t = Date.parse('2026-01-02T10:00:00Z'), at = ms => new Date(t + ms).toISOString();
+  const lines = [
+    { type: 'user', cwd: dir, timestamp: at(-1000), message: { role: 'user', content: 'draw it' } },
+    { type: 'assistant', cwd: dir, timestamp: at(0), message: { model: 'claude-opus-5-5', content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'python3 /tmp/gen.py' } }] } },
+    { type: 'user', cwd: dir, timestamp: at(1500), toolUseResult: { stdout: '', bashEditDiff: { files: [], moreFiles: 0, changedFiles: [page, note] } },
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: '' }] } },
+    { type: 'system', subtype: 'turn_duration', durationMs: 2000, timestamp: at(2000) },
+  ];
+  const padding = Array.from({ length: 80 }, (_, i) => ({ type: 'user', cwd: dir, timestamp: at(10000 + i), message: { role: 'user', content: 'x'.repeat(100000) } }));
+  const write = (name, l) => { const f = path.join(dir, name); fs.writeFileSync(f, l.map(x => JSON.stringify(x)).join('\n') + '\n'); return f; };
+  try {
+    const r = await readTranscript(write('s.jsonl', lines), 400, dir);
+    assert.deepEqual(r.items.find(i => i.kind === 'work')?.files.map(x => x.path), [page]);
+    assert.deepEqual((await readTranscript(write('long.jsonl', [...lines, ...padding]), 400, dir)).work.map(f => f.path), [page]);   // early in a long session too
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('previews: a picture a script made under a path no command names is offered once the agent opens it', async () => {
   const { readTranscript } = await import('../service/transcript.mjs');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ww-read-')), shot = path.join(dir, 'shots', 'step.png'), old = path.join(dir, 'old.png');

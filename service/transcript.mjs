@@ -219,6 +219,7 @@ export class Builder {
       }
       if (step.group === 'recall' && step.state === 'ok') { step.report = text.length > 2400 ? text.slice(0, 2399) + '…' : text; step.hits = +(/^(\d+) of \d+ match/.exec(text)?.[1] || 0); }
       if (step.state !== 'bg') step.end = at;
+      if (step.group === 'run' && step.state !== 'no') this.changed(extra.bashEditDiff?.changedFiles, ts);
       if (step.group === 'run' && step.state !== 'no' && step.state !== 'bg') this.keepOutput(r.tool_use_id, step, text.replace(/^Exit code \d+\n?/, ''));
       changed.add(hit.item);
     }
@@ -388,6 +389,14 @@ export class Builder {
    */
   toolsDone(ts) { const at = (ts ? Date.parse(ts) : Date.now()) + 2000; for (const n of this.named) n.to = Math.max(n.to ?? 0, at); }
   closeText() { const last = this.items[this.items.length - 1]; if (last && last.kind === 'assistant') last.open = false; }
+  /**
+   * Files Claude Code saw a command change (its bashEditDiff): a script that writes a page under a path the command
+   * itself never names. Only what can be shown is kept.
+   */
+  changed(files, ts) {
+    if (!Array.isArray(files)) return;
+    for (const f of files) if (typeof f === 'string' && path.isAbsolute(f) && previewKind(f)) this.fresh.set(f, ts || this.lastTs || new Date().toISOString());
+  }
   /** A file the agent points at without having written it this turn (a question's option names it): offered with the rest. */
   offer(file) { if (path.isAbsolute(file) && previewKind(file) && !this.fresh.has(file)) this.fresh.set(file, this.lastTs || new Date().toISOString()); }
   /** Previewable files written since the last call become one item, shown as cards. Files that are gone are left out. */
@@ -442,7 +451,11 @@ function earlyWork(file, upto, cwd) {
       } else if (line.includes('"type":"assistant"') && /"name":"(?:Bash|PowerShell)"/.test(line) && !line.includes('"isSidechain":true')) {
         b.ran(/"timestamp":"([^"]+)"/.exec(line)?.[1]);   // a command that names nothing to show may still make what a later Read opens
       } else if (line.includes('"type":"user"')) {
-        if (!line.includes('"isSidechain":true') && line.includes('"tool_result"')) b.toolsDone(/"timestamp":"([^"]+)"/.exec(line)?.[1]);
+        if (!line.includes('"isSidechain":true') && line.includes('"tool_result"')) {
+          const ts = /"timestamp":"([^"]+)"/.exec(line)?.[1];
+          b.toolsDone(ts);
+          if (line.includes('"bashEditDiff"') && SHOWABLE.test(line)) { let m; try { m = JSON.parse(line); } catch { m = null; } b.changed(m?.toolUseResult?.bashEditDiff?.changedFiles, ts); }
+        }
       } else if (line.includes('"turn_duration"')) b.flushWork();
       if (at > upto) break;   // the line the tail read starts inside is finished here
     }

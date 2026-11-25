@@ -11,3 +11,6 @@ mise.toml
 .mise.toml
 mise.local.toml
 .mise.local.toml
+
+# worktrees sessions work in (see CLAUDE.md)
+.claude/worktrees/

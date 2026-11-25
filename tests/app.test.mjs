@@ -1314,11 +1314,11 @@ test('dictation: the GPU model is downloaded only when asked, then used, and can
 
 test('settings: default profile and dictation language are kept; sign-in again runs Claudius in a terminal', async () => {
   const handoff = { model: 'auto', effort: 'medium', offer: 400000 };
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', cacheMinutes: 60, handoff });
-  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', cacheMinutes: 60, handoff });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, handoff });
+  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, handoff });
   const kept = JSON.parse(fs.readFileSync(path.join(sb.home, '.config', 'workwood', 'state.json'), 'utf8'));
   assert.deepEqual([kept.defaultProfile, kept.language, typeof kept.done], ['other', 'latvian', 'object']);
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', cacheMinutes: 60, handoff });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, handoff });
   const a = (await svc.call('about')).body;
   assert.deepEqual([a.version, a.claude, typeof a.speech.model], ['0.1.0', '2.1.322', 'string']);
   assert.equal((await svc.call('profiles/nobody/login', {})).status, 404);
@@ -1495,7 +1495,7 @@ const chrome = findChrome();
 const ui = (name, fn) => test(name, { skip: chrome ? false : 'no Chromium found; set WORKWOOD_CHROME or run: npx playwright install chromium-headless-shell' }, async () => {
   if (!page) {
     const { chromium } = await import('playwright-core');
-    browser = await chromium.launch({ executablePath: chrome, args: ['--no-sandbox', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
+    browser = await chromium.launch({ executablePath: chrome, args: ['--no-sandbox', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
     page = await browser.newPage({ viewport: { width: 1400, height: 880 } });
     page.setDefaultTimeout(8000);
     await page.goto(svc.address + '#' + sb.sessions.alphaLive);
@@ -2407,6 +2407,102 @@ ui('window: a code block in an answer copies just its code, from the button that
   assert.equal(await page.evaluate(() => window.copied), 'ls -la\necho "<b>"');
 });
 
+ui('window: an answer is read aloud from the speaker before Copy, sentence by sentence; the player can be a strip, the foot line or a card', async () => {
+  await startNew('Read this slowly. Then a second one.'); await page.waitForSelector('.ai:has-text("Echo: Read this slowly")');
+  const id = await page.locator('.sess.sel').getAttribute('data-id'); await idle(id); await page.waitForSelector('#send[data-tip="Send"]');
+  const now = () => page.evaluate(() => { const h = CSS.highlights.get('ra-now'); return h ? [...h][0].toString() : null; });
+  const before = readLog(sb).length;
+  // the strip: in front, lit sentence, Space pauses, → steps, Esc stops
+  await page.click('.tfoot [data-ra]');
+  await page.waitForSelector('#hstrip.ply:has-text("Reading aloud · 1 of 2")');
+  await until(async () => (await now()) === 'Echo: Read this slowly.', 'the first sentence to be lit');
+  await until(() => readLog(sb).slice(before).some(l => l === 'speak af_bella Echo: Read this slowly.'), 'the first clip');
+  await page.waitForSelector('#hstrip [data-ra-pp][data-tip="Pause"]');
+  await page.focus('#input'); await page.keyboard.press('Space');
+  await page.waitForSelector('#hstrip [data-ra-pp][data-tip="Play"]');
+  assert.equal(await page.inputValue('#input'), '');
+  await page.keyboard.press('ArrowRight'); await page.waitForSelector('#hstrip:has-text("2 of 2")');
+  await until(async () => (await now()) === 'Then a second one.', 'the second sentence to be lit');
+  await page.keyboard.press('Escape'); await page.waitForSelector('#hstrip', { state: 'hidden' });
+  assert.equal(await now(), null);
+  // with another strip up, reading goes in front and the other waits behind, counted by the tab; Show all docks them
+  await page.evaluate(() => { V.context = { used: 160000, window: 200000 }; renderComposer(); });
+  await page.waitForSelector('#hstrip:has-text("Context 160k")');
+  await page.click('.tfoot [data-ra]'); await page.waitForSelector('#hstrip.ply');
+  await page.waitForSelector('#hdeck .htab:has-text("2")'); assert.equal(await page.locator('#hdeck .lip').count(), 1);
+  await page.click('#hdeck [data-hall]'); await page.waitForSelector('#hdeck.open .hstrip:has-text("Context 160k")');
+  await page.click('#hdeck [data-hall-fold]'); await page.waitForSelector('#hdeck .lip');
+  await page.keyboard.press('Escape'); await page.waitForSelector('#hstrip:has-text("Context 160k")');
+  assert.equal(await page.locator('#hdeck').isVisible(), false);
+  await page.click('#hstrip [data-hx]'); await page.waitForSelector('#hstrip', { state: 'hidden' });
+  // under the answer: the foot line becomes the player
+  await svc.call('settings', { readPlace: 'answer' }); await page.waitForFunction(() => A.prefs.readPlace === 'answer');
+  await page.click('.tfoot [data-ra]'); await page.waitForSelector('.tfoot.ply [data-ra-pp]');
+  assert.equal(await page.locator('#hstrip').isVisible(), false);
+  await page.click('.tfoot.ply [data-ra-x]'); await page.waitForSelector('.tfoot.ply', { state: 'detached' });
+  // the mini player: a card, bottom center, dragged to top right, where it stays
+  await svc.call('settings', { readPlace: 'mini' }); await page.waitForFunction(() => A.prefs.readPlace === 'mini');
+  await page.evaluate(() => localStorage.removeItem('ww.raSpot'));
+  await page.click('.tfoot [data-ra]'); await page.waitForSelector('#raMini:not([hidden]):has-text("Reading aloud")');
+  assert.equal(await page.locator('#raMini').evaluate(m => m.style.left), '50%');
+  const g = await page.locator('#raMini [data-ra-grip]').boundingBox(), conv = await page.locator('#conv').boundingBox();
+  await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2); await page.mouse.down();
+  await page.mouse.move(conv.x + conv.width - 60, conv.y + 40, { steps: 4 });
+  await page.waitForSelector('.radrop [data-spot="top-right"].hl');
+  await page.mouse.up(); await page.waitForSelector('.radrop', { state: 'detached' });
+  assert.equal(await page.evaluate(() => localStorage.getItem('ww.raSpot')), 'top-right');
+  assert.deepEqual(await page.locator('#raMini').evaluate(m => [m.style.top, m.style.right]), ['12px', '16px']);
+  await page.keyboard.press('Escape'); await page.waitForSelector('#raMini', { state: 'hidden' });
+  // Settings: the voice, the player as three pictures, the speed
+  await page.evaluate(() => openSettings(STABS.indexOf('Speech'))); await page.waitForSelector('#spage .rlc');
+  assert.deepEqual(await page.locator('#spage .rlc b').allInnerTexts(), ['Strip', 'Under the answer', 'Mini player']);
+  assert.equal(await page.locator('#spage .rlc.on b').innerText(), 'Mini player');
+  await page.click('#spage .rlc[data-rplace="strip"]'); await page.waitForSelector('#spage .rlc.on[data-rplace="strip"]');
+  await page.click('#spage [data-rspd="1.5"]'); await page.waitForSelector('#spage [data-rspd="1.5"].on');
+  assert.equal((await svc.call('settings', {})).body.readSpeed, 1.5);
+  await svc.call('settings', { readSpeed: 1 }); await page.keyboard.press('Escape');
+});
+
+ui('window: a previewed page is read aloud from its header, open questions first; Read section by a heading; full width, the player is in the header', async () => {
+  await startNew('please build a MOCKUP'); await page.waitForSelector('.hero.n3');
+  // an answer's speaker reads the turn's last answer only, as Copy takes it
+  await idle(await page.locator('.sess.sel').getAttribute('data-id'));
+  await page.click('.tfoot [data-ra]'); await page.waitForSelector('#hstrip.ply');
+  assert.deepEqual(await page.evaluate(() => RA.sents.map(x => x.say)), ['Both directions are ready.']);
+  await page.keyboard.press('Escape'); await page.waitForSelector('#hstrip', { state: 'hidden' });
+  const file = await page.locator('.hero .hc:has-text("light.html")').getAttribute('data-open');
+  fs.writeFileSync(file, `<h1>Round 9</h1><div class="frame"><p>Send. Stop. Copy that text from the mock window here.</p></div>
+    <h2>What changed slowly</h2><p>The player moved slowly into the header of the preview pane. It keeps slowly the same controls and the same keys as the strip does today.</p>
+    <h2>Open questions slowly</h2><ol><li>Should it stay there slowly?</li><li>Is the slowly speed fine?</li></ol>`);
+  await page.click('.hero .hc:has-text("light.html")'); await page.click('#bFull');   // split view
+  await page.waitForSelector('#bRead:not([hidden])');
+  const lit = () => page.frameLocator('#stage iframe').locator('body').evaluate(() => { const h = CSS.highlights.get('ww-now'); return h ? [...h][0].toString() : null; });
+  const before = readLog(sb).length;
+  await page.click('#bRead');
+  await page.waitForSelector('#hstrip.ply:has-text("Open questions slowly · 1 of 6")');
+  await until(async () => (await lit()) === 'Open questions slowly', 'the open questions heading to be lit first');
+  await until(() => readLog(sb).slice(before).some(l => l === 'speak af_bella Open questions slowly'), 'the first clip');
+  assert.equal(await page.locator('#bRead.on').count(), 1);
+  await page.keyboard.press('ArrowRight'); await until(async () => (await lit()) === 'Should it stay there slowly?', 'the first question');
+  await page.keyboard.press('Shift+ArrowRight'); await page.waitForSelector('#hstrip:has-text("What changed slowly · 4 of 6")');
+  // the mock window's words and the page title (too few words) are never read
+  assert.ok(!(await page.evaluate(() => RA.sents.map(x => x.say).join(' '))).includes('Copy that'));
+  // full width: no message box, so the player sits in the header instead of the speaker
+  await page.click('#bFull'); await page.waitForSelector('#pRa:not([hidden]) [data-ra-pp]');
+  assert.equal(await page.locator('#bRead').isHidden(), true);
+  await page.click('#pRa [data-ra-x]'); await page.waitForSelector('#pRa', { state: 'hidden' });
+  await until(async () => (await lit()) === null, 'the page to be unlit');
+  // Read section, by pointing at a heading
+  await page.frameLocator('#stage iframe').locator('h2:has-text("What changed slowly")').hover();
+  await page.frameLocator('#stage iframe').locator('button.c.sec').click();
+  await page.waitForSelector('#pRa:has-text("What changed slowly · 1 of 3")');
+  await page.keyboard.press('Escape'); await page.waitForSelector('#pRa', { state: 'hidden' });
+  // a page of layout alone gets no speaker
+  fs.writeFileSync(file, '<h1>Just a frame</h1><div class="frame"><p>Send</p></div>');
+  await page.click('#bRefresh'); await page.frameLocator('#stage iframe').locator('h1:has-text("Just a frame")').waitFor();
+  await page.waitForTimeout(300); assert.equal(await page.locator('#bRead').isHidden(), true);
+});
+
 ui('window: rewind from the arrow beside a message, Esc Esc or /rewind, and the outline\'s ⋮; the strip offers Undo until the next message', async () => {
   await startNew('WRITES plan.md first plan'); await page.waitForSelector('.ai:has-text("Wrote plan.md")');
   const id = await page.locator('.sess.sel').getAttribute('data-id'), plan = path.join((await state()).sessions.find(s => s.id === id).cwd, 'plan.md');
@@ -2691,7 +2787,7 @@ ui('window: a /compact stopped by a limit offers another profile, and continuing
 });
 
 ui('window: the setting to continue at a limit by itself, and the card counts down with a way to cancel', async () => {
-  await page.click('#bGear'); await page.click('#gAll');
+  await page.click('#bGear'); await page.click('#gAll'); await page.click('#stabs [data-st="5"]');
   await page.click('#spage [data-set="auto"]');
   await page.waitForSelector('#spage [data-set="auto"].on');
   await page.click('#dClose');
@@ -2811,9 +2907,15 @@ ui('window: Settings, Profiles: a profile\'s problems with what to do, its own d
 ui('window: the settings dialog: tabs, default profile for new sessions, sign in again from the Profiles tab', async () => {
   await page.click('#bGear'); await page.click('#gAll');
   await page.waitForSelector('#spage .pgh:has-text("General")');
+  // General, Sessions and Speech come first; a line sets them apart from Profiles, Skills and About
+  assert.deepEqual(await page.locator('#stabs').evaluate(t => [...t.children].map(c => c.tagName === 'I' ? '—' : c.textContent)), ['General', 'Sessions', 'Speech', 'Look', '—', 'Profiles', 'Skills', 'About']);
+  await page.click('#stabs [data-st="6"]'); await page.waitForSelector('#spage .lgrp:has-text("Dictation")');
   await page.selectOption('#sLang', 'german');
+  await page.click('#stabs [data-st="5"]'); await page.waitForSelector('#spage [data-set="bypass"]');
+  assert.deepEqual(await page.locator('#spage .lgrp').allInnerTexts(), ['LIMITS', 'HANDOFF']);
   await page.selectOption('#sDays', '14'); await until(async () => (await state()).prefs.doneDays === 14, 'the clearing time to be saved'); await page.selectOption('#sDays', '7');
   await until(async () => { const p = (await state()).prefs; return p.defaultProfile === 'other' && p.language === 'german'; }, 'the settings to be saved');
+  await page.click('#stabs [data-st="0"]');
   await page.fill('#sFolders', '/nowhere/at/all'); await page.press('#sFolders', 'Enter');
   await page.waitForSelector('text=There is no folder at');
   await page.fill('#sFolders', '~/workspace; ~/.claude'); await page.press('#sFolders', 'Enter');

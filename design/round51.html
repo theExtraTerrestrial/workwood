@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 51: stacked strips, a mini player, what a preview reads (wireframes)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+  :root{color-scheme:dark}[data-theme=light]{color-scheme:light}
+  :root{--page:#0e0f11;--win:#17181b;--side:#121315;--blk:#26282c;--blk2:#33363b;--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.18);
+    --text:#e9eaec;--dim:#9a9ea6;--faint:#61656d;--note:#5fd4b4;--note-soft:rgba(95,212,180,.12);--warn:#e8b45a;--warn-soft:rgba(232,180,90,.12);--pop:#1f2124}
+  [data-theme=light]{--page:#e6e7ea;--win:#fbfbfc;--side:#f1f2f4;--blk:#e2e4e8;--blk2:#cfd2d8;--line:rgba(0,0,0,.09);--line2:rgba(0,0,0,.2);
+    --text:#1a1c20;--dim:#5d616a;--faint:#9ea2aa;--note:#13916f;--note-soft:rgba(19,145,111,.1);--warn:#b07a12;--warn-soft:rgba(176,122,18,.1);--pop:#fff}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--text);font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:10px;padding:24px 0 4px}
+  .top h1{font-size:17px;margin:0;flex:1}
+  .tbtn{padding:4px 10px;border-radius:8px;background:var(--blk);color:var(--dim);font-size:12px}
+  .intro{color:var(--dim);max-width:760px;margin:4px 0 0}.intro b{color:var(--text)}
+  h2{font-size:15px;margin:48px 0 2px}
+  .why{color:var(--dim);margin:0 0 14px;max-width:760px}.why b{color:var(--text);font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px}
+  .opt h3{font-size:13px;margin:0 0 2px;display:flex;align-items:center;gap:8px}
+  .opt h3 em{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--note);background:var(--note-soft);padding:1px 6px;border-radius:5px}
+  .opt p{margin:0 0 8px;color:var(--dim);font-size:12px;min-height:36px}
+
+  /* a window, low-fi */
+  .win{height:300px;border:1px solid var(--line2);border-radius:10px;background:var(--win);display:flex;position:relative;overflow:hidden}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+  .mh{height:30px;flex:none;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 12px;gap:8px}
+  .mh::before{content:"";height:7px;width:110px;border-radius:4px;background:var(--blk2)}
+  .th{flex:1;padding:12px 18px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+  .b{height:7px;border-radius:4px;background:var(--blk);margin:6px 0}
+  .me{height:22px;width:42%;margin:4px 0 10px auto;border-radius:10px;background:var(--blk)}
+  .cmp{padding:0 18px 12px;flex:none;position:relative}
+  .box{height:40px;border-radius:12px;border:1px solid var(--line2);background:var(--win);position:relative;z-index:2}
+  /* strips: tucked under the box's top edge */
+  .st{height:30px;margin:0 10px -10px;padding:0 10px 10px;border:1px solid var(--line2);border-bottom:0;border-radius:9px 9px 0 0;display:flex;align-items:center;gap:7px;font-size:11px;color:var(--dim);position:relative;background:var(--blk)}
+  .st b{color:var(--text);font-weight:600}.st>*{white-space:nowrap}.st>span:not(.pill):not(.chip):not(.dot):not(.g){overflow:hidden;text-overflow:ellipsis;min-width:0}.st .g{flex:1}
+  .st.cache{background:var(--blk)}
+  .st.ctx{background:color-mix(in srgb,var(--note) 10%,var(--blk))}
+  .st.read{background:color-mix(in srgb,var(--note) 16%,var(--blk))}
+  .pill{height:16px;padding:0 7px;border-radius:5px;background:var(--blk2);font-size:10px;display:inline-flex;align-items:center;color:var(--text);white-space:nowrap}
+  .pill.go{background:var(--note);color:#0b1714;font-weight:700}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:none}.dot.n{background:var(--note)}
+  /* A: a deck: the strip behind shows only its lip */
+  .lip{height:17px;margin:0 22px -4px;padding-bottom:3px;border:1px solid var(--line2);border-bottom:0;border-radius:8px 8px 0 0;background:var(--blk);position:relative;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--dim)}
+  .lip.two{margin:0 34px -4px;height:10px}
+  /* C: chips of the others */
+  .chip{display:inline-flex;align-items:center;gap:4px;height:16px;padding:0 6px;border-radius:5px;box-shadow:inset 0 0 0 1px var(--line2);font-size:10px;color:var(--dim);white-space:nowrap}
+  /* mini player */
+  .mp{position:absolute;display:flex;align-items:center;gap:5px;height:28px;padding:0 6px 0 4px;border-radius:14px;background:var(--pop);box-shadow:0 0 0 1px var(--line2),0 6px 18px rgba(0,0,0,.3);font-size:10.5px;z-index:5;white-space:nowrap}
+  .mp .grip{width:8px;height:14px;background:radial-gradient(circle,var(--faint) 1px,transparent 1.5px) 0 0/4px 4px;opacity:.9;cursor:grab}
+  .mp .pp{width:20px;height:20px;border-radius:50%;background:var(--note);flex:none;position:relative}
+  .mp .pp::before,.mp .pp::after{content:"";position:absolute;top:6px;width:2.5px;height:8px;background:#0b1714;border-radius:1px}.mp .pp::before{left:6.5px}.mp .pp::after{left:11px}
+  .mp .sk{width:14px;height:14px;border-radius:4px;background:var(--blk2);flex:none}
+  .mp .bar{width:60px;height:3px;border-radius:2px;background:var(--blk2);position:relative}.mp .bar::after{content:"";position:absolute;left:0;top:0;bottom:0;width:35%;background:var(--note);border-radius:2px}
+  .mp .t{color:var(--dim)}
+  .spot{position:absolute;border:1.5px dashed var(--line2);border-radius:14px;height:28px;width:150px;z-index:1;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:var(--faint)}
+  .spot.hl{border-color:var(--note);background:var(--note-soft);color:var(--note)}
+  .lit{background:var(--note-soft);box-shadow:0 0 0 1px color-mix(in srgb,var(--note) 40%,transparent)}
+  /* preview page */
+  .pv{width:56%;flex:none;border-left:1px solid var(--line);display:flex;flex-direction:column}
+  .pv .ph{height:30px;flex:none;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 10px;gap:6px;font-size:10.5px;color:var(--dim)}
+  .pv .ph .g{flex:1}
+  .ic{width:16px;height:16px;border-radius:5px;background:var(--blk2);flex:none;display:inline-block}
+  .ic.spk{background:var(--note-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--note) 50%,transparent);position:relative}
+  .ic.spk::after{content:"";position:absolute;left:5px;top:4px;border:4px solid transparent;border-left:6px solid var(--note);border-right:0}
+  .pg{flex:1;margin:8px;border-radius:7px;background:var(--side);padding:10px 12px;overflow:hidden;font-size:10.5px}
+  .sec{border-radius:6px;padding:5px 6px;margin:0 -6px 6px;position:relative}
+  .hd{display:flex;align-items:center;gap:6px;font-weight:600;color:var(--text);font-size:10.5px;margin-bottom:4px}
+  .frm{display:flex;gap:6px}.frm i{flex:1;height:54px;border-radius:5px;border:1px solid var(--line2);background:var(--blk)}
+  .tx{height:5px;border-radius:3px;background:var(--blk2);margin:4px 0}
+  .tag{font-size:9px;color:var(--faint);margin-left:auto;font-weight:500}
+  .sec.r{background:var(--note-soft)}
+  .ok{color:var(--note)}.no{color:var(--faint)}
+
+  .rules{max-width:760px;color:var(--dim);font-size:12.5px;margin:14px 0 0;padding-left:18px}.rules li{margin:4px 0}.rules b{color:var(--text);font-weight:600}
+  .q{border-top:1px solid var(--line);margin-top:48px;padding-top:16px}
+  .q h2{margin:0 0 6px}.q ol{margin:0;padding-left:18px;color:var(--dim)}.q li{margin:5px 0}.q b{color:var(--text)}
+</style></head><body><div class="wrap">
+<div class="top"><h1>Stacked strips, a mini player, what a preview reads</h1><button class="tbtn" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<p class="intro">Wireframes, round 51. Settled: reading aloud happens <b>only in the session you're looking at</b>; switch away and it pauses.</p>
+
+<h2>1 · Two strips at once</h2>
+<p class="why">The cache countdown and the context offer can both want the box today. Three ways to stack them; the newest or most urgent is on top.</p>
+<div class="grid" id="stack"></div>
+
+<h2>2 · The reading mini player</h2>
+<p class="why">Not a strip: a small pill that floats over the conversation. <b>Drag it by its grip</b>; it snaps to the nearest spot and stays there next time.</p>
+<div class="grid" id="mini"></div>
+
+<h2>3 · What a preview reads</h2>
+<p class="why">Most previews are layout. Only <b>sections of words</b> get a speaker: open questions, notes, what changed. Frames and pictures never do.</p>
+<div class="grid" id="pvs"></div>
+<ol class="rules">
+<li><b>The agent marks them.</b> Design rounds are asked to put notes and questions in <code>&lt;section data-read&gt;</code>. Marked sections always get a speaker.</li>
+<li><b>Otherwise Workwood guesses:</b> a heading whose section is mostly words (lists, paragraphs, at least about 20 words, no frames or pictures) gets one; anything named like <i>Open questions</i>, <i>Questions</i> or <i>Notes</i> always does.</li>
+<li>The header's speaker reads every such section in order, <b>open questions first</b>. On a page with none, it doesn't show.</li>
+</ol>
+
+<div class="q"><h2>Questions</h2><ol>
+<li><b>Two strips:</b> the deck (A), paging (B), or one strip with chips (C)?</li>
+<li><b>Mini player:</b> which spot should it start in? Or should it always start docked on the strips (B) until you drag it out?</li>
+<li><b>Preview:</b> header speaker reads open questions first — or only open questions?</li>
+</ol></div>
+</div>
+<script>
+const thread=`<div class="b" style="width:70%"></div><div class="b" style="width:55%"></div><div class="me"></div><div class="b" style="width:80%"></div><div class="b" style="width:62%"></div><div class="b" style="width:40%"></div>`;
+const win=(cmp,extra='',th=thread)=>`<div class="win"><div class="main"><div class="mh"></div><div class="th">${th}</div><div class="cmp">${cmp}<div class="box"></div></div>${extra}</div></div>`;
+const cache=(x='')=>`<div class="st cache"><span class="dot"></span><b>Cache cools in 6m</b><span>· send to keep warm</span><span class="g"></span>${x}<span class="pill">✕</span></div>`;
+const ctx=(x='')=>`<div class="st ctx"><span class="dot n"></span><b>Context 420k</b><span>· earlier turns blur</span><span class="g"></span>${x}<span class="pill go">Hand off</span><span class="pill">✕</span></div>`;
+const opt=(id,list)=>document.getElementById(id).innerHTML=list.map(([k,t,rec,d,w])=>`<div class="opt"><h3>${k?k+' · ':''}${t}${rec?'<em>Recommended</em>':''}</h3><p>${d}</p>${w}</div>`).join('');
+opt('stack',[
+ ['A','A deck',true,'The other strip tucks behind; its lip shows above. Click the lip, or point at the deck, and they fan out.',
+  win(`<div class="lip">1 more · cache 6m</div>${ctx()}`)],
+ ['B','One strip, paged',false,'Only one shows; “1 of 2” with ‹ › steps through them.',
+  win(ctx(`<span class="chip">‹ 1 of 2 ›</span>`))],
+ ['C','One strip, chips for the rest',false,'The top strip in full; each other one shrinks to a chip in it. Click a chip to swap.',
+  win(ctx(`<span class="chip"><span class="dot" style="width:6px;height:6px"></span>6m</span>`))],
+]);
+const mp=(style)=>`<div class="mp" style="${style}"><span class="grip"></span><span class="sk"></span><span class="pp"></span><span class="sk"></span><span class="bar"></span><span class="t">2/4</span><span class="pill">1.25×</span><span class="pill">✕</span></div>`;
+const litThread=`<div class="b" style="width:70%"></div><div class="me"></div><div class="b" style="width:80%"></div><div class="b lit" style="width:62%"></div><div class="b" style="width:40%"></div>`;
+opt('mini',[
+ ['A','Top right of the conversation',true,'Out of the way of the box and the strips; the answer it reads stays visible below.',
+  win('',mp('top:38px;right:12px'),litThread)],
+ ['B','Docked on the strips',false,'Sits on top of the strip deck, above the box, like a strip but pill-shaped.',
+  win(`<div style="height:34px"></div>${cache()}`,mp('bottom:86px;left:50%;transform:translateX(-50%)'),litThread)],
+ ['C','Where you dragged it',false,'Drag the grip: the snap spots show while you drag. Here, dropping on the bottom left.',
+  win('',`<div class="spot" style="top:38px;right:12px">top right</div><div class="spot" style="top:38px;left:12px">top left</div><div class="spot hl" style="bottom:62px;left:18px;width:220px">bottom left</div><div class="spot" style="bottom:62px;right:18px;width:110px">bottom right</div>${mp('bottom:68px;left:30px;opacity:.95')}`,litThread)],
+]);
+const sec=(name,read,body,tag)=>`<div class="sec ${read?'r':''}"><div class="hd">${read?'<span class="ic spk"></span>':''}${name}<span class="tag ${read?'ok':'no'}">${tag}</span></div>${body}</div>`;
+const tx=n=>Array.from({length:n},(_,i)=>`<div class="tx" style="width:${[92,78,85,60][i%4]}%"></div>`).join('');
+const frames=`<div class="frm"><i></i><i></i></div>`;
+const pvWin=(page,hdr)=>`<div class="win"><div class="main"><div class="mh"></div><div class="th">${thread}</div><div class="cmp"><div class="box"></div></div></div><div class="pv"><div class="ph">round51.html<span class="g"></span>${hdr}<span class="ic"></span></div><div class="pg">${page}</div></div></div>`;
+opt('pvs',[
+ ['','A mockup with notes',false,'Frames get nothing; Notes and Open questions get a speaker each.',
+  pvWin(sec('A · Above the box',false,frames,'frames')+sec('Same in both',true,tx(2),'words')+sec('Open questions',true,tx(3),'always'),'<span class="ic spk"></span>')],
+ ['','A layout-only mockup',false,'No section of words: no speakers, and none in the header.',
+  pvWin(sec('A · Compact',false,frames,'frames')+sec('B · Tall',false,frames,'frames'),'')],
+]);
+</script></body></html>

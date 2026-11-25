@@ -1,0 +1,240 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 54 — Stacked strips and three players</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<!-- the app's own stylesheet: the thread, message box and strip below are drawn by it -->
+<link rel="stylesheet" href="../ui/app.css">
+<style>
+html,body{height:auto}
+body{overflow:auto;background:var(--bg);padding:36px 24px 80px}
+.top{max-width:1320px;margin:0 auto 8px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top>span{color:var(--faint);font-size:12.5px}
+.tg{margin-left:auto;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:8px;box-shadow:0 0 0 1px var(--line2)}
+.lede{max-width:1320px;margin:0 auto 28px;color:var(--faint);font-size:12.5px}.lede b{color:var(--dim);font-weight:650}
+.two{max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:24px}
+.two h2{font-size:14px;margin:0 0 2px;font-weight:700;display:flex;gap:8px;align-items:center}
+.two h2 em{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);padding:1px 6px;border-radius:5px}
+.two p{margin:0 0 12px;color:var(--faint);font-size:12.5px;min-height:36px}
+
+.frame{background:var(--bg);border-radius:14px;box-shadow:0 0 0 1px var(--line2);height:500px;display:flex;overflow:hidden;position:relative}
+.frame .conv{height:100%}
+.frame .scroll{overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:20px 22px 4px}
+.frame .col{width:100%}
+.frame .composer{padding:8px 22px 12px;position:relative}
+
+/* the foot line: Read aloud beside Copy */
+.tfoot{display:flex;align-items:center;gap:6px;margin-bottom:16px}
+.ab{width:22px;height:20px;display:grid;place-items:center;color:var(--dim);border-radius:6px;position:relative}
+.ab svg{width:12.5px;height:12.5px}.ab.hov{color:var(--text);background:var(--surface2)}
+.ab.on{color:var(--accent)}
+.tip2{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11px;padding:3px 7px;border-radius:6px;background:var(--text);color:var(--bg);font-weight:600}
+
+/* the sentence being read */
+.ai .s{border-radius:4px;transition:background .2s}
+.ai .s.now{background:color-mix(in srgb,var(--accent) 20%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 20%,transparent)}
+.ai .s.done{color:var(--dim)}
+.ai .s.hov{text-decoration:underline dotted var(--faint);text-underline-offset:3px;cursor:pointer}
+
+/* the player: transport, progress by sentence, speed, close */
+.pl{display:flex;align-items:center;gap:4px}
+.rpb{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--dim)}
+.rpb svg{width:13px;height:13px}.rpb:hover{color:var(--text);background:var(--surface2)}
+.rpb.big{width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--btn-ink)}.rpb.big svg{width:12px;height:12px}
+.rprog{flex:1;min-width:60px;display:flex;gap:2px;align-items:center;height:26px;margin:0 6px}
+.rprog i{flex:1;height:4px;border-radius:2px;background:var(--line2)}
+.rprog i.d{background:color-mix(in srgb,var(--accent) 55%,transparent)}
+.rprog i.n{background:var(--accent);height:6px}
+.tm{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums;white-space:nowrap;margin-right:4px}
+.sp{font-size:11px;font-weight:700;color:var(--dim);padding:3px 7px;border-radius:6px;background:var(--surface2)}
+/* A: the handoff strip as it is: tint, bold title + dim detail, pill buttons; a thin progress line on its top edge */
+.hstrip.ra{overflow:hidden;margin-left:12px;margin-right:12px}
+.hstrip.ra .t{display:flex;align-items:center;gap:7px}.hstrip.ra .t>span{overflow:hidden;text-overflow:ellipsis}
+.hstrip.ra .ci{width:13px;height:13px;flex:none;color:var(--accent)}
+.hstrip.ra .hgo,.hstrip.ra .hc2{display:inline-flex;align-items:center;gap:5px}
+.hstrip.ra .hgo svg,.hstrip.ra .hc2 svg{width:11px;height:11px}
+.hstrip.ra .hc2.i{padding:4px 7px}
+.hstrip.ra .hc2.sp2{font-variant-numeric:tabular-nums;color:var(--dim)}
+.hstrip.ra .line{position:absolute;left:0;right:0;top:0;height:2px;display:flex;gap:2px}
+.hstrip.ra .line i{flex:1;background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.hstrip.ra .line i.d{background:color-mix(in srgb,var(--accent) 60%,transparent)}
+.hstrip.ra .line i.n{background:linear-gradient(90deg,var(--accent) 40%,color-mix(in srgb,var(--accent) 14%,transparent) 40%)}
+/* B: the foot line becomes the player */
+.tfoot.plx .sp{margin-right:4px}
+.tfoot.plx{margin-top:-6px;padding:4px 6px;border-radius:10px;background:var(--surface);box-shadow:0 0 0 1px var(--line)}
+
+.note{max-width:1320px;margin:28px auto 0;border-top:1px solid var(--line);padding-top:18px;font-size:13px;color:var(--dim)}
+.note h3{font-size:13px;margin:0 0 6px;color:var(--text)}.note ol{margin:0;padding-left:18px}.note li{margin:4px 0}
+.note kbd{font:inherit;font-size:11.5px;padding:0 5px;border-radius:4px;box-shadow:0 0 0 1px var(--line2);color:var(--text)}
+details.uh{max-width:1320px;margin:28px auto 0;border-top:1px solid var(--line);padding-top:16px;font-size:12.5px;color:var(--dim)}
+details.uh summary{cursor:pointer;color:var(--text);font-weight:650;font-size:13px}
+details.uh ul{margin:8px 0 0;padding-left:18px}details.uh li{margin:4px 0}
+details.uh code{font-size:11.5px;color:var(--text)}
+
+/* round 50b: other strips, long answers, settings */
+.sec{max-width:1320px;margin:40px auto 0}
+.sec>h2{font-size:14px;margin:0 0 2px;font-weight:700}.sec>p{margin:0 0 14px;color:var(--faint);font-size:12.5px;max-width:820px}
+.cap{font-size:11.5px;color:var(--faint);margin:0 0 6px;font-weight:600}
+.hstrip.cache .drain{position:absolute;left:0;bottom:16px;height:2px;width:var(--left,60%);background:color-mix(in srgb,var(--accent) 45%,transparent)}
+.hstrip .chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:650;color:var(--dim);padding:3px 7px;border-radius:7px;box-shadow:inset 0 0 0 1px var(--line2);white-space:nowrap}
+.hstrip .chip svg{width:11px;height:11px;color:var(--faint)}
+.hstrip.ra .line.cont{gap:0;background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.hstrip.ra .line.cont b{position:absolute;left:0;top:0;bottom:0;background:var(--accent)}
+.hstrip.ra .line.cont u{position:absolute;top:0;bottom:0;width:2px;background:var(--surface)}
+.tall .frame{height:560px}
+.ai h4{margin-top:0}
+.ai p .s.done,.ai li .s.done{color:var(--dim)}
+/* settings */
+.sbox{background:var(--pop);border:1px solid var(--line2);border-radius:14px;padding:6px 12px;max-width:640px;box-shadow:var(--shadow)}
+.sbox .pgh{font-size:13px;font-weight:700;padding:8px 8px 4px}
+.sbox .sib{display:grid;place-items:center;color:var(--dim);border-radius:7px}
+.sbox .sib svg{width:13px;height:13px}
+.sbox .srow.new{background:color-mix(in srgb,var(--accent) 6%,transparent);border-radius:8px}
+.sbox select.sval{padding:5px 8px;border-radius:8px;background:var(--surface2)}
+.srow .stog{width:30px;height:17px;border-radius:9px;position:relative;flex:none;display:block}
+.srow .stog::after{content:"";position:absolute;top:2px;width:13px;height:13px;border-radius:50%;background:#fff}
+
+/* the preview pane */
+.pvframe{display:flex;height:520px}
+.pvframe .conv{flex:1;min-width:0}
+.pvside{width:52%;flex:none;border-left:1px solid var(--line);display:flex;flex-direction:column;background:var(--bg)}
+.pvside.full{width:100%;border-left:0}
+.phd{height:42px;flex:none;display:flex;align-items:center;gap:2px;padding:0 8px 0 10px;border-bottom:1px solid var(--line);font-size:12.5px}
+.phd .nm{font-weight:600;padding:0 8px}.phd .gap{flex:1}
+.phd .ib2{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--dim)}
+.phd .ib2 svg{width:14px;height:14px}.phd .ib2.on{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.phd .tip2{top:calc(100% + 6px);bottom:auto}
+.stg{flex:1;min-height:0;background:var(--stage);padding:14px;display:flex}
+.pg{flex:1;background:#fff;color:#1d1d1f;border-radius:10px;box-shadow:var(--shadow);padding:20px 22px;font:13px/1.55 Manrope,system-ui,sans-serif;overflow:hidden;position:relative}
+.pg h3{font-size:15px;margin:0 0 6px;position:relative}.pg h4{font-size:13px;margin:16px 0 4px;position:relative;display:flex;align-items:center;gap:8px}
+.pg p,.pg li{color:#555}.pg ol{padding-left:18px;margin:4px 0}
+.pg .lit{background:color-mix(in srgb,var(--accent) 28%,#fff);border-radius:3px;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 28%,#fff)}
+.pg .rd{color:#999}
+.pg .hs{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:650;color:#fff;background:var(--accent);padding:2px 8px 2px 6px;border-radius:7px}
+.pg .hs svg{width:11px;height:11px}
+.pg .selb{position:absolute;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:650;color:#fff;background:#1d1d1f;padding:4px 9px 4px 7px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+.pg .selb svg{width:12px;height:12px}
+.pg .sel{background:#b4d5fe}
+.phd .mini{display:flex;align-items:center;gap:4px;padding:3px;border-radius:10px;background:color-mix(in srgb,var(--accent) 9%,var(--surface));box-shadow:inset 0 0 0 1px var(--line2);margin-right:6px}
+.phd .mini b{font-size:11.5px;font-weight:650;margin:0 4px 0 6px;white-space:nowrap}.phd .mini span{font-size:11px;color:var(--faint);white-space:nowrap;margin-right:4px}
+.phd .mini .hc2,.phd .mini .hgo{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:7px;font-size:11.5px}
+.phd .mini .hgo{background:var(--accent);color:var(--btn-ink);font-weight:700}.phd .mini .hc2{background:var(--surface2);font-weight:600}
+.phd .mini svg{width:10px;height:10px}
+
+.frame{height:430px}
+.grid2{max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:24px}
+.grid3{max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(560px,1fr));gap:24px}
+.grid3 .frame{height:400px}
+/* the deck: strips behind show a lip; the switcher is its own tab at the top right */
+.deck{position:relative;max-width:676px;margin:0 auto}
+.lip{height:10px;background:color-mix(in srgb,var(--text) 9%,var(--surface))!important;margin:0 96px -1px;border:1px solid var(--line2);border-bottom:0;border-radius:9px 9px 0 0;background:var(--surface);position:relative}
+.lip+.lip{margin:0 84px -1px}
+.lip.l2{height:6px;margin:0 108px -1px;opacity:.7}
+.swt{position:absolute;right:14px;bottom:100%;height:22px;margin-bottom:-1px;display:flex;align-items:center;gap:5px;padding:0 8px 0 7px;border:1px solid var(--line2);border-bottom:0;border-radius:8px 8px 0 0;background:var(--surface);font-size:11px;font-weight:650;color:var(--dim);z-index:2;cursor:pointer}
+.swt svg{width:12px;height:12px}.swt.hov{color:var(--text);background:var(--surface2)}
+.swt.open{color:var(--accent)}
+.swt .tip2{position:absolute;opacity:1;bottom:auto;top:50%;left:auto;right:calc(100% + 8px);transform:translateY(-50%);z-index:9}
+.swt .ca{font-weight:600;color:var(--dim);padding-right:6px;margin-right:2px;border-right:1px solid var(--line2)}
+.hstrip.ra{margin-left:12px;margin-right:12px}
+/* show all: every strip, stacked and docked */
+.all .hstrip{animation:none}
+.all .hstrip.up{margin-bottom:0;padding-bottom:5px;border-radius:0}
+.all .hstrip.up.first{border-radius:12px 12px 0 0}
+.all .hstrip.up+.hstrip{border-radius:0}
+/* C: the mini player */
+.mp{position:absolute;z-index:6;display:flex;align-items:center;gap:3px;padding:3px 8px 3px 4px;border-radius:20px;background:var(--pop);box-shadow:0 0 0 1px var(--line2),var(--shadow);white-space:nowrap}
+.mp .grip{width:12px;height:22px;background:radial-gradient(circle,var(--faint) 1.1px,transparent 1.6px) 0 1px/5px 5px;cursor:grab;margin:0 2px 0 4px}
+.mp .rprog{flex:none;width:96px;margin:0 6px}
+.mp .rpb{width:24px;height:24px}.mp .rpb.big{width:26px;height:26px}
+.mp .tm{margin:0 4px 0 0}
+.mp.drag{opacity:.92;transform:rotate(-1deg);cursor:grabbing}
+.mp.drag .grip{cursor:grabbing}
+.mp.bc{left:50%;transform:translateX(-50%)}
+/* drop rows: one solid segmented pill each */
+.seg{position:absolute;left:50%;transform:translateX(-50%);width:min(560px,86%);height:34px;padding:3px;border-radius:17px;display:flex;gap:3px;z-index:5;background:color-mix(in srgb,var(--surface) 92%,transparent);box-shadow:inset 0 0 0 1px var(--line2),var(--shadow);backdrop-filter:blur(6px)}
+.seg span{flex:1;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--faint)}
+.seg span+span{position:relative}.seg span+span::before{content:"";position:absolute;left:-2px;top:7px;bottom:7px;width:1px;background:var(--line2)}
+.seg span.hl{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.seg span.hl::before,.seg span.hl+span::before{display:none}
+.cur{position:absolute;z-index:7;width:14px;height:14px;pointer-events:none}
+</style></head><body>
+<div class="top"><h1>Stacked strips and three players</h1><span>round 54 · hi-fi, for approval</span><button class="tg" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<div class="lede">Strips stay <b>docked to the box</b>. When several want it, the newest or most urgent is in front and the others show as <b>lips</b> behind it. A small <b>tab at the top right</b> counts them and opens <b>Show all</b>. The read-aloud player can be <b>A</b> a strip, <b>B</b> under the answer, or <b>C</b> a mini player you can move.</div>
+
+<div class="sec"><h2>The deck</h2><p>With one strip, nothing changes and there's no tab.</p><div class="grid3" id="deck"></div></div>
+<div class="sec"><h2>Player placement</h2><p>A setting with three options. In A the player is always in front of the deck. In B and C the strips stay as they are.</p><div class="grid3" id="pl"></div></div>
+<div class="sec"><h2>Moving the mini player</h2><p>Drag its grip and two segmented rows appear, one at the top of the conversation and one at the bottom: <b>left · center · right</b>. The segment under the pointer lights. Drop it and it stays there, in new sessions too.</p><div class="grid2" id="drag"></div></div>
+<div class="sec"><h2>Settings</h2><p>The player row gets a third option.</p><div class="sbox" id="sets"></div></div>
+<div class="note"><h3>Same as round 50</h3><ol>
+<li>The speaker sits before Copy. The sentence being read is lit, and clicking a sentence reads from there. <kbd>Esc</kbd> stops. With the box empty, <kbd>Space</kbd> pauses and <kbd>←</kbd> <kbd>→</kbd> step a sentence.</li>
+<li>Reading only happens in the session you're looking at. Switching away pauses it.</li>
+<li>In the preview, the header's speaker reads <b>open questions first</b>, then the other sections of words.</li>
+</ol></div>
+<script>
+
+const I={
+ cp:'<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
+ spk:'<svg viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" stroke-linejoin="round"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
+ pause:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+ back:'<svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M6 5v14"/><path d="M18 5.5v13L9 12z"/></svg>',
+ fwd:'<svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M18 5v14"/><path d="M6 5.5v13L15 12z"/></svg>',
+ x:'<svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+ ch:'<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>',
+ clip:'<svg viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>',
+ sl:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="m14 8.5-4 7"/></svg>',
+ mic:'<svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg>',
+ up:'<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>'};
+const ab=(ic,cls='',tip='')=>`<button class="ab ${cls}">${ic}${tip?`<span class="tip2">${tip}</span>`:''}</button>`;
+const step=t=>`<div class="acts"><button class="act">${I.ch}${t}</button></div>`;
+const box=()=>`<div class="box"><textarea rows="1" placeholder="Message the agent…"></textarea><div class="row"><button class="ib">${I.clip}</button><button class="ib">${I.sl}</button><span class="gap"></span><button class="ib">${I.mic}</button><button class="send">${I.up}</button></div></div>`;
+const S=['All 150 tests pass.','Code blocks in answers now have a copy button at their top right, shown when you point at a block.','It copies just the code, without the fences or the language name.','After a copy the icon turns into a check for a moment.'];
+const answer=(now,hov)=>`<div class="ai"><p>${S.map((s,i)=>`<span class="s ${i<now?'done':''} ${i===now?'now':''} ${i===hov?'hov':''}">${s}</span>`).join(' ')}</p></div>`;
+const prog=(n,of)=>`<span class="rprog">${Array.from({length:of},(_,i)=>`<i class="${i<n?'d':i===n?'n':''}"></i>`).join('')}</span>`;
+const player=`<span class="pl"><button class="rpb">${I.back}</button><button class="rpb big">${I.pause}</button><button class="rpb">${I.fwd}</button></span>${prog(1,4)}<span class="tm">0:06 / 0:19</span><button class="sp">1.25×</button>`;
+const T1=`<div class="me">Add a CSV export to the reports page</div>${step('Edited 2 files')}<div class="ai"><p>Done. An Export button now writes the visible rows to <code>report.csv</code>.</p></div><div class="tfoot">Worked for 1m 40s · 10:02 AM ${ab(I.spk)}${ab(I.cp)}</div>`;
+const me2=`<div class="me">Add a copy button to code blocks</div>${step('Edited 3 files · ran 1 command')}`;
+const fr=(thread,strip='')=>`<div class="frame"><section class="conv"><div class="scroll"><div class="col">${thread}</div></div><div class="composer">${strip}${box()}</div></section></div>`;
+I.cold='<svg viewBox="0 0 24 24"><path d="M12 2v20M4.9 6l14.2 12M4.9 18 19.1 6"/></svg>';
+I.play='<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5v14l12-7z"/></svg>';
+const raStrip=(line,detail,extra='')=>`<div class="hstrip ra">${line}<span class="t">${I.spk.replace('<svg','<svg class="ci"')}<b>Reading aloud</b><span> · ${detail}</span></span>${extra}<button class="hc2 i">${I.back}</button><button class="hgo">${I.pause}Pause</button><button class="hc2 i">${I.fwd}</button><button class="hc2 sp2">1.25×</button><button class="ib hx">${I.x}</button></div>`;
+const segs='<span class="line"><i class="d"></i><i class="n"></i><i></i><i></i></span>';
+const cacheStrip=`<div class="hstrip cache" style="--left:55%"><span class="t">${I.cold.replace('<svg','<svg class="ci"')}<b>Cache cools in 6m</b><span> · send now to keep it warm</span></span><button class="ib hx">${I.x}</button><span class="drain"></span></div>`;
+const footOn=`<div class="tfoot">Worked for 2m 12s · 10:20 AM ${ab(I.spk,'on')}${ab(I.cp)}</div>`;
+const lseg=(items,cur)=>`<div class="lseg">${items.map(n=>`<button class="${n===cur?'on':''}">${n}</button>`).join('')}</div>`;
+
+I.stack='<svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M12 4 3 8.5l9 4.5 9-4.5z"/><path d="m3 13 9 4.5 9-4.5"/></svg>';
+I.chd='<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>';
+I.rw='<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>';
+const ctxStrip=(cls='')=>`<div class="hstrip ${cls}"><span class="t"><b>Context 420k</b> · earlier turns start to blur</span><button class="hgo">Hand off</button><button class="hc2">Compact</button><button class="ib hx">${I.x}</button></div>`;
+const cacheS=(cls='')=>`<div class="hstrip cache ${cls}" style="--left:55%"><span class="t">${I.cold.replace('<svg','<svg class="ci"')}<b>Cache cools in 6m</b><span> · send now to keep it warm</span></span><button class="ib hx">${I.x}</button><span class="drain"></span></div>`;
+const rwS=(cls='')=>`<div class="hstrip rw ${cls}"><span class="t" style="display:flex;align-items:center;gap:7px">${I.rw.replace('<svg','<svg class="ci"')}<b>Rewound</b><span> · 3 turns out, 2 files undone</span></span><button class="hc2">Undo</button><button class="ib hx">${I.x}</button></div>`;
+const raS=(cls='')=>raStrip(segs,'sentence 2 of 4 · 0:06 / 0:19').replace('class="hstrip ra"',`class="hstrip ra ${cls}"`);
+const tab=(n,st='')=>st==='open'?`<span class="swt open"><span class="ca">Close all</span>${I.chd}</span>`
+  :`<span class="swt ${st}">${I.stack}${n}${st==='hov'?'<span class="tip2">Show all</span>':''}</span>`;
+const lips=n=>n>2?'<div class="lip l2"></div><div class="lip"></div>':'<div class="lip"></div>';
+const deck=(front,n,st)=>`<div class="deck">${tab(n,st)}${lips(n)}${front}</div>`;
+const frx=(thread,strip='',over='')=>`<div class="frame"><section class="conv" style="position:relative"><div class="scroll"><div class="col">${thread}</div></div><div class="composer">${strip}${box()}</div>${over}</section></div>`;
+const th=T1+me2+answer(-1)+`<div class="tfoot">Worked for 2m 12s · 10:20 AM ${ab(I.spk)}${ab(I.cp)}</div>`;
+const thR=T1+me2+answer(1,-1)+footOn;
+const cap=(t,d,f)=>`<div><div class="cap">${t}</div><p style="margin:0 0 10px;color:var(--faint);font-size:12.5px;min-height:34px">${d}</p>${f}</div>`;
+document.getElementById('deck').innerHTML=[
+ ['Two strips','The countdown is in front. The handoff offer waits behind as a lip, and the tab counts both.',frx(th,deck(cacheS(),2))],
+ ['Pointing at the tab','It lights and says what a click does.',frx(th,deck(cacheS(),2,'hov'))],
+ ['Show all','Every strip in full, newest nearest the box. The tab offers Close all, and ⌄ folds them back, as does clicking anywhere else.',
+  frx(th,`<div class="deck all">${tab(3,'open')}${rwS('up first')}${ctxStrip('up')}${cacheS()}</div>`)],
+].map(a=>cap(...a)).join('');
+const mpl=(cls,style='')=>`<div class="mp ${cls}" style="${style}"><span class="grip"></span><button class="rpb">${I.back}</button><button class="rpb big">${I.pause}</button><button class="rpb">${I.fwd}</button>${prog(1,4)}<span class="tm">0:06 / 0:19</span><button class="sp">1.25×</button><button class="rpb">${I.x}</button></div>`;
+document.getElementById('pl').innerHTML=[
+ ['A · A strip, in front','Reading takes the front of the deck. What was there waits behind it and comes back when reading stops.',frx(thR,deck(raS(),2))],
+ ['B · Under the answer','The player takes over the answer’s foot line. The deck isn’t touched.',frx(T1+me2+answer(1,-1)+`<div class="tfoot plx">${player}<button class="rpb">${I.x}</button></div>`,deck(cacheS(),2))],
+ ['C · Mini player','It floats at bottom center, just above the deck, until you move it.',frx(thR,deck(cacheS(),2),mpl('bc','bottom:158px'))],
+].map(a=>cap(...a)).join('');
+const seg=(pos,hl)=>`<div class="seg" style="${pos}">${['Left','Center','Right'].map(s=>`<span class="${s===hl?'hl':''}">${s}</span>`).join('')}</div>`;
+document.getElementById('drag').innerHTML=[
+ ['Dragging','Over the top row’s Right.',frx(thR,deck(cacheS(),2),seg('top:14px','Right')+seg('bottom:142px','')+mpl('drag','top:44px;right:46px'))],
+ ['Dropped top right','It stays above the conversation and doesn’t scroll with it.',frx(thR,deck(cacheS(),2),mpl('','top:14px;right:16px'))],
+].map(a=>cap(...a)).join('');
+document.getElementById('sets').innerHTML=`<div class="pgh">General</div>
+<div class="srow"><span>Dictation language<small>What the mic expects to hear.</small></span><select class="sval"><option>English</option></select></div>
+<div class="srow"><span>Read-aloud voice<small>Kokoro, on this computer.</small></span><button class="sib">${I.play}</button><select class="sval"><option>Bella</option></select></div>
+<div class="srow new"><span>Read-aloud player<small>Mini player: drag it to any of six spots.</small></span>${lseg(['Strip','Under the answer','Mini player'],'Strip')}</div>
+<div class="srow"><span>Reading speed<small>The player's speed button changes it too.</small></span>${lseg(['1×','1.25×','1.5×','2×'],'1.25×')}</div>
+<div class="srow"><span>Read answers when a turn ends<small>Only in the session you're looking at.</small></span><i class="stog"></i></div>`;
+</script></body></html>

@@ -38,8 +38,15 @@ const P={
   cpu:'<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
   pulse:'<path d="M4 12h3l2-6 4 12 2-6h5"/>',
   eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  spk:'<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" stroke-linejoin="round"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+  rplay:'<path d="M9 5.4v13.2c0 .8.9 1.3 1.6.8l9.6-6.6c.6-.4.6-1.2 0-1.6L10.6 4.6C9.9 4.1 9 4.6 9 5.4z" fill="currentColor" stroke="none"/>',
+  rpause:'<rect x="6.5" y="5" width="4" height="14" rx="1.2" fill="currentColor" stroke="none"/><rect x="13.5" y="5" width="4" height="14" rx="1.2" fill="currentColor" stroke="none"/>',
+  rback:'<g fill="currentColor" stroke="none"><rect x="5" y="5.5" width="2.6" height="13" rx="1"/><path d="M19 6.6v10.8c0 .8-.9 1.2-1.5.8l-7.9-5.4a1 1 0 0 1 0-1.6l7.9-5.4c.6-.4 1.5 0 1.5.8z"/></g>',
+  rfwd:'<g fill="currentColor" stroke="none"><rect x="16.4" y="5.5" width="2.6" height="13" rx="1"/><path d="M5 6.6v10.8c0 .8.9 1.2 1.5.8l7.9-5.4a1 1 0 0 0 0-1.6L6.5 5.8C5.9 5.4 5 5.8 5 6.6z"/></g>',
+  layers:'<path d="M12 4 3 8.5l9 4.5 9-4.5z" stroke-linejoin="round"/><path d="m3 13 9 4.5 9-4.5" stroke-linejoin="round"/>',
   copy:'<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
   stop:'<rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none"/>',
+  bgdown:'<path d="M12 4v10m-4-4 4 4 4-4M5 19h14"/>',
   check:'<path d="M20 6 9 17l-5-5"/>',
   panel:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
   spark:'<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" fill="currentColor"/>',
@@ -395,10 +402,7 @@ function answeredCard(it){
   return `<div class="ans ${n>1?'stack':''}" data-ans="${esc(key)}"><div class="steps2">${qs.map((x,k)=>`<button class="qhd ${k===at?'':'off'}" data-astep="${k}">${esc(x.head||'Question '+(k+1))}</button>`).join('')}<span class="cnt">${n>1?`${at+1} of ${n} · `:''}Answered</span></div>
     ${qs.map((x,k)=>`<div class="apage" ${k===at?'':'hidden'}>${x.q?`<div class="aq">${esc(x.q)}</div>`:''}${answer(x)}</div>`).join('')}</div>`;
 }
-// A turn's answers, its text without the steps: what the Copy at the end of its foot line takes.
 const itemsOf=sid=>sid&&sid!==V.sel?V.older.get(sid)?.items||[]:V.items;
-function turnText(n,sid){const L=itemsOf(sid),i=L.findIndex(x=>x.n===n);if(i<0)return'';const out=[];
-  for(let k=i;k>=0&&L[k].kind!=='user';k--)if(L[k].kind==='assistant'&&L[k].text)out.unshift(L[k].text.trim());return out.join('\n\n')}
 // The last answer of a turn that has no foot line (Claude Code seldom writes the time a turn took) gets one, for its Copy.
 function lastWord(it,ix){const L=itemsOf(it.sid);if(L[ix]!==it)return false;
   for(let k=ix+1;k<L.length&&L[k].kind!=='user';k++)if(L[k].kind==='assistant'||L[k].kind==='done')return false;return true}
@@ -419,14 +423,14 @@ let lbx=null;   // the pictures of the message open in the large view, and which
 function itemPart(it,ix,since,latest){
     let h='';
     if(it.kind==='user'){const at=it.files||[];h=`<div class="me"><span class="macts">${it.uid&&!it.sid&&canRewind()?`<button class="rwb" data-rw="${it.n}" data-tip="Rewind" data-tip-d="Take this message and all after it back" data-tip-k="Esc Esc">${svg('rewind')}</button>`:''}${it.text?`<button data-cpmsg="${it.n}"${it.sid?` data-sid="${esc(it.sid)}"`:''} data-tip="Copy">${svg('copy')}</button>`:''}</span>${picCards((it.pics||[]).map(p=>({url:picUrl(p.id),name:p.name})),it.text||it.skill||(it.files||[]).length)}${it.skill?`<span class="chip">${svg('zap')}${esc(it.skill)}</span>`:''}${esc(it.text)}${at.length?`<div class="matt">${at.map(n=>`<span class="fch">${svg('file')}${esc(n)}</span>`).join('')}</div>`:''}</div>`}
-    else if(it.kind==='assistant')h=`<div class="ai">${md(it.text)}${ix>since||!lastWord(it,ix)?'':`<div class="tfoot afoot">${cpTurn(it)}</div>`}</div>`;
+    else if(it.kind==='assistant')h=`<div class="ai" data-n="${it.n}" data-sid="${esc(it.sid||'')}">${md(it.text)}${ix>since||!lastWord(it,ix)?'':raIs(it)&&raPlace()==='answer'?`<div class="tfoot afoot ply">${raHtml('answer')}</div>`:`<div class="tfoot afoot">${raBtn(it)}${cpTurn(it)}</div>`}</div>`;
     else if(it.kind==='tools'){const live=ix>since,open=V.openTools.has(it.n)||live&&!V.shutTools.has(it.n);
       h=`<div class="acts ${open?'open':''}"><button class="act" data-tools="${it.n}" data-on="${open?1:''}">${svg('chev-r')}${esc(toolSummary(it.tools))}${stepsTime(it.tools,live)}</button>${open?`<div class="steps">${it.tools.map(x=>stepHtml(x,live)).join('')}</div>`:''}</div>`}
     else if(it.kind==='bg')h=`<div class="bgn ${esc(it.of||'')} ${it.bad?'bad':''}"><i></i>${it.event?`<b>${esc(it.name||'Monitor')}</b><span class="mono">${esc(it.event)}</span>`:`<span>${esc(it.text||'')}</span>`}<time>${clock(it.ts)}</time></div>`;
     else if(it.kind==='answers')h=answeredCard(it);
     else if(it.kind==='skill')h=`<div class="sknote">${svg('zap')}Loaded skill <b>${esc(it.name)}</b></div>`;
     else if(it.kind==='note')h=`<div class="sys">${esc(it.stop?`${it.stop==='auth'?'Paused':'Stopped'} at ${clock(it.ts)} · ${it.stop==='auth'?it.profile+' was signed out':it.stop==='limit'?'limit reached on '+it.profile:(it.text||'something went wrong')}`:it.text)}</div>`;
-    else if(it.kind==='done')h=`<div class="tfoot">Worked for ${dur(it.ms)}${it.ts?' · '+clock(it.ts):''}${cpTurn(it)}</div>`;
+    else if(it.kind==='done')h=raIs(it)&&raPlace()==='answer'?`<div class="tfoot ply">${raHtml('answer')}</div>`:`<div class="tfoot">Worked for ${dur(it.ms)}${it.ts?' · '+clock(it.ts):''}${raBtn(it)}${cpTurn(it)}</div>`;
     else if(it.kind==='work'&&A.preview)h=workCards(it,latest);
     return h;
 }
@@ -487,7 +491,7 @@ function renderThread(){
   else if(V.run?.status==='working')parts.push(['working',`<div class="w1"><i class="spin"></i><span class="shim">${esc(V.run.activity||'Working')}</span><span class="el" id="elapsed"></span></div>`]);
   if(!V.items.length&&!V.run&&!pd)parts.splice(0,parts.length,['empty','<div class="empty">Nothing in this session yet.</div>']);
   if(V.rw&&!V.focus){const k=parts.findIndex(([key])=>key==='i'+V.rw.n),r=rwInfo(V.rw.n);if(k>=0&&r)parts.splice(k,0,['rwcut',`<div class="rwcut"><b>${plural(r.turns,'turn')}</b>${r.gain?' · −'+kTok(r.gain):''}</div>`])}
-  patch(t,parts);markGone();tick();fitThumbs();markCards();renderRail();if(V.side==='outline')renderOutline();
+  patch(t,parts);markGone();tick();fitThumbs();markCards();renderRail();if(V.side==='outline')renderOutline();raPaint();
 }
 const markCards=()=>{document.querySelectorAll('#thread [data-open]').forEach(c=>c.classList.toggle('on',c.dataset.open===V.pv));
   document.querySelectorAll('#thread [data-fpath]').forEach(c=>{const f=FP.get(V.sel+'|'+c.dataset.fpath);c.classList.toggle('miss',f===null);c.classList.toggle('on',!!f&&f.path===V.pv)})};
@@ -512,17 +516,18 @@ function renderPanel(){
   const tk=!open&&!V.isNew&&V.side==='tasks'&&bgList().length>0;$('tkw').hidden=!tk;if(tk)renderTasks();else clearTimeout(tkTimer);
   $('panel').hidden=!open&&!ch&&!cm&&!ol&&!tk;$('pvw').hidden=!open;$('cmw').hidden=!cm;renderCompare(cm);$('olw').hidden=!ol;renderOutline();$('chw').hidden=open||!ch;renderChanges();
   $('split').classList.toggle('full',!!(open||cm)&&V.full);markCards();fitSide();
-  if(!open){if(staged){staged=null;$('stage').innerHTML=''}$('menu').hidden=true;return}
+  if(!open){if(staged){staged=null;$('stage').innerHTML='';pvGone()}$('menu').hidden=true;raHead();return}
   $('pName').textContent=f.name;$('pCnt').textContent=W.length>1?`${i+1} of ${W.length}`:'';
   $('pPrev').disabled=$('pNext').disabled=W.length<2;
   $('menu').innerHTML=W.map(w=>`<button data-pick="${esc(w.path)}" class="${w.path===V.pv?'cur':''}" data-tip-path="${esc(w.path)}"><b>${esc(w.name)}</b><span>${w.ts?ago(Date.parse(w.ts)/1000)==='now'?'just now':ago(Date.parse(w.ts)/1000)+' ago':''}</span></button>`).join('');
   $('bFull').dataset.i=V.full?'min':'max';$('bFull').dataset.tip=V.full?'Show conversation':'Full width';$('bFull').classList.toggle('on',V.full);hydrate($('bFull').parentNode);
   const key=f.path+'|'+f.v+'|'+(f.sid||'');
-  if(key!==staged){staged=key;$('stage').innerHTML=stageOf(f)}
+  if(key!==staged){staged=key;$('stage').innerHTML=stageOf(f);pvGone()}
+  raHead();
   fitThumbs();
 }
 const stageOf=f=>{const u=esc(fileUrl(f));
-  return f.kind==='page'?`<iframe class="pvf" src="${u}" sandbox="${SANDBOX}" title="${esc(f.name)}"></iframe>`
+  return f.kind==='page'?`<iframe class="pvf" src="${u}${A.tts?'&amp;ra':''}" sandbox="${SANDBOX}" title="${esc(f.name)}"></iframe>`
     :f.kind==='image'?`<div class="pvbox"><img src="${u}" alt="${esc(f.name)}"></div>`
     :f.kind==='video'?`<div class="pvbox v"><video src="${u}" controls></video></div>`
     :`<iframe class="pvf" src="${u}" title="${esc(f.name)}"></iframe>`};
@@ -613,7 +618,7 @@ function renderFocus(t){
   parts.push(['seam'+x.id,seamHtml(x,o.handoff)]);if(V.hopen.has(x.id)&&o.handoff)parts.push(['hand'+x.id,handHtml(o.handoff)]);
   parts.push(...olderParts(x,o,false));
   parts.push(['fend',`<div class="tstub"><span><b>${k+2<T.n?`Sessions ${k+2}–${T.n}`:`Session ${T.n}`}</b> · to now</span><span class="gap"></span><button data-tback>Show</button></div>`]);
-  patch(t,parts);fitThumbs();markCards();renderRail();renderBack();renderStrip();if(V.side==='outline')renderOutline();
+  patch(t,parts);fitThumbs();markCards();renderRail();renderBack();renderStrip();if(V.side==='outline')renderOutline();raPaint();
 }
 $('tback').onclick=e=>{e.stopPropagation();backToNow()};
 const renderBack=()=>{const b=$('tback');b.hidden=!V.focus||V.isNew;if(!b.hidden)b.innerHTML=`${svg('chev-d')}Back to now · Session ${V.thread.n}`};
@@ -711,7 +716,7 @@ function openHPick(anchor){
   if(wasOpen){m.hidden=true;return}
   m._a=anchor;
   m.innerHTML=`<div class="skl">Handoff written by</div>`+[['auto','Auto','by how much went on'],['haiku','Haiku','short sessions'],['sonnet','Sonnet','most threads'],['opus','Opus','intricate ones']].map(([v,n,d])=>`<button class="item ${p.model===v?'on':''}" data-hm="${v}"><span class="nm"><b>${n}</b></span><small>${d}</small></button>`).join('')
-    +`<div class="hef">${['low','medium','high'].map(v=>`<button class="${p.effort===v?'on':''}" data-he="${v}">${v}</button>`).join('')}</div><div class="cap2">Default in Settings · General</div>`;
+    +`<div class="hef">${['low','medium','high'].map(v=>`<button class="${p.effort===v?'on':''}" data-he="${v}">${v}</button>`).join('')}</div><div class="cap2">Default in Settings · Sessions</div>`;
   m.hidden=false;
   const c=m.offsetParent.getBoundingClientRect(),r=anchor.getBoundingClientRect();
   m.style.left=Math.max(8,Math.min(r.left-c.left,c.width-m.offsetWidth-8))+'px';m.style.bottom=(c.bottom-r.top+6)+'px';
@@ -768,9 +773,9 @@ async function doRewind(it,files,edit){
 // The message you took back, in the box to change and send again.
 function rwEdit(text){if(text==null)return;input.value=text;grow();fitSend();input.focus();input.setSelectionRange(input.value.length,input.value.length)}
 async function unRewind(){try{await api(`sessions/${V.sel}/unrewind`,{});await reread();V.rewound=null;renderStrip()}catch(e){oops(e.message)}}
-function rwStrip(el){const r=V.rewound;el.classList.add('cache','rw');
-  el.innerHTML=`<span class="t">${svg('rewind','ci')}<b>Rewound</b><span> · ${plural(r.turns,'turn')} out${r.undone?`, ${plural(r.undone,'file')} undone`:''}${r.filesError?' · the files were not undone':''}</span></span>`
-    +`${r.text?'<button class="hc2" data-rwtext>Edit that prompt</button>':''}<button class="hgo" data-hgo>Hand off</button><button class="hc2 u" data-unrw data-tip="Put back what was taken out" data-tip-d="Until your next message">${svg('rewind')}Undo</button><button class="ib hx" data-rwx data-tip="Close">${svg('x')}</button>`}
+function rwStrip(){const r=V.rewound;
+  return {cls:'cache rw',html:`<span class="t">${svg('rewind','ci')}<b>Rewound</b><span> · ${plural(r.turns,'turn')} out${r.undone?`, ${plural(r.undone,'file')} undone`:''}${r.filesError?' · the files were not undone':''}</span></span>`
+    +`${r.text?'<button class="hc2" data-rwtext>Edit that prompt</button>':''}<button class="hgo" data-hgo>Hand off</button><button class="hc2 u" data-unrw data-tip="Put back what was taken out" data-tip-d="Until your next message">${svg('rewind')}Undo</button><button class="ib hx" data-rwx data-tip="Close">${svg('x')}</button>`}}
 
 // Esc Esc, or /rewind: your messages above the box, newest last; Enter on one gives the same menu for it.
 function openPick(){if(!canRewind()){oops(busy()?'Rewind once the turn is over.':'There is nothing to rewind here.');return}
@@ -831,33 +836,267 @@ const hDismissed=()=>{try{return JSON.parse(localStorage.getItem('ww.hoff')||'{}
 const coldOff=()=>{try{return JSON.parse(localStorage.getItem('ww.cold')||'{}')}catch{return {}}};
 // The cache line: a quiet countdown in the last ten minutes, then a warning once it has likely expired. Its × hides it
 // until the next reply. It takes the strip's place, with the same handoff on offer.
-function coldStrip(el,c,id){
-  const end=coldAt(c);if(!end||coldOff()[id]===c.at)return false;
-  const left=end-Date.now(),soon=Math.min(10*60000,(c.ttl||3600)*1000/3);if(left>soon)return false;
-  el.classList.add('cache');el.classList.toggle('expired',left<=0);el.style.setProperty('--left',Math.max(0,left/soon*100)+'%');
-  el.innerHTML=(left>0?`<span class="t">${svg('cold','ci')}<b>Cache cools in ${hm(left)}</b><span> · send now to keep it warm</span></span>`
+function coldStrip(c,id){
+  const end=coldAt(c);if(!end||coldOff()[id]===c.at)return null;
+  const left=end-Date.now(),soon=Math.min(10*60000,(c.ttl||3600)*1000/3);if(left>soon)return null;
+  return {cls:'cache'+(left<=0?' expired':''),style:`--left:${Math.max(0,left/soon*100)}%`,
+    html:(left>0?`<span class="t">${svg('cold','ci')}<b>Cache cools in ${hm(left)}</b><span> · send now to keep it warm</span></span>`
     :`<span class="t">${svg('cold','ci')}<b>Cache likely expired</b><span> · idle ${hm(Date.now()-c.at)} · your next message re-reads ${kTok(c.used)} tokens</span></span><span class="by">by <u data-hpick>${esc(hLabel(hPick()))}</u>${svg('chev-d','cv')}</span><button class="hgo" data-hgo>Hand off</button>`)
-    +`<button class="ib hx" data-cx data-tip="Not now">${svg('x')}</button>`+(left>0?'<span class="drain"></span>':'');
-  return true}
+    +`<button class="ib hx" data-cx data-tip="Not now">${svg('x')}</button>`+(left>0?'<span class="drain"></span>':'')}}
+// The strips above the box, most urgent first: reading aloud (when its player is the strip), a rewind, the cache
+// countdown, the handoff offer. The first is in front; the others wait behind it as lips, and a tab on its top edge
+// counts them and opens them all, docked one above another.
+function stripList(){
+  const c=V.context,id=V.sel,L=[],quiet=!V.isNew&&!V.loading&&!isWorking()&&!V.handing&&!V.focus;
+  if(raHere()&&!raInHead()&&(raPlace()==='strip'||RA.pv&&raPlace()==='answer'))L.push({k:'ra',cls:'ply',html:raHtml('strip')});
+  if(quiet&&V.rewound)L.push({k:'rw',...rwStrip()});
+  const cold=quiet&&c&&coldStrip(c,id);if(cold)L.push({k:'cold',...cold});
+  if(quiet&&c&&c.used>=offerAt(c)&&!hDismissed()[id])L.push({k:'ctx',cls:'',html:`<span class="t"><b>Context ${kTok(c.used)}</b> · earlier turns start to blur</span><span class="by">by <u data-hpick>${esc(hLabel(hPick()))}</u>${svg('chev-d','cv')}</span><button class="hgo" data-hgo>Hand off</button><button class="hc2" data-hcompact>Compact</button><button class="ib hx" data-hx data-tip="Not now" data-tip-d="It is still in the context menu and as /handoff.">${svg('x')}</button>`});
+  return L}
 function renderStrip(){
-  const el=$('hstrip'),c=V.context,id=V.sel;el.classList.remove('cache','expired');
+  const el=$('hstrip'),dk=$('hdeck'),c=V.context;
   const w=$('cWarm'),end=!V.isNew&&!isWorking()&&coldAt(c);w.innerHTML=end?warmDial(end,end-c.at):'';w.hidden=!w.innerHTML;
-  el.classList.remove('rw');
-  if(!V.isNew&&V.rewound&&!V.loading&&!isWorking()&&!V.handing&&!V.focus){rwStrip(el);el.hidden=false;return}
-  if(!V.isNew&&c&&!V.loading&&!isWorking()&&!V.handing&&!V.focus&&coldStrip(el,c,id)){el.hidden=false;return}
-  const on=!V.isNew&&!!c&&!V.loading&&!isWorking()&&!V.handing&&!V.focus&&c.used>=offerAt(c)&&!hDismissed()[id];
-  el.hidden=!on;if(!on)return;
-  el.innerHTML=`<span class="t"><b>Context ${kTok(c.used)}</b> · earlier turns start to blur</span><span class="by">by <u data-hpick>${esc(hLabel(hPick()))}</u>${svg('chev-d','cv')}</span><button class="hgo" data-hgo>Hand off</button><button class="hc2" data-hcompact>Compact</button><button class="ib hx" data-hx data-tip="Not now" data-tip-d="It is still in the context menu and as /handoff.">${svg('x')}</button>`;
+  const L=stripList(),[f,...rest]=L;if(!rest.length)V.deckOpen=false;
+  const open=!!V.deckOpen;
+  if(!f){el.hidden=true;el.className='hstrip';dk.hidden=true;raLift();return}
+  el.className='hstrip '+f.cls+(open?' dopen':'');el.dataset.k=f.k;el.style.cssText=f.style||'';el.innerHTML=f.html;el.hidden=false;
+  dk.hidden=!rest.length;
+  if(rest.length){dk.className='hdeck'+(open?' open':'');
+    dk.innerHTML=(open?rest.slice().reverse().map(s=>`<div class="hstrip up ${s.cls}" data-k="${s.k}" style="${s.style||''}">${s.html}</div>`).join('')
+      :(rest.length>1?'<i class="lip l2"></i>':'')+'<i class="lip"></i>')
+      +(open?`<span class="htab open"><button data-hall-x>Close all</button><button class="fold" data-hall-fold data-tip="Fold them back">${svg('chev-d')}</button></span>`
+      :`<button class="htab" data-hall data-tip="Show all">${svg('layers')}${L.length}</button>`)}
+  raLift();
 }
-$('hstrip').onclick=e=>{e.stopPropagation();const t=e.target;
+// A strip's ×, also what Close all does to each.
+function closeStrip(k){
+  if(k==='ra')return raStop();
+  if(k==='rw')V.rewound=null;
+  else if(k==='cold'){const d=coldOff();d[V.sel]=V.context?.at;const ks=Object.keys(d);if(ks.length>200)delete d[ks[0]];localStorage.setItem('ww.cold',JSON.stringify(d))}
+  else if(k==='ctx'){const d=hDismissed();d[V.sel]=Date.now();const ks=Object.keys(d);if(ks.length>200)delete d[ks[0]];localStorage.setItem('ww.hoff',JSON.stringify(d))}
+}
+function stripClick(e){e.stopPropagation();const t=e.target;
+  if(raAct(e))return;
+  if(t.closest('[data-hall]')){V.deckOpen=true;return renderStrip()}
+  if(t.closest('[data-hall-fold]')){V.deckOpen=false;return renderStrip()}
+  if(t.closest('[data-hall-x]')){for(const s of stripList())closeStrip(s.k);V.deckOpen=false;return renderStrip()}
   if(t.closest('[data-hpick]'))return openHPick(t.closest('[data-hpick]'));
   if(t.closest('[data-unrw]'))return unRewind();
   if(t.closest('[data-rwtext]'))return rwEdit(V.rewound?.text);
-  if(t.closest('[data-rwx]')){V.rewound=null;return renderStrip()}
+  if(t.closest('[data-rwx]')){closeStrip('rw');return renderStrip()}
   if(t.closest('[data-hgo]'))handOff();
   else if(t.closest('[data-hcompact]'))sendText('/compact');
-  else if(t.closest('[data-cx]')){const d=coldOff();d[V.sel]=V.context?.at;const ks=Object.keys(d);if(ks.length>200)delete d[ks[0]];localStorage.setItem('ww.cold',JSON.stringify(d));renderStrip()}
-  else if(t.closest('[data-hx]')){const d=hDismissed();d[V.sel]=Date.now();const ks=Object.keys(d);if(ks.length>200)delete d[ks[0]];localStorage.setItem('ww.hoff',JSON.stringify(d));renderStrip()}};
+  else if(t.closest('[data-cx]')){closeStrip('cold');renderStrip()}
+  else if(t.closest('[data-hx]')){closeStrip('ctx');renderStrip()}}
+$('hstrip').onclick=stripClick;$('hdeck').onclick=stripClick;
+// Show all folds back when you click anywhere else.
+document.addEventListener('pointerdown',e=>{if(V.deckOpen&&!e.target.closest?.('#hdeck,#hstrip,.pop')){V.deckOpen=false;renderStrip()}},true);
+
+/* ---------- read aloud: an answer, sentence by sentence, in a voice made on this computer (Kokoro, see service/speech.mjs) ---------- */
+// The sentence being read is lit with the CSS Highlight API, so the answer's own HTML is never touched and survives
+// the thread being drawn again. Each sentence is its own clip, kept here once made: back, forward and pause are instant.
+// The player is one set of parts shown in one of three places (Settings): a strip above the box, the answer's foot
+// line, or a small card that floats over the conversation and can be dragged to six spots.
+const RA={on:false,home:null,sid:'',n:null,pv:null,sents:[],i:0,playing:false,wait:false,el:new Audio(),clips:new Map(),durs:new Map(),gen:0,watch:{}};
+const raVoice=()=>A.prefs?.readVoice||'af_bella',raPlace=()=>A.prefs?.readPlace||'strip',raSpeed=()=>A.prefs?.readSpeed||1;
+const raHere=()=>RA.on&&RA.home===V.sel&&!V.isNew;
+const raIs=it=>raHere()&&RA.n===it.n&&RA.sid===(it.sid||'');
+const RSPEEDS=[1,1.25,1.5,2],spdName=v=>String(v).replace(/^0/,'')+'×';
+const raBtn=it=>A.tts&&lastAnswer(it.n,it.sid)?`<button data-ra="${it.n}"${it.sid?` data-sid="${esc(it.sid)}"`:''} class="${raIs(it)?'ok':''}" data-tip="${raIs(it)?(RA.playing?'Pause':'Go on reading'):'Read aloud'}">${svg('spk')}</button>`:'';
+// what a turn's speaker reads: its last answer, as Copy takes it, not the lines written on the way there
+function turnNs(n,sid){const L=itemsOf(sid),i=L.findIndex(x=>x.n===n);if(i<0)return[];
+  let k=i;while(k+1<L.length&&L[k+1].kind!=='user')k++;
+  for(;k>=0&&L[k].kind!=='user';k--)if(L[k].kind==='assistant'&&L[k].text?.trim())return[L[k].n];return[]}
+const raAi=(sid,n)=>document.querySelector(`#thread .ai[data-n="${n}"][data-sid="${CSS.escape(sid||'')}"]`);
+// Blocks of text, each read on its own: paragraphs, list items, headings, table cells. A code block is read as "Code block".
+const RBLK='p,li,h1,h2,h3,h4,h5,h6,td,th,pre';
+const raBlocks=el=>[...el.querySelectorAll(RBLK)].filter(b=>!b.closest('.tfoot')&&(b.tagName==='PRE'||!b.closest('pre')));
+function raTexts(b){const w=document.createTreeWalker(b,NodeFilter.SHOW_TEXT,{acceptNode:t=>{const p=t.parentElement;return p.closest(RBLK)===b&&!p.closest('button')?1:3}}),L=[];
+  while(w.nextNode())L.push(w.currentNode);return L}
+const SEG=typeof Intl.Segmenter==='function'?new Intl.Segmenter('en',{granularity:'sentence'}):null;
+function raSentences(sid,ns){const out=[];
+  for(const n of ns){const el=raAi(sid,n);if(!el)continue;
+    raBlocks(el).forEach((b,bi)=>{
+      if(b.tagName==='PRE'){out.push({n,b:bi,s:0,e:0,say:'Code block.',pre:true,first:true});return}
+      const txt=raTexts(b).map(t=>t.data).join('');let first=!/^LI$|^T[DH]$/.test(b.tagName);
+      for(const g of SEG?SEG.segment(txt):[{index:0,segment:txt}]){let s=g.index,e=s+g.segment.length;
+        while(s<e&&/\s/.test(txt[s]))s++;while(e>s&&/\s/.test(txt[e-1]))e--;
+        const say=txt.slice(s,e);if(!/[\p{L}\p{N}]/u.test(say))continue;
+        out.push({n,b:bi,s,e,say,first});first=false}})}
+  return out}
+function raRange(x){const el=raAi(RA.sid,x.n),b=el&&raBlocks(el)[x.b];if(!b)return null;const r=document.createRange();
+  if(x.pre){r.selectNodeContents(b);return r}
+  let pos=0,set=false;
+  for(const t of raTexts(b)){const L=t.data.length;
+    if(!set&&x.s<=pos+L){r.setStart(t,x.s-pos);set=true}
+    if(set&&x.e<=pos+L){r.setEnd(t,x.e-pos);return r}
+    pos+=L}
+  return null}
+function raPaint(){pvLight();const H=window.CSS?.highlights;if(!H)return;H.delete('ra-now');H.delete('ra-done');
+  if(!raHere()||RA.pv)return;
+  const now=RA.sents[RA.i]&&raRange(RA.sents[RA.i]);if(now)H.set('ra-now',new Highlight(now));
+  const done=RA.sents.slice(0,RA.i).map(raRange).filter(Boolean);if(done.length)H.set('ra-done',new Highlight(...done))}
+// The clips: made by the service one at a time, kept here by voice and text.
+const raUrl=(say,voice)=>`/api/speak?token=${encodeURIComponent(TOKEN)}&voice=${voice}&text=${encodeURIComponent(say)}`;
+function raFetch(say,voice=raVoice()){const k=voice+'|'+say;
+  if(!RA.clips.has(k)){const p=fetch(raUrl(say,voice)).then(async r=>{if(!r.ok)throw new Error((await r.json().catch(()=>({}))).error||'Could not read that aloud.');return URL.createObjectURL(await r.blob())});
+    p.catch(()=>RA.clips.delete(k));RA.clips.set(k,p);
+    if(RA.clips.size>400){const [old,op]=RA.clips.entries().next().value;RA.clips.delete(old);op.then(u=>URL.revokeObjectURL(u),()=>{})}}
+  return RA.clips.get(k)}
+// how long each sentence takes, at normal speed: known once its clip has loaded, guessed from its length before
+const raDur=x=>RA.durs.get(raVoice()+'|'+x.say)??x.say.length/15;
+const mss=s=>{s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+function raTime(){const sp=raSpeed(),S=RA.sents;let done=0,all=0;S.forEach((x,i)=>{const d=raDur(x);all+=d;if(i<RA.i)done+=d});
+  return `<b>${mss((done+(RA.el.currentTime||0))/sp)}</b> / ${mss(all/sp)}`}
+function raFrac(){const x=RA.sents[RA.i],d=RA.el.duration||(x&&raDur(x));return d?Math.min(1,(RA.el.currentTime||0)/d):0}
+// One segment a sentence; past 12 sentences, one smooth bar with a notch where each paragraph starts.
+function raBar(){const N=RA.sents.length,f=raFrac();
+  if(N<=12)return RA.sents.map((x,i)=>`<i class="${i<RA.i?'d':i===RA.i?'n':''}"${i===RA.i?` style="--f:${f*100}%"`:''}></i>`).join('');
+  return `<span class="cont"><b style="width:${(RA.i+f)/N*100}%"></b>${RA.sents.map((x,i)=>i&&x.first?`<u style="left:${i/N*100}%"></u>`:'').join('')}</span>`}
+function raHtml(where){
+  const tr=`<button class="tb" data-ra-back data-tip="Back a sentence" data-tip-k="←">${svg('rback')}</button><button class="pb ${RA.wait?'wait':''}" data-ra-pp data-tip="${RA.playing?'Pause':'Play'}" data-tip-k="Space">${svg(RA.playing?'rpause':'rplay')}</button><button class="tb" data-ra-fwd data-tip="Forward a sentence" data-tip-k="→">${svg('rfwd')}</button>`,
+    bar=`<span class="sc ${RA.sents.length>12?'long':''}" data-ra-bar>${raBar()}</span>`,tm=`<span class="tm" data-ra-tm>${raTime()}</span>`,
+    spd=`<button class="spd" data-ra-spd data-tip="Speed">${spdName(raSpeed())}</button>`,cx=`<button class="cx" data-ra-x data-tip="Stop" data-tip-k="Esc">${svg('x')}</button>`,
+    cnt=`<span data-ra-cnt>${RA.i+1} of ${RA.sents.length}</span>`,sec=RA.pv?`<span data-ra-sec>${esc(RA.sents[RA.i]?.sec||'')}</span> · `:'';
+  if(where==='strip')return `<span class="rap">${tr}<span class="ttl"><b>Reading aloud</b> · ${sec}${cnt}</span>${bar}${tm}${spd}${cx}</span>`;
+  if(where==='head')return `<span class="rap">${tr}<span class="ttl"><b>Reading aloud</b> · ${sec}${cnt}</span>${bar}${tm}${spd}${cx}</span>`;
+  if(where==='answer')return `<span class="rap">${tr}${bar}${tm}${spd}${cx}</span>`;
+  return `<span class="grip" data-ra-grip data-tip="Drag to move"></span><div class="r1 rap"><span class="vis ${RA.playing?'on':''}"><u></u><u></u><u></u><u></u></span><span class="ttl"><b>Reading aloud</b> · sentence ${cnt}</span>${spd}${cx}</div><div class="rap">${tr}${bar}${tm}</div>`}
+// What changes while it reads, put in place without drawing the player again.
+function raUpdate(){
+  document.querySelectorAll('[data-ra-bar]').forEach(e=>{e.innerHTML=raBar();e.classList.toggle('long',RA.sents.length>12)});
+  document.querySelectorAll('[data-ra-tm]').forEach(e=>e.innerHTML=raTime());
+  document.querySelectorAll('[data-ra-cnt]').forEach(e=>e.textContent=`${RA.i+1} of ${RA.sents.length}`);
+  document.querySelectorAll('[data-ra-sec]').forEach(e=>e.textContent=RA.sents[RA.i]?.sec||'');
+  document.querySelectorAll('[data-ra-spd]').forEach(e=>e.textContent=spdName(raSpeed()));
+  document.querySelectorAll('[data-ra-pp]').forEach(e=>{e.innerHTML=svg(RA.playing?'rpause':'rplay');e.classList.toggle('wait',RA.wait);e.dataset.tip=RA.playing?'Pause':'Play'});
+  document.querySelectorAll('.mcard .vis').forEach(e=>e.classList.toggle('on',RA.playing&&!RA.wait))}
+// Draw the player where it belongs, and the speakers' state.
+function raShow(){renderThread();renderStrip();raMini();raHead();raPaint()}
+function raStart(sid,n,i=0){
+  const S=raSentences(sid||'',turnNs(n,sid||undefined));if(!S.length)return;
+  Object.assign(RA,{on:true,home:V.sel,sid:sid||'',n,pv:null,sents:S,playing:true});raShow();raPlay(i)}
+function raStop(){if(!RA.on)return;RA.on=false;RA.playing=false;RA.wait=false;RA.gen++;RA.el.pause();RA.el.removeAttribute('src');RA.el.load();raShow()}
+function raVisible(r){if(!r)return false;const a=r.getBoundingClientRect(),s=$('scroll').getBoundingClientRect();return a.bottom>s.top&&a.top<s.bottom-40}
+// Follow the reading down the page, but only while you are following it: if the sentence before was in view.
+function raFollow(prev){if(!raHere())return;const r=RA.sents[RA.i]&&raRange(RA.sents[RA.i]);if(!r||!prev)return;
+  const a=r.getBoundingClientRect(),s=$('scroll').getBoundingClientRect();
+  if(a.bottom>s.bottom-60||a.top<s.top)$('scroll').scrollBy({top:a.top-s.top-s.height/3,behavior:'smooth'})}
+async function raPlay(i){
+  const prev=raVisible(RA.sents[RA.i]&&raRange(RA.sents[RA.i]));
+  const g=++RA.gen,x=RA.sents[i];if(!x)return raStop();
+  RA.i=i;RA.wait=true;RA.el.pause();raPaint();raUpdate();raFollow(prev);
+  let url;try{url=await raFetch(x.say)}catch(e){if(g===RA.gen){oops(e.message);raStop()}return}
+  if(g!==RA.gen)return;
+  RA.wait=false;const a=RA.el;a.src=url;a.preservesPitch=true;a.playbackRate=raSpeed();
+  if(RA.playing)a.play().catch(()=>{});
+  raUpdate();
+  for(const k of [1,2])if(RA.sents[i+k])raFetch(RA.sents[i+k].say).catch(()=>{});   // the next ones are made while this one plays
+}
+RA.el.onended=()=>{if(!RA.on)return;if(RA.i+1<RA.sents.length)raPlay(RA.i+1);else raStop()};
+RA.el.ontimeupdate=()=>{if(RA.on)raUpdate()};
+RA.el.onloadedmetadata=()=>{const x=RA.sents[RA.i];if(x&&isFinite(RA.el.duration))RA.durs.set(raVoice()+'|'+x.say,RA.el.duration);RA.el.playbackRate=raSpeed()};
+function raToggle(){if(!RA.on)return;RA.playing=!RA.playing;
+  if(RA.playing){if(RA.el.ended)return raPlay(RA.i+1<RA.sents.length?RA.i+1:0);if(!RA.wait)RA.el.play().catch(()=>{})}else RA.el.pause();
+  raUpdate();renderThread();raHead()}
+const raGo=i=>{if(RA.on)raPlay(Math.max(0,Math.min(RA.sents.length-1,i)))};
+function raStep(d,para){if(!RA.on)return;let i=RA.i+d;
+  if(para){i=RA.i;do i+=d;while(i>0&&i<RA.sents.length&&!RA.sents[i].first)}
+  raGo(i)}
+async function raSpeedNext(){const v=RSPEEDS[(RSPEEDS.indexOf(raSpeed())+1)%RSPEEDS.length];RA.el.playbackRate=v;
+  A.prefs={...A.prefs,readSpeed:v};raUpdate();try{A.prefs=await api('settings',{readSpeed:v})}catch(e){oops(e.message)}}
+function raAct(e){const b=e.target.closest('[data-ra-pp],[data-ra-back],[data-ra-fwd],[data-ra-spd],[data-ra-x],[data-ra-bar]');if(!b)return false;e.stopPropagation();
+  const d=b.dataset;
+  if('raPp' in d)raToggle();else if('raBack' in d)raStep(-1);else if('raFwd' in d)raStep(1);
+  else if('raSpd' in d)raSpeedNext();else if('raX' in d)raStop();
+  else{const r=b.getBoundingClientRect();raGo(Math.floor((e.clientX-r.left)/r.width*RA.sents.length))}
+  return true}
+document.addEventListener('click',e=>{if(raAct(e))return;
+  const b=e.target.closest('[data-ra]');if(b){e.stopPropagation();const n=+b.dataset.ra,sid=b.dataset.sid||'';
+    if(raHere()&&RA.n===n&&RA.sid===sid)raToggle();else raStart(sid,n);return}
+  // a click on a sentence of the answer being read reads from there
+  if(!raHere()||e.target.closest('button,a,pre,.tfoot')||!getSelection().isCollapsed)return;
+  const ai=e.target.closest('#thread .ai[data-n]');if(!ai||ai.dataset.sid!==RA.sid)return;
+  const p=document.caretRangeFromPoint?.(e.clientX,e.clientY);if(!p)return;
+  const i=RA.sents.findIndex(x=>{const r=raRange(x);try{return r&&r.isPointInRange(p.startContainer,p.startOffset)}catch{return false}});
+  if(i>=0){RA.playing=true;raGo(i)}});
+// pointing at a speaker starts making its first sentence, so it plays sooner
+document.addEventListener('pointerover',e=>{const b=e.target.closest?.('[data-ra]');if(!b||b._warm)return;b._warm=1;
+  const S=raSentences(b.dataset.sid||'',turnNs(+b.dataset.ra,b.dataset.sid||undefined));if(S[0])raFetch(S[0].say).catch(()=>{})});
+// Esc stops; with the message box empty (or nothing typed into), Space pauses and ← → step a sentence, with Shift a paragraph.
+addEventListener('keydown',e=>{if(!raHere()||e.ctrlKey||e.metaKey||e.altKey)return;
+  const t=e.target,typing=t.closest?.('input,textarea,select,[contenteditable="true"],#xt,#lgx');
+  if(e.key==='Escape'){if(document.querySelector('.pop:not([hidden])')||!$('sdim').hidden||!$('lbx').hidden||(R&&!R.done))return;
+    e.preventDefault();e.stopImmediatePropagation();raStop();return}
+  if(typing&&!(t.id==='input'&&!t.value))return;
+  if(e.key===' '&&!e.shiftKey){e.preventDefault();e.stopImmediatePropagation();raToggle()}
+  else if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();e.stopImmediatePropagation();raStep(e.key==='ArrowRight'?1:-1,e.shiftKey)}},true);
+// Reading goes on only in the session you are looking at: open another and it pauses, and it is there when you come back.
+function raSeen(){if(RA.on&&RA.home!==V.sel&&RA.playing){RA.playing=false;RA.el.pause()}raMini()}
+// Read answers when a turn ends (Settings): the session you are looking at, when its turn ends while you look at it.
+function raTurnEnd(working){const k=V.sel,w=RA.watch;
+  if(w.sel===k&&w.w&&!working&&!V.loading&&!V.isNew&&A.tts&&A.prefs?.readAuto&&!document.hidden)setTimeout(()=>{
+    if(V.sel!==k||isWorking())return;const u=V.items.findLastIndex(x=>x.kind==='user'),L=V.items.slice(u+1);
+    const it=L.findLast(x=>x.kind==='done')||L.findLast(x=>x.kind==='assistant'&&x.text);if(it)raStart('',it.n)},600);
+  RA.watch={sel:k,w:!!working&&!V.loading}}
+// Reading a previewed page. The page is another site, so a helper the service adds to it (preview-read.js) finds the
+// sections of words, lights the sentence and offers Read section and Read aloud; it talks to the window by messages.
+const PV={key:null,secs:[]};
+const pvWin=()=>$('stage').querySelector('iframe.pvf')?.contentWindow;
+const pvAll=()=>PV.secs.flatMap(s=>s.sents.map(x=>({...x,sec:s.title})));
+const raInHead=()=>RA.on&&V.full&&!!staged&&!$('pvw').hidden;
+function pvGone(){PV.key=null;PV.secs=[];$('bRead').hidden=true;if(RA.on&&RA.pv)raStop()}
+function pvStart(sents,label){if(!sents.length)return;
+  Object.assign(RA,{on:true,home:V.sel,sid:'',n:null,pv:{key:staged,label},sents,playing:true});raShow();raPlay(0)}
+function pvLight(){const w=pvWin();if(!w)return;const on=raHere()&&RA.pv?.key===staged;
+  w.postMessage({ww:'ra',t:'light',reading:on?RA.sents.map(x=>x.id):null,now:on?RA.sents[RA.i]?.id:null,done:on?RA.sents.slice(0,RA.i).map(x=>x.id):[]},'*')}
+// the header's speaker, or the player itself when the preview is full width and the message box is hidden
+let raWasHead=false;
+function raHead(){const h=$('pRa'),inH=raInHead()&&raHere(),pvOn=raHere()&&!!RA.pv;
+  if(inH!==raWasHead){raWasHead=inH;renderStrip();raMini()}
+  h.hidden=!inH;h.innerHTML=inH?raHtml('head'):'';
+  const b=$('bRead');b.hidden=inH||!A.tts||!PV.secs.length;b.classList.toggle('on',pvOn);
+  b.dataset.tip=pvOn?(RA.playing?'Pause':'Go on reading'):'Read page aloud'}
+$('bRead').onclick=()=>{if(raHere()&&RA.pv)raToggle();else pvStart(pvAll(),'page')};
+$('pRa').addEventListener('click',e=>raAct(e));
+addEventListener('message',e=>{const m=e.data;if(!m||m.ww!=='ra'||e.source!==pvWin())return;
+  if(m.t==='secs'){PV.key=staged;PV.secs=m.secs||[];raHead()}
+  else if(m.t==='read')pvStart(m.sents||[],m.title);
+  else if(m.t==='go'&&raHere()&&RA.pv){const i=RA.sents.findIndex(x=>x.id===m.id);if(i>=0){RA.playing=true;raGo(i)}}
+  else if(m.t==='key'&&raHere()){if(m.key==='Escape')raStop();else if(m.key===' ')raToggle();else raStep(m.key==='ArrowRight'?1:-1,m.shift)}});
+// a page that loads says hello back with what it can read; the accent comes along so the lit sentence matches
+$('stage').addEventListener('load',e=>{if(e.target.matches?.('iframe.pvf'))e.target.contentWindow.postMessage({ww:'ra',t:'hello',acc:getComputedStyle(document.body).getPropertyValue('--accent').trim()},'*')},true);
+// The mini player: a card over the conversation, in one of six spots, bottom center unless you dragged it elsewhere.
+const raSpot=()=>localStorage.getItem('ww.raSpot')||'bottom-center';
+function raMini(){let m=$('raMini');const show=raHere()&&!raInHead()&&raPlace()==='mini';
+  if(!m){if(!show)return raLift();m=document.createElement('div');m.id='raMini';m.className='mcard';$('conv').appendChild(m);m.addEventListener('pointerdown',raDrag);
+    new ResizeObserver(()=>{if(!m.hidden)raPin(m)}).observe($('conv').querySelector('.composer'))}
+  m.hidden=!show;if(show){m.innerHTML=raHtml('mini');raPin(m)}raLift()}
+function raPin(m){const [v,h]=raSpot().split('-'),comp=$('conv').querySelector('.composer');
+  Object.assign(m.style,{top:v==='top'?'12px':'',bottom:v==='bottom'?comp.offsetHeight+10+'px':'',left:h==='left'?'16px':h==='center'?'50%':'',right:h==='right'?'16px':'',transform:h==='center'?'translateX(-50%)':''});raLift()}
+// at bottom center the card sits where "Jump to the end" and "Back to now" show: they rise above it
+function raLift(){const m=$('raMini'),on=m&&!m.hidden&&raSpot()==='bottom-center';$('conv').style.setProperty('--ralift',on?m.offsetHeight+10+'px':'0px')}
+function raDrag(e){if(!e.target.closest('[data-ra-grip],.r1')||e.target.closest('button'))return;e.preventDefault();
+  const m=$('raMini'),conv=$('conv'),cr=conv.getBoundingClientRect(),mr=m.getBoundingClientRect(),dx=e.clientX-mr.left,dy=e.clientY-mr.top,comp=conv.querySelector('.composer');
+  const ov=document.createElement('div');ov.className='radrop';
+  ov.innerHTML='<div class="scrim"></div>'+['top','bottom'].map(v=>`<div class="row3" style="${v==='top'?'top:10px':`bottom:${comp.offsetHeight+4}px`}">${['left','center','right'].map(h=>`<span class="${h}" data-spot="${v}-${h}"><i class="gh"></i></span>`).join('')}</div>`).join('');
+  conv.appendChild(ov);m.classList.add('drag');let spot=raSpot();
+  const move=ev=>{Object.assign(m.style,{left:ev.clientX-cr.left-dx+'px',top:ev.clientY-cr.top-dy+'px',right:'',bottom:'',transform:''});
+    const x=(ev.clientX-cr.left)/cr.width;spot=(ev.clientY-cr.top<cr.height/2?'top':'bottom')+'-'+(x<1/3?'left':x>2/3?'right':'center');
+    ov.querySelectorAll('[data-spot]').forEach(s=>s.classList.toggle('hl',s.dataset.spot===spot))};
+  const up=()=>{removeEventListener('pointermove',move);removeEventListener('pointerup',up);ov.remove();m.classList.remove('drag');localStorage.setItem('ww.raSpot',spot);raPin(m)};
+  addEventListener('pointermove',move);addEventListener('pointerup',up);move(e)}
+// Settings: the voice (with a sample), where the player shows (three pictures), the speed, and reading when a turn ends.
+let raSampleEl=null;
+function raSample(){const v=raVoice(),name={af_bella:'Bella',af_heart:'Heart',af_nicole:'Nicole'}[v];
+  raSampleEl?.pause();raFetch(`Hi, I'm ${name}. This is how your answers will sound.`,v).then(u=>{raSampleEl=new Audio(u);raSampleEl.playbackRate=raSpeed();raSampleEl.preservesPitch=true;raSampleEl.play()},e=>oops(e.message))}
+function readRows(pf){if(!A.tts)return'';const v=pf.readVoice||'af_bella',pl=pf.readPlace||'strip',sp=pf.readSpeed||1;
+  const ln=w=>`<i class="ln" style="width:${w}%"></i>`,base=`<i class="bm"></i>${ln(85)}`;
+  const card=(k,t,d,sk)=>`<button class="rlc ${pl===k?'on':''}" data-rplace="${k}">${pl===k?`<span class="ok">${svg('check')}</span>`:''}<span class="rsk">${sk}</span><b>${t}</b><small>${d}</small></button>`;
+  return `<div class="lgrp">Read aloud</div><div class="srow"><span>Voice and speed<small>Kokoro, on this computer. The player's speed button changes it too.</small></span><button class="sib" data-set="hearvoice" data-tip="Hear it">${svg('rplay')}</button><select class="sval" id="sVoice">${[['af_bella','Bella'],['af_heart','Heart'],['af_nicole','Nicole']].map(([k,n])=>`<option value="${k}" ${v===k?'selected':''}>${n}</option>`).join('')}</select><div class="lseg">${RSPEEDS.map(x=>`<button data-rspd="${x}" class="${x===sp?'on':''}">${spdName(x)}</button>`).join('')}</div></div>
+    <div class="srow rplace"><span>Player<small>Where the controls show while it reads.</small></span><div class="rlcards">
+      ${card('strip','Strip','Above the message box',`${base}<i class="sst hi"></i><i class="bx"></i>`)}${card('answer','Under the answer','In its foot line',`${base}<i class="ft hi"></i><i class="bx"></i>`)}${card('mini','Mini player','A card you can drag',`<i class="fl hi"></i>${ln(55)}<i class="bm"></i>${ln(85)}<i class="bx"></i>`)}</div></div>
+    <div class="srow"><span>Read answers when a turn ends<small>Only in the session you're looking at.</small></span><i class="stog ${pf.readAuto?'on':''}" data-set="readauto"></i></div>`}
 
 /* ---------- compare: a question about things the agent just made, with those things next to it ---------- */
 // Each option is shown with the file its preview names, the text the agent attached to it, or the file from this turn that
@@ -1252,7 +1491,7 @@ document.addEventListener('keydown',e=>{if(!(e.ctrlKey&&e.shiftKey&&!e.altKey&&!
   e.preventDefault();if(R){if(!R.done)stopVoice();return}startVoice(document.activeElement?.id==='qText'?'qText':'input')});
 
 /* ---------- settings dialog ---------- */
-const STABS=['General','Profiles','Skills','About','Look'],SORDER=[0,4,1,2,3],LANGS=['english','latvian','russian','german','french','spanish','italian','polish','lithuanian','estonian','finnish','swedish','ukrainian'];
+const STABS=['General','Profiles','Skills','About','Look','Sessions','Speech'],SORDER=[0,5,6,4,-1,1,2,3],LANGS=['english','latvian','russian','german','french','spanish','italian','polish','lithuanian','estonian','finnish','swedish','ukrainian'];
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 let stab=0,about=null,L=null,PE=null,PSel=null,PAdd=false,PD=null; // PSel: the profile open on the Profiles page; PAdd: the add form is showing; PD: its Claude Code defaults {name, d}
  // L: the sign-in terminal on screen {name, term, es, ro}; PE: a profile being renamed or asked about {name, kind}
@@ -1292,19 +1531,21 @@ function renderLook(pg){
 }
 function renderSettings(){
   if($('sdim').hidden)return;
-  $('stabs').innerHTML=SORDER.map(i=>`<button data-st="${i}" class="${i===stab?'on':''}">${STABS[i]}</button>`).join('');
+  $('stabs').innerHTML=SORDER.map(i=>i<0?'<i class="nsep"></i>':`<button data-st="${i}" class="${i===stab?'on':''}">${STABS[i]}</button>`).join('');
   if(L&&stab===1)return;                                     // the sign-in terminal is showing; leave it be
-  if(stab===0&&$('spage').contains(document.activeElement)&&document.activeElement.tagName==='SELECT')return; // a menu is open
+  if([0,5,6].includes(stab)&&$('spage').contains(document.activeElement)&&document.activeElement.tagName==='SELECT')return; // a menu is open
   const cd=svg('chev-d'),pf=A.prefs||{},pg=$('spage');
-  if(stab===0)pg.innerHTML=`<div class="pgh">General</div>
-    <div class="srow"><span>Clear quiet sessions<small>A session nobody has touched for this long leaves the sidebar. Search still finds it.</small></span><select class="sval" id="sDays">${[[1,'After a day'],[3,'After 3 days'],[7,'After 7 days'],[14,'After 14 days'],[30,'After 30 days'],[0,'Never']].map(([v,n])=>`<option value="${v}" ${(pf.doneDays??7)===v?'selected':''}>${n}</option>`).join('')}</select></div>${LOGIN?`<div class="srow"><span>Open at login<small>Start Workwood when you sign in to this computer.</small></span><i class="stog ${loginOn?'on':''}" data-set="login"></i></div>`:''}
-    <div class="srow"><span>Offer Bypass mode<small>A permission mode that never asks before edits or commands. Only for work you trust completely.</small></span><i class="stog ${pf.bypass?'on':''}" data-set="bypass"></i></div>
-    ${A.profiles.length>1?`<div class="srow"><span>Continue on another profile at a limit<small>When a session hits a limit, it goes on with the profile that has the most room after 5 minutes. The card counts down, so you can cancel.</small></span><i class="stog ${pf.autoContinue?'on':''}" data-set="auto"></i></div>`:''}
-    <div class="srow"><span>Handoff written by<small>Auto picks by how much went on: Haiku for short sessions, Sonnet for most, Opus for long or intricate ones.</small></span><select class="sval" id="sHModel">${[['auto','Auto'],['haiku','Haiku'],['sonnet','Sonnet'],['opus','Opus']].map(([v,n])=>`<option value="${v}" ${(pf.handoff?.model||'auto')===v?'selected':''}>${n}</option>`).join('')}</select><select class="sval" id="sHEffort">${['low','medium','high'].map(v=>`<option value="${v}" ${(pf.handoff?.effort||'medium')===v?'selected':''}>${cap(v)}</option>`).join('')}</select></div>
-    <div class="srow"><span>Cache lasts<small>How long Claude keeps a conversation cached after a reply. While it lasts, a small clock shows by the session; in its last ten minutes a countdown shows above the message box, and after it a warning.</small></span><select class="sval" id="sCache">${[[0,'No warning'],[5,'5 minutes'],[30,'30 minutes'],[60,'1 hour'],[120,'2 hours']].map(([v,n])=>`<option value="${v}" ${cacheMin()===v?'selected':''}>${n}</option>`).join('')}</select></div>
-    <div class="srow"><span>Offer a handoff at<small>A strip above the message box offers it from here, or at ¾ of a smaller window.</small></span><select class="sval" id="sHOffer">${[100000,200000,300000,400000,600000].map(v=>`<option value="${v}" ${(pf.handoff?.offer||400000)===v?'selected':''}>${v/1000}k tokens</option>`).join('')}</select></div>
-    <div class="srow"><span>Dictation language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>${speechRow()}
+  if(stab===0)pg.innerHTML=`<div class="pgh">General</div>${LOGIN?`<div class="srow"><span>Open at login<small>Start Workwood when you sign in to this computer.</small></span><i class="stog ${loginOn?'on':''}" data-set="login"></i></div>`:''}
     <div class="srow"><span>Project folders<small>Folders that hold your projects. Separate several with a semicolon.</small></span><input class="sval sin mono" id="sFolders" spellcheck="false" autocomplete="off" value="${esc((pf.folders||[]).map(short).join('; '))}" placeholder="${esc(short((A.folders||[])[0]||''))}">${window.workwood?.pickFolder?'<button class="sval" id="sBrowse" data-tip="Choose a folder to add">Add…</button>':''}</div>`;
+  else if(stab===5)pg.innerHTML=`<div class="pgh">Sessions</div>
+    <div class="srow"><span>Clear quiet sessions<small>A session nobody has touched for this long leaves the sidebar. Search still finds it.</small></span><select class="sval" id="sDays">${[[1,'After a day'],[3,'After 3 days'],[7,'After 7 days'],[14,'After 14 days'],[30,'After 30 days'],[0,'Never']].map(([v,n])=>`<option value="${v}" ${(pf.doneDays??7)===v?'selected':''}>${n}</option>`).join('')}</select></div>
+    <div class="srow"><span>Offer Bypass mode<small>A permission mode that never asks before edits or commands. Only for work you trust completely.</small></span><i class="stog ${pf.bypass?'on':''}" data-set="bypass"></i></div>
+    <div class="lgrp">Limits</div>${A.profiles.length>1?`<div class="srow"><span>Continue on another profile at a limit<small>At a limit, it goes on with the profile that has the most room after 5 minutes. You can cancel.</small></span><i class="stog ${pf.autoContinue?'on':''}" data-set="auto"></i></div>`:''}
+    <div class="srow"><span>Cache lasts<small>How long Claude keeps a conversation cached after a reply. A countdown shows in its last ten minutes.</small></span><select class="sval" id="sCache">${[[0,'No warning'],[5,'5 minutes'],[30,'30 minutes'],[60,'1 hour'],[120,'2 hours']].map(([v,n])=>`<option value="${v}" ${cacheMin()===v?'selected':''}>${n}</option>`).join('')}</select></div>
+    <div class="lgrp">Handoff</div><div class="srow"><span>Offer a handoff at<small>A strip above the message box offers it from here, or at ¾ of a smaller window.</small></span><select class="sval" id="sHOffer">${[100000,200000,300000,400000,600000].map(v=>`<option value="${v}" ${(pf.handoff?.offer||400000)===v?'selected':''}>${v/1000}k tokens</option>`).join('')}</select></div>
+    <div class="srow"><span>Handoff written by<small>Auto picks Haiku, Sonnet or Opus by how much went on.</small></span><select class="sval" id="sHModel">${[['auto','Auto'],['haiku','Haiku'],['sonnet','Sonnet'],['opus','Opus']].map(([v,n])=>`<option value="${v}" ${(pf.handoff?.model||'auto')===v?'selected':''}>${n}</option>`).join('')}</select><select class="sval" id="sHEffort">${['low','medium','high'].map(v=>`<option value="${v}" ${(pf.handoff?.effort||'medium')===v?'selected':''}>${cap(v)}</option>`).join('')}</select></div>`;
+  else if(stab===6)pg.innerHTML=`<div class="pgh">Speech</div>
+    <div class="lgrp">Dictation</div><div class="srow"><span>Language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>${speechRow()}${readRows(pf)}`;
   else if(stab===1)renderProfilePage(pg);
   else if(stab===4)renderLook(pg);
   else if(stab===2){needSkills();const all=skillList();pg.innerHTML=`<div class="pgh">Skills</div>`+(!all?'<div class="cap2">Loading skills…</div>':V.sk.err?`<div class="cap2">${esc(V.sk.err)}</div>`:all.map(s=>`<div class="srow" data-tip="${esc(s.about)}"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">/${esc(s.name)}</span><span class="sstate">${s.from}</span></div>`).join('')+`<div class="cap2" style="padding:10px 8px">As Claude Code reports them for ${V.isNew?'a new session here':'the open session'}.</div>`)}
@@ -1472,6 +1713,13 @@ $('sdim').addEventListener('pointerdown',e=>{if(e.target===$('sdim'))closeSettin
 $('stabs').onclick=e=>{const b=e.target.closest('[data-st]');if(!b)return;dropLogin(true);PE=null;stab=+b.dataset.st;renderSettings()};
 $('spage').onclick=async e=>{
   const s=e.target.closest('[data-set]'),l=e.target.closest('[data-login]');
+  const rp=e.target.closest('[data-rplace]'),rs=e.target.closest('[data-rspd]');
+  try{
+    if(rp){A.prefs=await api('settings',{readPlace:rp.dataset.rplace});renderSettings();raShow();return}
+    if(rs){A.prefs=await api('settings',{readSpeed:+rs.dataset.rspd});RA.el.playbackRate=raSpeed();renderSettings();raUpdate();return}
+    if(s?.dataset.set==='readauto'){A.prefs=await api('settings',{readAuto:!A.prefs?.readAuto});renderSettings();return}
+    if(s?.dataset.set==='hearvoice'){raSample();return}
+  }catch(err){oops(err.message);return}
   if(e.target.closest('#lgBack')){dropLogin(true);renderSettings();return}
   const lk=e.target.closest('[data-bgk],[data-bgp],[data-bgm],[data-th]');
   if(lk){const ed=V.lookEdit||'home',d=lk.dataset;
@@ -1522,6 +1770,7 @@ $('spage').onchange=async e=>{
     if(pk&&PD){const name=PD.name;PD={name,d:await api(`profiles/${name}/defaults`,{[pk]:e.target.value})};e.target.blur();renderSettings();if(V.isNew&&V.profile===name)loadDefaults()}
     if(e.target.id==='sDays')A.prefs=await api('settings',{doneDays:+e.target.value});
     if(e.target.id==='sLang')A.prefs=await api('settings',{language:e.target.value});
+    if(e.target.id==='sVoice'){A.prefs=await api('settings',{readVoice:e.target.value});raSample()}
     if(e.target.id==='sCache'){A.prefs=await api('settings',{cacheMinutes:+e.target.value});renderList();renderStrip()}
     if(e.target.id==='sHModel'||e.target.id==='sHEffort'||e.target.id==='sHOffer')A.prefs=await api('settings',{handoff:{[{sHModel:'model',sHEffort:'effort',sHOffer:'offer'}[e.target.id]]:e.target.id==='sHOffer'?+e.target.value:e.target.value}});
     if(e.target.id==='sFolders'){A.prefs=await api('settings',{folders:e.target.value.split(';').map(x=>x.trim()).filter(Boolean)});e.target.value=(A.prefs.folders||[]).map(short).join('; ')}}catch(err){oops(err.message);renderSettings()}
@@ -1827,7 +2076,7 @@ function renderComposer(){
   const c=!nw&&V.context,pct=c?Math.min(100,Math.round(c.used/c.window*100)):0;
   $('pCtx').innerHTML=c?`<i class="ring" style="--p:${pct}"></i><span class="pct">${pct}%</span>`:'';$('pCtx').className='ctx '+(pct>=80?'mid':'')+($('mCtx').hidden?'':' open');$('sCtx').hidden=!c;
   $('pCtx').dataset.tip=c?`${pct}% of the agent's memory of this conversation is used: ${kTok(c.used)} of ${kTok(c.window)} tokens`:'';
-  renderStrip();renderBack();
+  renderStrip();renderBack();raTurnEnd(working);
 }
 const short=p=>A.home&&p&&p.startsWith(A.home)?'~'+p.slice(A.home.length):p||'';
 // The profile menu: a small table, one row per account with its 5-hour and 7-day limits, the one with most room first.
@@ -2383,7 +2632,7 @@ function renderHead(){
 function render(){
   const nw=V.isNew,s=selSession();
   if(s?.unread&&!nw&&!document.hidden){s.unread=false;api(`sessions/${s.id}/seen`,{}).catch(()=>{})}   // you are looking at it
-  renderList();renderUpd();renderThread();renderHome();renderCard();renderQueue();renderComposer();renderPanel();renderTerm();renderHead();
+  renderList();renderUpd();renderThread();renderHome();renderCard();renderQueue();renderComposer();renderPanel();renderTerm();renderHead();raSeen();
   $('tools').style.visibility=nw||!s?'hidden':'visible';
   $('main').classList.toggle('newmode',nw&&!V.pend);
 }

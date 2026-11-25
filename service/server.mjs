@@ -15,6 +15,7 @@ import { terms, openTerm, attach, typeInto, resize, closeTerm, closeAll } from '
 import { changesFor, changeOf } from './changes.mjs';
 import * as home from './home.mjs';
 import * as voice from './voice.mjs';
+import * as speech from './speech.mjs';
 import * as usage from './usage.mjs';
 import * as prof from './profiles.mjs';
 import * as update from './update.mjs';
@@ -46,9 +47,15 @@ const done = new Map(Object.entries(kept.done || {})); for (const id of kept.arc
 let own = Array.isArray(kept.own) ? new Set(kept.own) : null;   // null until the first list is read: then everything recent is yours
 const unread = new Set(kept.unread || []);
 const CACHE_MINUTES = [0, 5, 30, 60, 120];
+const READ_PLACES = ['strip', 'answer', 'mini'], READ_SPEEDS = [1, 1.25, 1.5, 2];
 const prefs = { defaultProfile: kept.defaultProfile || null, language: kept.language || null, folders: Array.isArray(kept.folders) ? kept.folders : [],
   doneDays: Number.isInteger(kept.doneDays) ? kept.doneDays : 7, bypass: kept.bypass === true, autoContinue: kept.autoContinue === true,
   speech: kept.speech === 'turbo' ? 'turbo' : 'small',
+  // reading answers aloud: the voice, where its player shows, how fast, and whether a turn that ends is read by itself
+  readVoice: speech.VOICES.includes(kept.readVoice) ? kept.readVoice : speech.VOICES[0],
+  readPlace: READ_PLACES.includes(kept.readPlace) ? kept.readPlace : 'strip',
+  readSpeed: READ_SPEEDS.includes(kept.readSpeed) ? kept.readSpeed : 1,
+  readAuto: kept.readAuto === true,
   // how long a session's prompt cache is taken to last after its last reply (0: no warning); a reply that wrote a shorter one counts that
   cacheMinutes: CACHE_MINUTES.includes(kept.cacheMinutes) ? kept.cacheMinutes : 60,
   // handing off: who writes the handoff (Auto picks by how much went on), and from how many tokens of context it is offered
@@ -229,7 +236,7 @@ const fileOf = cwd => id => state.sessions.find(x => x.id === id)?.file || trans
 
 const snapshot = () => ({
   profiles: state.profiles.filter(p => !adding.has(p.name)).map(({ account, ...p }) => ({ ...p, reading: reading.has(p.name), failed: failed.get(p.name) || null, stop: stops.get(p.name) || null })), next: state.next, projects: state.projects,
-  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, prefs, plain: src.PLAIN, folders: folders(), home: src.HOME, preview: previewBase, update: update.status(),
+  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, prefs, tts: speech.available(), plain: src.PLAIN, folders: folders(), home: src.HOME, preview: previewBase, update: update.status(),
 });
 let lastSent = '';
 function pushState() { const s = JSON.stringify(snapshot()); if (s !== lastSent) { lastSent = s; emit('state', JSON.parse(s)); } }
@@ -516,6 +523,14 @@ async function api(req, res, url) {
     const next = [...prevOf].find(([, p]) => p === s.id)?.[0], cont = next && state.sessions.find(x => x.id === next);   // handed off: where the thread goes on
     return send(res, 200, { ...t, place, ...now, thread: await threadInfo(s.id), handing: handing.get(s.id) || null, rewound: rewoundOf(s.id), continued: cont ? { id: cont.id, n: chainOf(cont.id).length } : null, defaults: await src.defaultsFor(s.cwd, run?.profile || s.profile, state.profiles) });
   }
+  if (req.method === 'GET' && parts[0] === 'speak') {   // one sentence, read aloud: a WAV clip
+    if (!speech.available()) return send(res, 404, { error: 'Kokoro is not installed.' });
+    try {
+      const wav = await speech.speak(url.searchParams.get('text'), url.searchParams.get('voice') || prefs.readVoice);
+      res.writeHead(200, { 'content-type': 'audio/wav', 'content-length': wav.length, 'cache-control': 'no-store' });
+      return res.end(wav);
+    } catch (e) { return send(res, 500, { error: 'Could not read that aloud: ' + String(e.message).split('\n')[0] }); }
+  }
   if (parts[0] === 'voice') {
     if (req.method === 'GET') { if (url.searchParams.has('warm')) voice.warm(); return send(res, 200, voice.status); }
     if (parts[1] === 'better') {   // get the GPU model, then use it: it takes minutes, so this answers at once and the status tells how far it is
@@ -550,6 +565,10 @@ async function api(req, res, url) {
     }
     if ('cacheMinutes' in b) prefs.cacheMinutes = CACHE_MINUTES.includes(+b.cacheMinutes) ? +b.cacheMinutes : 60;
     if ('speech' in b) { prefs.speech = b.speech === 'turbo' ? 'turbo' : 'small'; voice.choose(prefs.speech); }
+    if ('readVoice' in b) prefs.readVoice = speech.VOICES.includes(b.readVoice) ? b.readVoice : speech.VOICES[0];
+    if ('readPlace' in b) prefs.readPlace = READ_PLACES.includes(b.readPlace) ? b.readPlace : 'strip';
+    if ('readSpeed' in b) prefs.readSpeed = READ_SPEEDS.includes(+b.readSpeed) ? +b.readSpeed : 1;
+    if ('readAuto' in b) prefs.readAuto = b.readAuto === true;
     if ('language' in b) prefs.language = /^[a-z]{3,20}$/.test(b.language || '') ? b.language : null;
     if ('folders' in b) {
       try { prefs.folders = await src.checkFolders(b.folders); } catch (e) { return send(res, 400, { error: e.message }); }
@@ -845,6 +864,8 @@ async function namedFile(s, raw) {
 const inside = (file, dir) => file === dir || file.startsWith(dir.endsWith(path.sep) ? dir : dir + path.sep);
 const real = async p => { try { return await fs.realpath(p); } catch { return null; } };
 
+let helper = null;
+const readHelper = async () => helper ??= (await fs.readFile(path.join(UI, 'preview-read.js'), 'utf8')).replace(/<\/(script)/gi, '<\\/$1');
 const previews = http.createServer(async (req, res) => {
   const deny = (code = 403) => { res.writeHead(code, { 'content-type': 'text/plain' }); res.end(code === 404 ? 'Not found.' : 'Not available.'); };
   try {
@@ -863,6 +884,12 @@ const previews = http.createServer(async (req, res) => {
     const st = await fs.stat(file);
     if (!st.isFile()) return deny(404);
     const head = { 'content-type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'accept-ranges': 'bytes' };
+    // A page shown in the window's preview gets the read-aloud helper added at its end, as it is sent; the file is untouched.
+    if (/\.html?$/i.test(file) && new URL(req.url, 'http://localhost').searchParams.has('ra')) {
+      const body = Buffer.concat([await fs.readFile(file), Buffer.from(`\n<script>${await readHelper()}</script>\n`)]);
+      delete head['accept-ranges']; head['content-length'] = body.length; res.writeHead(200, head);
+      return res.end(req.method === 'HEAD' ? undefined : body);
+    }
     const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');   // videos are fetched in pieces
     let start = 0, end = st.size - 1, code = 200;
     if (m && (m[1] || m[2]) && st.size) {
@@ -919,7 +946,7 @@ export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
   setInterval(refreshAll, 30000).unref();
   setInterval(() => readings.add(state.profiles), 5 * 60000).unref();   // limits, every five minutes
   update.watch(pushState);
-  process.on('exit', closeAll);
+  process.on('exit', closeAll); process.on('exit', speech.stop);
   return { address };
 }
 

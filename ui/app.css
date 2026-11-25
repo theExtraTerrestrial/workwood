@@ -1392,8 +1392,9 @@
 .hef button{flex:1;padding:3px 0;border-radius:6px;font-size:11.5px;color:var(--dim)}.hef button.on{background:var(--pop);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.2)}
 .hpick .cap2{border-top:1px solid var(--line);padding:6px 8px 2px;margin-top:2px}
 /* the offer above the message box: a suggestion, not a warning */
-.hstrip{display:flex;align-items:center;gap:10px;max-width:676px;margin:0 auto -16px;padding:5px 6px 21px 12px;position:relative;border:1px solid var(--line2);border-bottom:0;border-radius:12px 12px 0 0;background:color-mix(in srgb,var(--accent) 9%,var(--surface));font-size:12px;animation:hsin .35s ease-out both}
-.queue:not([hidden])+.hstrip{border-radius:0;max-width:676px}
+.hstrip{display:flex;align-items:center;gap:10px;max-width:min(676px,calc(100% - 24px));margin:0 auto -16px;padding:5px 6px 21px 12px;position:relative;border:1px solid var(--line2);border-bottom:0;border-radius:12px 12px 0 0;background:color-mix(in srgb,var(--accent) 9%,var(--surface));font-size:12px;animation:hsin .35s ease-out both}
+.queue:not([hidden])+.hdeck+.hstrip{border-radius:0}
+.queue:not([hidden])+.hdeck{display:none}
 /* it runs on under the message box, so the box's rounded corners sit on it with no gap */
 .hstrip:not([hidden])+.box{z-index:1}
 .hstrip[hidden]{display:none}
@@ -1522,3 +1523,119 @@
 .fmenu.olm{width:170px}
 .olm button .cv{margin-left:auto;width:12px;height:12px}
 .olm button.on{background:rgba(128,128,128,.16)}
+
+/* ---------- strips that stack: the others wait behind the front one as lips; a tab on its top edge counts them and opens them all ---------- */
+.hdeck{position:relative;max-width:min(676px,calc(100% - 24px));margin:0 auto}
+.hdeck[hidden]{display:none}
+.hdeck .lip{display:block;height:8px;margin:0 70px -1px 96px;border:1px solid var(--line2);border-bottom:0;border-radius:9px 9px 0 0;background:color-mix(in srgb,var(--text) 8%,var(--surface))}
+.hdeck .lip.l2{height:7px;margin:0 84px -1px 110px;opacity:.6}
+.hdeck .htab{position:absolute;right:12px;bottom:-1px;z-index:2;height:22px;display:flex;align-items:center;gap:5px;padding:0 8px 0 7px;border:1px solid var(--line2);border-bottom:0;border-radius:8px 8px 0 0;background:var(--surface);font-size:11px;font-weight:650;color:var(--dim)}
+.hdeck .htab svg{width:12px;height:12px}
+.hdeck button.htab:hover{color:var(--text);background:color-mix(in srgb,var(--text) 6%,var(--surface))}
+.hdeck.open .htab{bottom:calc(100% - 1px);padding:0 3px 0 9px}
+.hdeck .htab.open button{font-size:11px;font-weight:600;color:var(--dim)}.hdeck .htab.open button:hover{color:var(--text)}
+.hdeck .htab [data-hall-x]{padding-right:7px;margin-right:2px;border-right:1px solid var(--line2)}
+.hdeck .htab .fold{width:20px;height:18px;display:grid;place-items:center;border-radius:5px;color:var(--accent)!important}
+.hdeck .hstrip{max-width:none;margin:0;padding-bottom:5px;border-radius:0;animation:none}
+.hdeck .hstrip:first-child{border-radius:12px 12px 0 0}
+.hdeck .hstrip+.hstrip,.hstrip.dopen{border-top:1px solid var(--line)}
+.hstrip.dopen{border-radius:0;animation:none}
+.jump,.tback{translate:0 calc(-1 * var(--ralift,0px))}
+
+/* ---------- read aloud: the player, one set of parts in three places ---------- */
+::highlight(ra-now){background-color:color-mix(in srgb,var(--accent) 24%,transparent)}
+::highlight(ra-done){color:var(--dim)}
+.rap{display:flex;align-items:center;gap:2px;min-width:0}
+.rap svg{display:block}
+.rap .tb{width:26px;height:26px;margin:0;border-radius:8px;display:grid;place-items:center;color:var(--dim);flex:none}
+.rap .tb svg{width:13px;height:13px}
+.rap .tb:hover{color:var(--text);background:var(--surface2)}
+.rap .pb{width:28px;height:28px;padding:0;margin:0 1px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--btn-ink);flex:none}
+.rap .pb:hover{background:var(--accent);color:var(--btn-ink);filter:brightness(1.08)}
+.rap .pb svg{width:12px;height:12px}
+.rap .pb.wait{animation:rawait 1s ease-in-out infinite}
+@keyframes rawait{50%{opacity:.55}}
+.rap .sc{position:relative;flex:1;min-width:60px;height:18px;display:flex;align-items:center;gap:3px;margin:0 8px;cursor:pointer}
+.rap .sc i{flex:1;height:3px;border-radius:2px;background:color-mix(in srgb,var(--text) 14%,transparent);position:relative;overflow:hidden}
+.rap .sc i.d{background:color-mix(in srgb,var(--accent) 70%,transparent)}
+.rap .sc i.n::after{content:"";position:absolute;inset:0 auto 0 0;width:var(--f,0%);background:var(--accent)}
+.rap .sc .cont{position:relative;flex:1;height:3px;border-radius:2px;background:color-mix(in srgb,var(--text) 14%,transparent)}
+.rap .sc .cont b{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--accent)}
+.rap .sc .cont u{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--surface)}
+.rap .sc:hover i,.rap .sc:hover .cont{height:5px}
+.rap .tm{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums;white-space:nowrap;margin-right:6px}
+.rap .tm b{color:var(--dim);font-weight:600}
+.rap .spd{width:auto;height:22px;margin:0;padding:0 7px;border-radius:7px;display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--dim);box-shadow:inset 0 0 0 1px var(--line2);font-variant-numeric:tabular-nums;flex:none}
+.rap .spd:hover{color:var(--text);background:var(--surface2)}
+.rap .cx{width:24px;height:24px;margin:0 0 0 2px;border-radius:7px;display:grid;place-items:center;color:var(--faint);flex:none}
+.rap .cx:hover{color:var(--text);background:var(--surface2)}
+.rap .cx svg{width:12px;height:12px}
+.rap .ttl{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:var(--dim);margin:0 4px 0 6px}
+.rap .ttl b{color:var(--text);font-weight:650}
+/* in the strip */
+.hstrip.ply{padding:4px 6px 20px 6px}
+.hstrip.ply .rap{flex:1}
+/* in the answer's foot line */
+.tfoot.ply{margin:-6px 0 18px;padding:3px 4px;border-radius:12px;background:color-mix(in srgb,var(--accent) 6%,var(--surface));box-shadow:inset 0 0 0 1px var(--line);max-width:520px;font-size:12px}
+.ai .afoot.ply{margin:4px 0 0}
+.tfoot.ply .rap{flex:1}
+/* the mini player: a card over the conversation */
+.mcard{position:absolute;z-index:6;width:300px;padding:9px 8px 6px 12px;border-radius:14px;background:var(--pop);box-shadow:0 0 0 1px var(--line2),0 10px 28px rgba(0,0,0,.35),0 2px 6px rgba(0,0,0,.2)}
+.mcard[hidden]{display:none}
+.mcard .grip{position:absolute;top:0;left:50%;transform:translateX(-50%);width:60px;height:12px;cursor:grab;display:grid;place-items:center}
+.mcard .grip::before{content:"";width:28px;height:4px;border-radius:2px;background:var(--line2)}
+.mcard .grip:hover::before{background:var(--faint)}
+.mcard .r1{gap:6px;margin-bottom:2px;cursor:grab}
+.mcard .r1 .ttl{flex:1;margin:0}
+.mcard .sc{margin:0 8px 0 6px}
+.mcard .vis{display:flex;align-items:flex-end;gap:1.5px;height:12px;margin:0 2px 0 0;flex:none}
+.mcard .vis u{width:2px;height:4px;border-radius:1px;background:var(--accent);opacity:.85}
+.mcard .vis.on u{animation:ravis .9s ease-in-out infinite}
+.mcard .vis u:nth-child(2){animation-delay:-.3s}.mcard .vis u:nth-child(3){animation-delay:-.6s}.mcard .vis u:nth-child(4){animation-delay:-.15s}
+@keyframes ravis{50%{height:12px}}
+.mcard.drag{z-index:8;rotate:-1.2deg;scale:1.03;box-shadow:0 0 0 1px var(--accent),0 18px 40px rgba(0,0,0,.45);cursor:grabbing}
+.mcard.drag .grip::before{background:var(--accent)}
+/* dragging it: the conversation dims, two rows of three spots, each with a ghost of where it lands */
+.radrop .scrim{position:absolute;inset:0;z-index:4;background:color-mix(in srgb,var(--bg) 45%,transparent)}
+.radrop .row3{position:absolute;left:50%;transform:translateX(-50%);width:min(600px,calc(100% - 32px));height:52px;padding:5px;border-radius:20px;display:flex;gap:5px;z-index:5;background:color-mix(in srgb,var(--surface) 92%,transparent);box-shadow:inset 0 0 0 1px var(--line2),0 8px 24px rgba(0,0,0,.25);backdrop-filter:blur(8px)}
+.radrop .row3>span{flex:1;border-radius:15px;display:flex;align-items:center;padding:0 10px;background:color-mix(in srgb,var(--text) 4%,transparent);transition:background .12s}
+.radrop .row3>.left{justify-content:flex-start}.radrop .row3>.center{justify-content:center}.radrop .row3>.right{justify-content:flex-end}
+.radrop .gh{width:74px;height:22px;border-radius:11px;border:1.5px dashed var(--line2)}
+.radrop .row3>span.hl{background:color-mix(in srgb,var(--accent) 14%,transparent);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.radrop .row3>span.hl .gh{border:0;background:color-mix(in srgb,var(--accent) 35%,transparent)}
+/* settings: where the player shows, as three pictures */
+.srow.rplace{display:block}
+.rlcards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0 4px}
+.rlc{display:block;width:100%;border-radius:12px;padding:8px;box-shadow:inset 0 0 0 1px var(--line2);background:var(--surface);text-align:left;position:relative}
+.rlc:hover{box-shadow:inset 0 0 0 1px var(--faint)}
+.rlc.on{box-shadow:inset 0 0 0 1.5px var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
+.rlc .ok{position:absolute;top:8px;right:8px;width:16px;height:16px;border-radius:50%;background:var(--accent);color:var(--btn-ink);display:grid;place-items:center;z-index:1}
+.rlc .ok svg{width:10px;height:10px;stroke-width:3}
+.rlc b{display:block;font-size:12px;font-weight:650;margin:8px 2px 0}
+.rlc small{display:block;font-size:11px;color:var(--faint);margin:1px 2px 0;line-height:1.35}
+.rsk{display:block;height:84px;border-radius:8px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line);position:relative;overflow:hidden;padding:10px 12px 0}
+.rsk i{display:block}
+.rsk .ln{height:4px;border-radius:2px;background:color-mix(in srgb,var(--text) 14%,transparent);margin:0 0 5px}
+.rsk .bm{height:9px;width:38%;border-radius:5px;background:color-mix(in srgb,var(--text) 10%,transparent);margin:0 0 7px auto}
+.rsk .bx{position:absolute;left:10px;right:10px;bottom:8px;height:16px;border-radius:6px;box-shadow:inset 0 0 0 1px var(--line2);background:var(--surface)}
+.rsk .hi{background:var(--accent)}
+.rlc:not(.on) .rsk .hi{background:var(--dim);opacity:.7}
+.rsk .sst{position:absolute;left:18px;right:18px;bottom:21px;height:9px;border-radius:4px 4px 0 0}
+.rsk .ft{height:7px;width:62%;border-radius:4px;margin:2px 0 6px}
+.rsk .fl{position:absolute;right:12px;top:8px;width:34px;height:12px;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+/* reading a previewed page: the header's speaker lights while it reads; full width, the player takes its place */
+#bRead.on{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.phra{display:flex;align-items:center;min-width:0;flex:0 1 620px;height:30px;padding:0 3px 0 4px;margin-right:4px;border-radius:15px;background:color-mix(in srgb,var(--accent) 6%,var(--surface));box-shadow:inset 0 0 0 1px var(--line)}
+.phra[hidden]{display:none}
+.phra .rap{flex:1}
+.phra .rap .ttl{flex:0 1 auto;margin:0 6px}
+.phra .rap .sc{flex:1 1 110px;min-width:72px;margin:0 6px}
+.phra .rap .tb{width:24px;height:24px}
+.phra .rap .pb{width:24px;height:24px}
+/* Settings: a line between your settings and Profiles, Skills, About; group labels within a page */
+.dlg .dtabs .nsep{display:block;height:1px;background:var(--line);margin:8px 9px}
+#spage .lgrp{padding:11px 8px 2px}#spage .pgh+.lgrp{padding-top:6px}
+/* the player's pictures, short enough for the Speech page to fit */
+.rlcards{margin:6px 0 0}
+.rsk{height:56px;padding:8px 12px 0}.rsk .bm,.rsk .ln{margin-bottom:4px}.rsk .bx{height:12px;bottom:6px}
+.rsk .sst{bottom:17px;height:7px}.rsk .fl{top:6px;height:10px}.rsk .ft{margin:2px 0 0}

@@ -1,0 +1,317 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 55 — The player, redrawn</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<!-- the app's own stylesheet: the thread, message box and strip below are drawn by it -->
+<link rel="stylesheet" href="../ui/app.css">
+<style>
+html,body{height:auto}
+body{overflow:auto;background:var(--bg);padding:36px 24px 80px}
+.top{max-width:1320px;margin:0 auto 8px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top>span{color:var(--faint);font-size:12.5px}
+.tg{margin-left:auto;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:8px;box-shadow:0 0 0 1px var(--line2)}
+.lede{max-width:1320px;margin:0 auto 28px;color:var(--faint);font-size:12.5px}.lede b{color:var(--dim);font-weight:650}
+.two{max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:24px}
+.two h2{font-size:14px;margin:0 0 2px;font-weight:700;display:flex;gap:8px;align-items:center}
+.two h2 em{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);padding:1px 6px;border-radius:5px}
+.two p{margin:0 0 12px;color:var(--faint);font-size:12.5px;min-height:36px}
+
+.frame{background:var(--bg);border-radius:14px;box-shadow:0 0 0 1px var(--line2);height:500px;display:flex;overflow:hidden;position:relative}
+.frame .conv{height:100%}
+.frame .scroll{overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:20px 22px 4px}
+.frame .col{width:100%}
+.frame .composer{padding:8px 22px 12px;position:relative}
+
+/* the foot line: Read aloud beside Copy */
+.tfoot{display:flex;align-items:center;gap:6px;margin-bottom:16px}
+.ab{width:22px;height:20px;display:grid;place-items:center;color:var(--dim);border-radius:6px;position:relative}
+.ab svg{width:12.5px;height:12.5px}.ab.hov{color:var(--text);background:var(--surface2)}
+.ab.on{color:var(--accent)}
+.tip2{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);white-space:nowrap;font-size:11px;padding:3px 7px;border-radius:6px;background:var(--text);color:var(--bg);font-weight:600}
+
+/* the sentence being read */
+.ai .s{border-radius:4px;transition:background .2s}
+.ai .s.now{background:color-mix(in srgb,var(--accent) 20%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 20%,transparent)}
+.ai .s.done{color:var(--dim)}
+.ai .s.hov{text-decoration:underline dotted var(--faint);text-underline-offset:3px;cursor:pointer}
+
+/* the player: transport, progress by sentence, speed, close */
+.pl{display:flex;align-items:center;gap:4px}
+.rpb{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--dim)}
+.rpb svg{width:13px;height:13px}.rpb:hover{color:var(--text);background:var(--surface2)}
+.rpb.big{width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--btn-ink)}.rpb.big svg{width:12px;height:12px}
+.rprog{flex:1;min-width:60px;display:flex;gap:2px;align-items:center;height:26px;margin:0 6px}
+.rprog i{flex:1;height:4px;border-radius:2px;background:var(--line2)}
+.rprog i.d{background:color-mix(in srgb,var(--accent) 55%,transparent)}
+.rprog i.n{background:var(--accent);height:6px}
+.tm{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums;white-space:nowrap;margin-right:4px}
+.sp{font-size:11px;font-weight:700;color:var(--dim);padding:3px 7px;border-radius:6px;background:var(--surface2)}
+/* A: the handoff strip as it is: tint, bold title + dim detail, pill buttons; a thin progress line on its top edge */
+.hstrip.ra{overflow:hidden;margin-left:12px;margin-right:12px}
+.hstrip.ra .t{display:flex;align-items:center;gap:7px}.hstrip.ra .t>span{overflow:hidden;text-overflow:ellipsis}
+.hstrip.ra .ci{width:13px;height:13px;flex:none;color:var(--accent)}
+.hstrip.ra .hgo,.hstrip.ra .hc2{display:inline-flex;align-items:center;gap:5px}
+.hstrip.ra .hgo svg,.hstrip.ra .hc2 svg{width:11px;height:11px}
+.hstrip.ra .hc2.i{padding:4px 7px}
+.hstrip.ra .hc2.sp2{font-variant-numeric:tabular-nums;color:var(--dim)}
+.hstrip.ra .line{position:absolute;left:0;right:0;top:0;height:2px;display:flex;gap:2px}
+.hstrip.ra .line i{flex:1;background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.hstrip.ra .line i.d{background:color-mix(in srgb,var(--accent) 60%,transparent)}
+.hstrip.ra .line i.n{background:linear-gradient(90deg,var(--accent) 40%,color-mix(in srgb,var(--accent) 14%,transparent) 40%)}
+/* B: the foot line becomes the player */
+.tfoot.plx .sp{margin-right:4px}
+.tfoot.plx{margin-top:-6px;padding:4px 6px;border-radius:10px;background:var(--surface);box-shadow:0 0 0 1px var(--line)}
+
+.note{max-width:1320px;margin:28px auto 0;border-top:1px solid var(--line);padding-top:18px;font-size:13px;color:var(--dim)}
+.note h3{font-size:13px;margin:0 0 6px;color:var(--text)}.note ol{margin:0;padding-left:18px}.note li{margin:4px 0}
+.note kbd{font:inherit;font-size:11.5px;padding:0 5px;border-radius:4px;box-shadow:0 0 0 1px var(--line2);color:var(--text)}
+details.uh{max-width:1320px;margin:28px auto 0;border-top:1px solid var(--line);padding-top:16px;font-size:12.5px;color:var(--dim)}
+details.uh summary{cursor:pointer;color:var(--text);font-weight:650;font-size:13px}
+details.uh ul{margin:8px 0 0;padding-left:18px}details.uh li{margin:4px 0}
+details.uh code{font-size:11.5px;color:var(--text)}
+
+/* round 50b: other strips, long answers, settings */
+.sec{max-width:1320px;margin:40px auto 0}
+.sec>h2{font-size:14px;margin:0 0 2px;font-weight:700}.sec>p{margin:0 0 14px;color:var(--faint);font-size:12.5px;max-width:820px}
+.cap{font-size:11.5px;color:var(--faint);margin:0 0 6px;font-weight:600}
+.hstrip.cache .drain{position:absolute;left:0;bottom:16px;height:2px;width:var(--left,60%);background:color-mix(in srgb,var(--accent) 45%,transparent)}
+.hstrip .chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:650;color:var(--dim);padding:3px 7px;border-radius:7px;box-shadow:inset 0 0 0 1px var(--line2);white-space:nowrap}
+.hstrip .chip svg{width:11px;height:11px;color:var(--faint)}
+.hstrip.ra .line.cont{gap:0;background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.hstrip.ra .line.cont b{position:absolute;left:0;top:0;bottom:0;background:var(--accent)}
+.hstrip.ra .line.cont u{position:absolute;top:0;bottom:0;width:2px;background:var(--surface)}
+.tall .frame{height:560px}
+.ai h4{margin-top:0}
+.ai p .s.done,.ai li .s.done{color:var(--dim)}
+/* settings */
+.sbox{background:var(--pop);border:1px solid var(--line2);border-radius:14px;padding:6px 12px;max-width:640px;box-shadow:var(--shadow)}
+.sbox .pgh{font-size:13px;font-weight:700;padding:8px 8px 4px}
+.sbox .sib{display:grid;place-items:center;color:var(--dim);border-radius:7px}
+.sbox .sib svg{width:13px;height:13px}
+.sbox .srow.new{background:color-mix(in srgb,var(--accent) 6%,transparent);border-radius:8px}
+.sbox select.sval{padding:5px 8px;border-radius:8px;background:var(--surface2)}
+.srow .stog{width:30px;height:17px;border-radius:9px;position:relative;flex:none;display:block}
+.srow .stog::after{content:"";position:absolute;top:2px;width:13px;height:13px;border-radius:50%;background:#fff}
+
+/* the preview pane */
+.pvframe{display:flex;height:520px}
+.pvframe .conv{flex:1;min-width:0}
+.pvside{width:52%;flex:none;border-left:1px solid var(--line);display:flex;flex-direction:column;background:var(--bg)}
+.pvside.full{width:100%;border-left:0}
+.phd{height:42px;flex:none;display:flex;align-items:center;gap:2px;padding:0 8px 0 10px;border-bottom:1px solid var(--line);font-size:12.5px}
+.phd .nm{font-weight:600;padding:0 8px}.phd .gap{flex:1}
+.phd .ib2{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--dim)}
+.phd .ib2 svg{width:14px;height:14px}.phd .ib2.on{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.phd .tip2{top:calc(100% + 6px);bottom:auto}
+.stg{flex:1;min-height:0;background:var(--stage);padding:14px;display:flex}
+.pg{flex:1;background:#fff;color:#1d1d1f;border-radius:10px;box-shadow:var(--shadow);padding:20px 22px;font:13px/1.55 Manrope,system-ui,sans-serif;overflow:hidden;position:relative}
+.pg h3{font-size:15px;margin:0 0 6px;position:relative}.pg h4{font-size:13px;margin:16px 0 4px;position:relative;display:flex;align-items:center;gap:8px}
+.pg p,.pg li{color:#555}.pg ol{padding-left:18px;margin:4px 0}
+.pg .lit{background:color-mix(in srgb,var(--accent) 28%,#fff);border-radius:3px;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 28%,#fff)}
+.pg .rd{color:#999}
+.pg .hs{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:650;color:#fff;background:var(--accent);padding:2px 8px 2px 6px;border-radius:7px}
+.pg .hs svg{width:11px;height:11px}
+.pg .selb{position:absolute;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:650;color:#fff;background:#1d1d1f;padding:4px 9px 4px 7px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+.pg .selb svg{width:12px;height:12px}
+.pg .sel{background:#b4d5fe}
+.phd .mini{display:flex;align-items:center;gap:4px;padding:3px;border-radius:10px;background:color-mix(in srgb,var(--accent) 9%,var(--surface));box-shadow:inset 0 0 0 1px var(--line2);margin-right:6px}
+.phd .mini b{font-size:11.5px;font-weight:650;margin:0 4px 0 6px;white-space:nowrap}.phd .mini span{font-size:11px;color:var(--faint);white-space:nowrap;margin-right:4px}
+.phd .mini .hc2,.phd .mini .hgo{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:7px;font-size:11.5px}
+.phd .mini .hgo{background:var(--accent);color:var(--btn-ink);font-weight:700}.phd .mini .hc2{background:var(--surface2);font-weight:600}
+.phd .mini svg{width:10px;height:10px}
+
+.frame{height:420px}
+.grid2{max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(560px,1fr));gap:24px}
+/* strips: always the app's width, 12px in from the box on each side */
+.composer .hstrip{max-width:676px;margin-left:max(12px,calc(50% - 338px));margin-right:max(12px,calc(50% - 338px))}
+.hstrip.ra{margin-left:max(12px,calc(50% - 338px));margin-right:max(12px,calc(50% - 338px))}
+/* the deck: lips behind; the tab sits on the front strip's top edge */
+.deck{position:relative;margin:0 max(12px,calc(50% - 338px)) -16px}
+.deck .hstrip{margin:0!important;max-width:none;animation:none}
+.deck+.box{z-index:1}
+.lip{height:8px;margin:0 70px -1px 96px;border:1px solid var(--line2);border-bottom:0;border-radius:9px 9px 0 0;background:color-mix(in srgb,var(--text) 8%,var(--surface))}
+.lip.l2{height:7px;margin:0 84px -1px 110px;opacity:.6}
+.fw{position:relative}
+.swt{position:absolute;right:12px;bottom:100%;height:22px;margin-bottom:-1px;display:flex;align-items:center;gap:5px;padding:0 8px 0 7px;border:1px solid var(--line2);border-bottom:0;border-radius:8px 8px 0 0;background:var(--surface);font-size:11px;font-weight:650;color:var(--dim);z-index:2}
+.swt svg{width:12px;height:12px}
+.swt.hov{color:var(--text);background:color-mix(in srgb,var(--text) 6%,var(--surface))}
+.swt .tip2{position:absolute;opacity:1;top:50%;bottom:auto;left:auto;right:calc(100% + 8px);transform:translateY(-50%)}
+.swt.open{color:var(--dim);padding:0 3px 0 9px}
+.swt.open .ca{padding-right:7px;margin-right:2px;border-right:1px solid var(--line2)}
+.swt.open .fold{width:20px;height:18px;display:grid;place-items:center;border-radius:5px;color:var(--accent)}
+.all .hstrip:not(:last-child){padding-bottom:5px;border-radius:0}
+.all .hstrip:first-child{border-radius:12px 12px 0 0}
+.all .hstrip+.hstrip{border-top:1px solid var(--line)}
+
+/* ---------- the player: one set of parts ---------- */
+.P{display:flex;align-items:center;gap:2px;min-width:0}
+.P svg{display:block}
+.P .tb{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;color:var(--dim);flex:none}
+.P .tb svg{width:13px;height:13px;fill:currentColor;stroke:none}
+.P .tb:hover{color:var(--text);background:var(--surface2)}
+.P .pb{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--btn-ink);flex:none;margin:0 1px}
+.P .pb svg{width:12px;height:12px;fill:currentColor;stroke:none}
+.P .sc{position:relative;flex:1;min-width:70px;height:18px;display:flex;align-items:center;gap:3px;margin:0 8px}
+.P .sc i{flex:1;height:3px;border-radius:2px;background:color-mix(in srgb,var(--text) 14%,transparent);position:relative;overflow:hidden}
+.P .sc i.d{background:color-mix(in srgb,var(--accent) 70%,transparent)}
+.P .sc i.n::after{content:"";position:absolute;inset:0 auto 0 0;width:45%;background:var(--accent)}
+.P .tm{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums;white-space:nowrap;margin-right:6px}
+.P .tm b{color:var(--dim);font-weight:600}
+.P .spd{height:22px;padding:0 7px;border-radius:7px;display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--dim);box-shadow:inset 0 0 0 1px var(--line2);font-variant-numeric:tabular-nums;flex:none}
+.P .cx{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;color:var(--faint);flex:none;margin-left:2px}
+.P .cx svg{width:12px;height:12px}
+.P .ttl{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:var(--dim);margin:0 4px 0 6px}
+.P .ttl b{color:var(--text);font-weight:650}
+.P .vis{display:flex;align-items:flex-end;gap:1.5px;height:12px;margin:0 2px 0 4px;flex:none}
+.P .vis u{width:2px;border-radius:1px;background:var(--accent);opacity:.85}
+
+/* in the strip */
+.hstrip.ply{padding:4px 6px 20px 6px;background:color-mix(in srgb,var(--accent) 9%,var(--surface))}
+.hstrip.ply .P{flex:1}
+/* under the answer */
+.tfoot.ply{margin:-4px 0 14px;padding:3px 4px;border-radius:12px;background:color-mix(in srgb,var(--accent) 6%,var(--surface));box-shadow:inset 0 0 0 1px var(--line);max-width:520px}
+.tfoot.ply .P{flex:1}
+/* mini player: a capsule */
+.mp{position:absolute;z-index:6;display:flex;align-items:center;height:40px;padding:0 6px 0 2px;border-radius:20px;background:var(--pop);box-shadow:0 0 0 1px var(--line2),0 10px 28px rgba(0,0,0,.35),0 2px 6px rgba(0,0,0,.2);white-space:nowrap}
+.mp .grip{width:16px;height:24px;display:grid;place-items:center;color:var(--faint);cursor:grab;flex:none}
+.mp .grip svg{width:8px;height:14px;fill:currentColor;stroke:none}
+.mp .pb{width:30px;height:30px}
+.mp .sc{flex:none;width:92px}
+.mp.bc{left:50%;transform:translateX(-50%)}
+/* mini player: a small card */
+.mc{position:absolute;z-index:6;width:300px;padding:8px 8px 6px 12px;border-radius:14px;background:var(--pop);box-shadow:0 0 0 1px var(--line2),0 10px 28px rgba(0,0,0,.35),0 2px 6px rgba(0,0,0,.2)}
+.mc .r1{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:2px}
+.mc .r1 .ttl{flex:1;margin:0}
+.mc .grip{position:absolute;top:4px;left:50%;transform:translateX(-50%);width:28px;height:4px;border-radius:2px;background:var(--line2)}
+.mc .sc{margin:0 8px 0 6px}
+
+/* dragging: a scrim, two rows, a ghost of where it lands */
+.scrim{position:absolute;inset:0;z-index:4;background:color-mix(in srgb,var(--bg) 45%,transparent)}
+.row3{position:absolute;left:50%;transform:translateX(-50%);width:min(600px,calc(100% - 32px));height:52px;padding:5px;border-radius:20px;display:flex;gap:5px;z-index:5;background:color-mix(in srgb,var(--surface) 92%,transparent);box-shadow:inset 0 0 0 1px var(--line2),0 8px 24px rgba(0,0,0,.25);backdrop-filter:blur(8px)}
+.row3>span{flex:1;border-radius:15px;display:flex;align-items:center;padding:0 10px;background:color-mix(in srgb,var(--text) 4%,transparent);transition:background .12s}
+.row3>span.l{justify-content:flex-start}.row3>span.c{justify-content:center}.row3>span.r{justify-content:flex-end}
+.row3 .gh{width:74px;height:22px;border-radius:11px;border:1.5px dashed var(--line2)}
+.row3>span.hl{background:color-mix(in srgb,var(--accent) 14%,transparent);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.row3>span.hl .gh{border:0;background:color-mix(in srgb,var(--accent) 35%,transparent)}
+.mp.drag{z-index:8;transform:rotate(-1.2deg) scale(1.03);box-shadow:0 0 0 1px var(--accent),0 18px 40px rgba(0,0,0,.45)}
+.mp.drag .grip{color:var(--accent);cursor:grabbing}
+
+/* settings: picture cards */
+.srow.stack{display:block}
+.lcards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0 4px}
+.lc{display:block;width:100%;border-radius:12px;padding:8px;box-shadow:inset 0 0 0 1px var(--line2);background:var(--surface);text-align:left;position:relative}
+.lc.on{box-shadow:inset 0 0 0 1.5px var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
+.lc .ok{position:absolute;top:8px;right:8px;width:16px;height:16px;border-radius:50%;background:var(--accent);color:var(--btn-ink);display:grid;place-items:center}
+.lc .ok svg{width:10px;height:10px;stroke-width:3}
+.lc b{display:block;font-size:12px;font-weight:650;margin:8px 2px 0}
+.lc small{display:block;font-size:11px;color:var(--faint);margin:1px 2px 0;line-height:1.35}
+.sk{display:block;width:100%;height:92px;border-radius:8px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line);position:relative;overflow:hidden;padding:10px 12px 0}
+.sk .ln{height:4px;border-radius:2px;background:color-mix(in srgb,var(--text) 14%,transparent);margin:0 0 5px}
+.sk .bm{height:9px;width:38%;border-radius:5px;background:color-mix(in srgb,var(--text) 10%,transparent);margin:0 0 7px auto}
+.sk .bx{position:absolute;left:10px;right:10px;bottom:8px;height:16px;border-radius:6px;box-shadow:inset 0 0 0 1px var(--line2);background:var(--surface)}
+.sk .hi{background:var(--accent)!important;opacity:.95}
+.sk .sst{position:absolute;left:18px;right:18px;bottom:21px;height:9px;border-radius:4px 4px 0 0}
+.sk .ft{height:7px;width:62%;border-radius:4px;margin:2px 0 6px}
+.sk .fl{position:absolute;right:12px;top:8px;width:34px;height:9px;border-radius:5px;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.lc:not(.on) .sk .hi{background:var(--dim)!important;opacity:.7}
+</style></head><body>
+<div class="top"><h1>The player, redrawn · strips, docked</h1><span>round 55 · hi-fi, for approval</span><button class="tg" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<div class="lede">Strips are their usual width again, <b>12px in from the box</b> on each side. The count tab sits <b>on the front strip's top edge</b>. The player is one set of parts in three places: <b>back · play · forward</b>, a sentence bar, the time, the speed and close.</div>
+
+<div class="sec"><h2>The deck</h2><p>Two strips: the countdown is in front and the handoff offer shows as a lip behind it. Show all lists every strip in full, with the tab still sitting on the top one.</p><div class="grid2" id="deck"></div></div>
+<div class="sec"><h2>The player, three places</h2><p>Play is a filled circle with the icon optically centered. Back and forward step a sentence. The bar has one segment per sentence, and the current one fills as it plays.</p><div class="grid2" id="pl"></div></div>
+<div class="sec"><h2>Mini player: a card</h2><p>What it reads on top, the controls below. Drag it by the bar on top.</p><div class="grid2" id="mini"></div></div>
+<div class="sec"><h2>Moving it</h2><p>While you drag, the conversation dims and two rows appear. Each row has three slots, and each slot shows a ghost of where the player will sit. The slot under the pointer lights up.</p><div class="grid2" id="drag"></div></div>
+<div class="sec"><h2>Settings</h2><p>The player's place is chosen from three pictures.</p><div class="sbox" id="sets" style="max-width:680px"></div></div>
+<div class="note"><h3>Questions</h3><ol>
+<li>None: approved, being built.</li>
+</ol></div>
+<script>
+
+const I={
+ cp:'<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
+ spk:'<svg viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" stroke-linejoin="round"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
+ pause:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+ back:'<svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M6 5v14"/><path d="M18 5.5v13L9 12z"/></svg>',
+ fwd:'<svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M18 5v14"/><path d="M6 5.5v13L15 12z"/></svg>',
+ x:'<svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+ ch:'<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>',
+ clip:'<svg viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>',
+ sl:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="m14 8.5-4 7"/></svg>',
+ mic:'<svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg>',
+ up:'<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>'};
+const ab=(ic,cls='',tip='')=>`<button class="ab ${cls}">${ic}${tip?`<span class="tip2">${tip}</span>`:''}</button>`;
+const step=t=>`<div class="acts"><button class="act">${I.ch}${t}</button></div>`;
+const box=()=>`<div class="box"><textarea rows="1" placeholder="Message the agent…"></textarea><div class="row"><button class="ib">${I.clip}</button><button class="ib">${I.sl}</button><span class="gap"></span><button class="ib">${I.mic}</button><button class="send">${I.up}</button></div></div>`;
+const S=['All 150 tests pass.','Code blocks in answers now have a copy button at their top right, shown when you point at a block.','It copies just the code, without the fences or the language name.','After a copy the icon turns into a check for a moment.'];
+const answer=(now,hov)=>`<div class="ai"><p>${S.map((s,i)=>`<span class="s ${i<now?'done':''} ${i===now?'now':''} ${i===hov?'hov':''}">${s}</span>`).join(' ')}</p></div>`;
+const prog=(n,of)=>`<span class="rprog">${Array.from({length:of},(_,i)=>`<i class="${i<n?'d':i===n?'n':''}"></i>`).join('')}</span>`;
+const player=`<span class="pl"><button class="rpb">${I.back}</button><button class="rpb big">${I.pause}</button><button class="rpb">${I.fwd}</button></span>${prog(1,4)}<span class="tm">0:06 / 0:19</span><button class="sp">1.25×</button>`;
+const T1=`<div class="me">Add a CSV export to the reports page</div>${step('Edited 2 files')}<div class="ai"><p>Done. An Export button now writes the visible rows to <code>report.csv</code>.</p></div><div class="tfoot">Worked for 1m 40s · 10:02 AM ${ab(I.spk)}${ab(I.cp)}</div>`;
+const me2=`<div class="me">Add a copy button to code blocks</div>${step('Edited 3 files · ran 1 command')}`;
+const fr=(thread,strip='')=>`<div class="frame"><section class="conv"><div class="scroll"><div class="col">${thread}</div></div><div class="composer">${strip}${box()}</div></section></div>`;
+const lseg=(items,cur)=>`<div class="lseg">${items.map(n=>`<button class="${n===cur?'on':''}">${n}</button>`).join('')}</div>`;
+I.cold='<svg viewBox="0 0 24 24"><path d="M12 2v20M4.9 6l14.2 12M4.9 18 19.1 6"/></svg>';
+I.play='<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 5v14l12-7z"/></svg>';
+const raStrip=(line,detail,extra='')=>`<div class="hstrip ra">${line}<span class="t">${I.spk.replace('<svg','<svg class="ci"')}<b>Reading aloud</b><span> · ${detail}</span></span>${extra}<button class="hc2 i">${I.back}</button><button class="hgo">${I.pause}Pause</button><button class="hc2 i">${I.fwd}</button><button class="hc2 sp2">1.25×</button><button class="ib hx">${I.x}</button></div>`;
+const segs='<span class="line"><i class="d"></i><i class="n"></i><i></i><i></i></span>';
+const cacheStrip=`<div class="hstrip cache" style="--left:55%"><span class="t">${I.cold.replace('<svg','<svg class="ci"')}<b>Cache cools in 6m</b><span> · send now to keep it warm</span></span><button class="ib hx">${I.x}</button><span class="drain"></span></div>`;
+const footOn=`<div class="tfoot">Worked for 2m 12s · 10:20 AM ${ab(I.spk,'on')}${ab(I.cp)}</div>`;
+
+I.stack='<svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M12 4 3 8.5l9 4.5 9-4.5z"/><path d="m3 13 9 4.5 9-4.5"/></svg>';
+I.chd='<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>';
+I.rw='<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>';
+I.chk='<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+// solid, centred glyphs
+const G={
+ pause:'<svg viewBox="0 0 24 24"><rect x="6.5" y="5" width="4" height="14" rx="1.2"/><rect x="13.5" y="5" width="4" height="14" rx="1.2"/></svg>',
+ play:'<svg viewBox="0 0 24 24"><path d="M9 5.4v13.2c0 .8.9 1.3 1.6.8l9.6-6.6c.6-.4.6-1.2 0-1.6L10.6 4.6C9.9 4.1 9 4.6 9 5.4z"/></svg>',
+ back:'<svg viewBox="0 0 24 24"><rect x="5" y="5.5" width="2.6" height="13" rx="1"/><path d="M19 6.6v10.8c0 .8-.9 1.2-1.5.8l-7.9-5.4a1 1 0 0 1 0-1.6l7.9-5.4c.6-.4 1.5 0 1.5.8z"/></svg>',
+ fwd:'<svg viewBox="0 0 24 24"><rect x="16.4" y="5.5" width="2.6" height="13" rx="1"/><path d="M5 6.6v10.8c0 .8.9 1.2 1.5.8l7.9-5.4a1 1 0 0 0 0-1.6L6.5 5.8C5.9 5.4 5 5.8 5 6.6z"/></svg>',
+ grip:'<svg viewBox="0 0 8 14"><circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/><circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/></svg>'};
+const tr=`<button class="tb">${G.back}</button><button class="pb">${G.pause}</button><button class="tb">${G.fwd}</button>`;
+const sc=(n=1,of=4)=>`<span class="sc">${Array.from({length:of},(_,i)=>`<i class="${i<n?'d':i===n?'n':''}"></i>`).join('')}</span>`;
+const tail=`<span class="tm"><b>0:06</b> / 0:19</span><button class="spd">1.25×</button><button class="cx">${I.x}</button>`;
+const vis='<span class="vis"><u style="height:5px"></u><u style="height:10px"></u><u style="height:7px"></u><u style="height:12px"></u></span>';
+const stripP=`<div class="hstrip ply"><span class="P">${tr}<span class="ttl"><b>Reading aloud</b> · 2 of 4</span>${sc()}${tail}</span></div>`;
+const footP=`<div class="tfoot ply"><span class="P">${tr}${sc()}${tail}</span></div>`;
+const capsule=(cls,style)=>`<div class="mp ${cls}" style="${style}"><span class="grip">${G.grip}</span><span class="P">${tr}${sc()}${tail}</span></div>`;
+const card=(style)=>`<div class="mc" style="${style}"><span class="grip"></span><div class="r1 P">${vis}<span class="ttl"><b>Reading aloud</b> · sentence 2 of 4</span><button class="spd">1.25×</button><button class="cx">${I.x}</button></div><div class="P">${tr}${sc()}<span class="tm"><b>0:06</b> / 0:19</span></div></div>`;
+
+const cacheS=`<div class="hstrip cache" style="--left:55%"><span class="t">${I.cold.replace('<svg','<svg class="ci"')}<b>Cache cools in 6m</b><span> · send now to keep it warm</span></span><button class="ib hx">${I.x}</button><span class="drain"></span></div>`;
+const ctxS=`<div class="hstrip"><span class="t"><b>Context 420k</b> · earlier turns start to blur</span><button class="hgo">Hand off</button><button class="hc2">Compact</button><button class="ib hx">${I.x}</button></div>`;
+const rwS=`<div class="hstrip rw"><span class="t" style="display:flex;align-items:center;gap:7px">${I.rw.replace('<svg','<svg class="ci"')}<b>Rewound</b><span> · 3 turns out, 2 files undone</span></span><button class="hc2">Undo</button><button class="ib hx">${I.x}</button></div>`;
+const tab=(n,st='')=>st==='open'?`<span class="swt open"><span class="ca">Close all</span><span class="fold">${I.chd}</span></span>`
+  :`<span class="swt ${st}">${I.stack}${n}${st==='hov'?'<span class="tip2">Show all</span>':''}</span>`;
+const deck=(front,n=2,st='')=>`<div class="deck">${n>2?'<div class="lip l2"></div>':''}<div class="lip"></div><div class="fw">${tab(n,st)}${front}</div></div>`;
+const allDeck=`<div class="deck all"><div class="fw">${tab(3,'open')}${rwS}${ctxS}${cacheS}</div></div>`;
+const frx=(thread,strip='',over='')=>`<div class="frame"><section class="conv" style="position:relative"><div class="scroll"><div class="col">${thread}</div></div><div class="composer">${strip}${box()}</div>${over}</section></div>`;
+const th=T1+me2+answer(-1)+`<div class="tfoot">Worked for 2m 12s · 10:20 AM ${ab(I.spk)}${ab(I.cp)}</div>`;
+const thR=T1+me2+answer(1,-1)+footOn;
+const cap=(t,d,f)=>`<div><div class="cap">${t}</div><p style="margin:0 0 10px;color:var(--faint);font-size:12.5px;min-height:18px">${d}</p>${f}</div>`;
+const put=(id,list)=>document.getElementById(id).innerHTML=list.map(a=>cap(...a)).join('');
+put('deck',[
+ ['Two strips','The tab counts them. Pointing at it says Show all.',frx(th,deck(cacheS,2,'hov'))],
+ ['Show all','Close all, and ⌄ to fold them back.',frx(th,allDeck)],
+]);
+put('pl',[
+ ['A · Strip','In front of the deck, the handoff strip’s tint and shape.',frx(thR,deck(stripP,2))],
+ ['B · Under the answer','Takes the answer’s foot line; the deck is left alone.',frx(T1+me2+answer(1,-1)+footP,deck(cacheS,2))],
+]);
+put('mini',[
+ 
+ ['C · Card','Two rows: what it reads, then the controls. The grip is the bar on top.',frx(thR,deck(cacheS,2),card('bottom:150px;left:50%;transform:translateX(-50%)'))],
+]);
+const row=(pos,hl)=>`<div class="row3" style="${pos}">${['l','c','r'].map(s=>`<span class="${s} ${s===hl?'hl':''}"><i class="gh"></i></span>`).join('')}</div>`;
+put('drag',[
+ ['Dragging, over top right','',frx(thR,deck(cacheS,2),'<div class="scrim"></div>'+row('top:12px','r')+row('bottom:150px','')+card('top:60px;right:56px').replace('class="mc"','class="mc drag"'))],
+ ['Dropped','It stays there, in new sessions too.',frx(thR,deck(cacheS,2),card('top:14px;right:16px'))],
+]);
+const skStrip=`<div class="sk"><div class="ln" style="width:70%"></div><div class="bm"></div><div class="ln" style="width:85%"></div><div class="ln" style="width:55%"></div><div class="sst hi"></div><div class="bx"></div></div>`;
+const skFoot=`<div class="sk"><div class="ln" style="width:70%"></div><div class="bm"></div><div class="ln" style="width:85%"></div><div class="ln" style="width:55%"></div><div class="ft hi"></div><div class="bx"></div></div>`;
+const skMini=`<div class="sk"><div class="fl hi"></div><div class="ln" style="width:70%;margin-top:14px"></div><div class="bm"></div><div class="ln" style="width:85%"></div><div class="ln" style="width:55%"></div><div class="bx"></div></div>`;
+const lc=(on,sk,t,d)=>`<button class="lc ${on?'on':''}">${on?`<span class="ok">${I.chk}</span>`:''}${sk}<b>${t}</b><small>${d}</small></button>`;
+document.getElementById('sets').innerHTML=`<div class="pgh">General</div>
+<div class="srow"><span>Read-aloud voice<small>Kokoro, on this computer.</small></span><button class="sib">${I.play}</button><select class="sval"><option>Bella</option></select></div>
+<div class="srow new stack"><span>Read-aloud player<small>Where the controls show while an answer is read.</small></span>
+<div class="lcards">${lc(true,skStrip,'Strip','Above the message box')}${lc(false,skFoot,'Under the answer','In its foot line')}${lc(false,skMini,'Mini player','Floats; drag it to six spots')}</div></div>
+<div class="srow"><span>Reading speed<small>The player's speed button changes it too.</small></span>${lseg(['1×','1.25×','1.5×','2×'],'1.25×')}</div>`;
+</script></body></html>

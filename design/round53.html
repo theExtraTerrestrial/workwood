@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 53: a deck of docked strips, three player placements</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+  :root{color-scheme:dark}[data-theme=light]{color-scheme:light}
+  :root{--page:#0e0f11;--win:#17181b;--side:#121315;--blk:#26282c;--blk2:#33363b;--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.18);
+    --text:#e9eaec;--dim:#9a9ea6;--faint:#61656d;--note:#5fd4b4;--note-soft:rgba(95,212,180,.12);--warn:#e8b45a;--warn-soft:rgba(232,180,90,.12);--pop:#1f2124}
+  [data-theme=light]{--page:#e6e7ea;--win:#fbfbfc;--side:#f1f2f4;--blk:#e2e4e8;--blk2:#cfd2d8;--line:rgba(0,0,0,.09);--line2:rgba(0,0,0,.2);
+    --text:#1a1c20;--dim:#5d616a;--faint:#9ea2aa;--note:#13916f;--note-soft:rgba(19,145,111,.1);--warn:#b07a12;--warn-soft:rgba(176,122,18,.1);--pop:#fff}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--text);font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:10px;padding:24px 0 4px}
+  .top h1{font-size:17px;margin:0;flex:1}
+  .tbtn{padding:4px 10px;border-radius:8px;background:var(--blk);color:var(--dim);font-size:12px}
+  .intro{color:var(--dim);max-width:760px;margin:4px 0 0}.intro b{color:var(--text)}
+  h2{font-size:15px;margin:48px 0 2px}
+  .why{color:var(--dim);margin:0 0 14px;max-width:760px}.why b{color:var(--text);font-weight:600}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px}
+  .opt h3{font-size:13px;margin:0 0 2px;display:flex;align-items:center;gap:8px}
+  .opt h3 em{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--note);background:var(--note-soft);padding:1px 6px;border-radius:5px}
+  .opt p{margin:0 0 8px;color:var(--dim);font-size:12px;min-height:36px}
+
+  /* a window, low-fi */
+  .win{height:300px;border:1px solid var(--line2);border-radius:10px;background:var(--win);display:flex;position:relative;overflow:hidden}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+  .mh{height:30px;flex:none;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 12px;gap:8px}
+  .mh::before{content:"";height:7px;width:110px;border-radius:4px;background:var(--blk2)}
+  .th{flex:1;padding:12px 18px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+  .b{height:7px;border-radius:4px;background:var(--blk);margin:6px 0}
+  .me{height:22px;width:42%;margin:4px 0 10px auto;border-radius:10px;background:var(--blk)}
+  .cmp{padding:0 18px 12px;flex:none;position:relative}
+  .box{height:40px;border-radius:12px;border:1px solid var(--line2);background:var(--win);position:relative;z-index:2}
+  /* strips: tucked under the box's top edge */
+  .st{height:30px;margin:0 10px -10px;padding:0 10px 10px;border:1px solid var(--line2);border-bottom:0;border-radius:9px 9px 0 0;display:flex;align-items:center;gap:7px;font-size:11px;color:var(--dim);position:relative;background:var(--blk)}
+  .st b{color:var(--text);font-weight:600}.st>*{white-space:nowrap}.st>span:not(.pill):not(.chip):not(.dot):not(.g){overflow:hidden;text-overflow:ellipsis;min-width:0}.st .g{flex:1}
+  .st.cache{background:var(--blk)}
+  .st.ctx{background:color-mix(in srgb,var(--note) 10%,var(--blk))}
+  .st.read{background:color-mix(in srgb,var(--note) 16%,var(--blk))}
+  .pill{height:16px;padding:0 7px;border-radius:5px;background:var(--blk2);font-size:10px;display:inline-flex;align-items:center;color:var(--text);white-space:nowrap}
+  .pill.go{background:var(--note);color:#0b1714;font-weight:700}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:none}.dot.n{background:var(--note)}
+  /* A: a deck: the strip behind shows only its lip */
+  .lip{height:17px;margin:0 22px -4px;padding-bottom:3px;border:1px solid var(--line2);border-bottom:0;border-radius:8px 8px 0 0;background:var(--blk);position:relative;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--dim)}
+  .lip.two{margin:0 34px -4px;height:10px}
+  /* C: chips of the others */
+  .chip{display:inline-flex;align-items:center;gap:4px;height:16px;padding:0 6px;border-radius:5px;box-shadow:inset 0 0 0 1px var(--line2);font-size:10px;color:var(--dim);white-space:nowrap}
+  /* mini player */
+  .mp{position:absolute;display:flex;align-items:center;gap:5px;height:28px;padding:0 6px 0 4px;border-radius:14px;background:var(--pop);box-shadow:0 0 0 1px var(--line2),0 6px 18px rgba(0,0,0,.3);font-size:10.5px;z-index:5;white-space:nowrap}
+  .mp .grip{width:8px;height:14px;background:radial-gradient(circle,var(--faint) 1px,transparent 1.5px) 0 0/4px 4px;opacity:.9;cursor:grab}
+  .mp .pp{width:20px;height:20px;border-radius:50%;background:var(--note);flex:none;position:relative}
+  .mp .pp::before,.mp .pp::after{content:"";position:absolute;top:6px;width:2.5px;height:8px;background:#0b1714;border-radius:1px}.mp .pp::before{left:6.5px}.mp .pp::after{left:11px}
+  .mp .sk{width:14px;height:14px;border-radius:4px;background:var(--blk2);flex:none}
+  .mp .bar{width:60px;height:3px;border-radius:2px;background:var(--blk2);position:relative}.mp .bar::after{content:"";position:absolute;left:0;top:0;bottom:0;width:35%;background:var(--note);border-radius:2px}
+  .mp .t{color:var(--dim)}
+  .spot{position:absolute;border:1.5px dashed var(--line2);border-radius:14px;height:28px;width:150px;z-index:1;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:var(--faint)}
+  .spot.hl{border-color:var(--note);background:var(--note-soft);color:var(--note)}
+  .lit{background:var(--note-soft);box-shadow:0 0 0 1px color-mix(in srgb,var(--note) 40%,transparent)}
+  /* preview page */
+  .pv{width:56%;flex:none;border-left:1px solid var(--line);display:flex;flex-direction:column}
+  .pv .ph{height:30px;flex:none;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 10px;gap:6px;font-size:10.5px;color:var(--dim)}
+  .pv .ph .g{flex:1}
+  .ic{width:16px;height:16px;border-radius:5px;background:var(--blk2);flex:none;display:inline-block}
+  .ic.spk{background:var(--note-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--note) 50%,transparent);position:relative}
+  .ic.spk::after{content:"";position:absolute;left:5px;top:4px;border:4px solid transparent;border-left:6px solid var(--note);border-right:0}
+  .pg{flex:1;margin:8px;border-radius:7px;background:var(--side);padding:10px 12px;overflow:hidden;font-size:10.5px}
+  .sec{border-radius:6px;padding:5px 6px;margin:0 -6px 6px;position:relative}
+  .hd{display:flex;align-items:center;gap:6px;font-weight:600;color:var(--text);font-size:10.5px;margin-bottom:4px}
+  .frm{display:flex;gap:6px}.frm i{flex:1;height:54px;border-radius:5px;border:1px solid var(--line2);background:var(--blk)}
+  .tx{height:5px;border-radius:3px;background:var(--blk2);margin:4px 0}
+  .tag{font-size:9px;color:var(--faint);margin-left:auto;font-weight:500}
+  .sec.r{background:var(--note-soft)}
+  .ok{color:var(--note)}.no{color:var(--faint)}
+
+  .rules{max-width:760px;color:var(--dim);font-size:12.5px;margin:14px 0 0;padding-left:18px}.rules li{margin:4px 0}.rules b{color:var(--text);font-weight:600}
+  .q{border-top:1px solid var(--line);margin-top:48px;padding-top:16px}
+  .q h2{margin:0 0 6px}.q ol{margin:0;padding-left:18px;color:var(--dim)}.q li{margin:5px 0}.q b{color:var(--text)}
+
+  .st.read .pill.go{font-weight:700}
+  /* deck lips behind the front strip */
+  .lip{height:9px;margin:0 22px -1px;padding:0}.lip.two{margin:0 34px -1px;height:8px}
+  /* switcher, off the strip */
+  .side{position:absolute;right:28px;top:-22px;height:20px;padding:0 7px;border-radius:7px 7px 0 0;border:1px solid var(--line2);border-bottom:0;background:var(--blk);font-size:10px;color:var(--dim);display:flex;align-items:center;gap:4px;z-index:1}
+  .marks{position:absolute;left:10px;bottom:8px;display:flex;gap:6px;align-items:center;z-index:3}
+  .marks i{width:11px;height:11px;border-radius:3px;background:var(--blk2)}
+  .stk{display:inline-flex;align-items:center;gap:3px;height:16px;padding:0 6px;border-radius:5px;background:var(--note-soft);color:var(--note);font-size:10px;font-weight:600}
+  .stk::before{content:"";width:9px;height:7px;border-top:1.5px solid currentColor;border-bottom:1.5px solid currentColor;box-shadow:inset 0 1.5px 0 -0px transparent}
+  /* show all: a stack of docked strips */
+  .all .st{margin-bottom:-1px;border-radius:9px 9px 0 0}
+  .all .st:not(:last-child){padding-bottom:0;margin-bottom:0;border-radius:9px 9px 0 0;height:26px;margin-left:10px;margin-right:10px}
+  .allh{display:flex;align-items:center;font-size:10px;color:var(--faint);padding:0 14px 4px}.allh .g{flex:1}
+  /* B: player under the answer */
+  .foot{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--dim);margin:2px 0 8px;white-space:nowrap}
+  .foot .pp{width:16px;height:16px;border-radius:50%;background:var(--note);flex:none;position:relative}
+  .foot .pp::before,.foot .pp::after{content:"";position:absolute;top:5px;width:2px;height:6px;background:#0b1714}.foot .pp::before{left:5px}.foot .pp::after{left:9px}
+  .foot .bar{width:70px;height:3px;border-radius:2px;background:var(--blk2);position:relative}.foot .bar::after{content:"";position:absolute;left:0;top:0;bottom:0;width:35%;background:var(--note)}
+  .foot .sk{width:12px;height:12px;border-radius:3px;background:var(--blk2)}
+  /* C: drop rows, one segmented pill each */
+  .seg{position:absolute;left:50%;transform:translateX(-50%);width:84%;height:28px;border-radius:14px;display:flex;z-index:1;background:var(--blk);box-shadow:inset 0 0 0 1px var(--line2);overflow:hidden}
+  .seg span{flex:1;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:var(--faint)}
+  .seg span+span{border-left:1px solid var(--line2)}
+  .seg span.hl{background:var(--note-soft);color:var(--note);box-shadow:inset 0 0 0 1.5px var(--note);border-radius:14px}
+</style></head><body><div class="wrap">
+<div class="top"><h1>A deck of docked strips, three player placements</h1><button class="tbtn" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<p class="intro">Wireframes, round 53. Strips stay <b>docked to the box</b>. The ones behind show only a lip. Switching between them is <b>not on the strip</b>.</p>
+
+<h2>1 · Where the switcher lives</h2>
+<p class="why">Two places for it, off the strip. Either one opens <b>Show all</b>.</p>
+<div class="grid" id="sw"></div>
+
+<h2>2 · Player placement: a setting with three options</h2>
+<p class="why"><b>A</b> is a strip, and it always comes first in the deck. <b>B</b> sits in the answer's foot line. <b>C</b> is the mini player.</p>
+<div class="grid" id="pl"></div>
+
+<h2>3 · Moving the mini player (C)</h2>
+<p class="why">While you drag it, two solid segmented rows show, one at the top and one at the bottom: <b>left · center · right</b>. The segment under it lights up. It starts at bottom center, above the strips.</p>
+<div class="grid" id="drag"></div>
+
+<div class="q"><h2>Questions</h2><ol>
+<li><b>Switcher:</b> a tab beside the strips (1), or a mark in the box's icon row (2)?</li>
+</ol></div>
+</div>
+<script>
+const thread=`<div class="b" style="width:70%"></div><div class="b" style="width:55%"></div><div class="me"></div><div class="b" style="width:80%"></div><div class="b lit" style="width:62%"></div><div class="b" style="width:40%"></div>`;
+const win=(cmp,extra='',th=thread,box='')=>`<div class="win"><div class="main"><div class="mh"></div><div class="th">${th}</div><div class="cmp">${cmp}<div class="box">${box}</div></div>${extra}</div></div>`;
+const cache=(x='')=>`<div class="st cache"><span class="dot"></span><b>Cache cools in 6m</b><span>· send to keep warm</span><span class="g"></span>${x}<span class="pill">✕</span></div>`;
+const ctx=(x='')=>`<div class="st ctx"><span class="dot n"></span><b>Context 420k</b><span>· earlier turns blur</span><span class="g"></span>${x}<span class="pill go">Hand off</span><span class="pill">✕</span></div>`;
+const read=`<div class="st read"><b>Reading</b><span>2 of 14</span><span class="g"></span><span class="pill">‹</span><span class="pill go">Pause</span><span class="pill">›</span><span class="pill">1.25×</span><span class="pill">✕</span></div>`;
+const lips=n=>(n>1?'<div class="lip two"></div>':'')+'<div class="lip"></div>';
+const opt=(id,list)=>document.getElementById(id).innerHTML=list.map(([k,t,d,w])=>`<div class="opt"><h3>${k?k+' · ':''}${t}</h3><p>${d}</p>${w}</div>`).join('');
+const marks=(x='')=>`<div class="marks"><i></i><i></i><i></i>${x}</div>`;
+opt('sw',[
+ ['1','A tab beside the strips','A small tab of its own, docked at the strips\' top right. It shows the count; click it for Show all.',
+  win(`<div style="position:relative">${lips(1)}${ctx()}<div class="side">2 ⌃</div></div>`)],
+ ['2','A mark in the box','A stack mark with the count in the box\'s icon row, next to the paperclip and cache dial.',
+  win(`${lips(1)}${ctx()}`,'',thread,marks('<span class="stk">2</span>'))],
+ ['','Show all','Every strip in full, stacked and docked, newest nearest the box. Click away to fold them back.',
+  win(`<div class="all"><div class="allh">3 notices<span class="g"></span><span class="pill">Close all</span></div>${read}${cache()}${ctx()}</div>`)],
+]);
+const mp=(style)=>`<div class="mp" style="${style}"><span class="grip"></span><span class="sk"></span><span class="pp"></span><span class="sk"></span><span class="bar"></span><span class="t">2/14</span><span class="pill">1.25×</span><span class="pill">✕</span></div>`;
+const footTh=`<div class="b" style="width:70%"></div><div class="me"></div><div class="b" style="width:80%"></div><div class="b lit" style="width:62%"></div><div class="b" style="width:40%"></div><div class="foot"><span class="sk"></span><span class="pp"></span><span class="sk"></span><span class="bar"></span><span>2 of 14</span><span class="pill">1.25×</span><span class="pill">✕</span><span class="g" style="flex:1"></span><span>Copy</span></div>`;
+opt('pl',[
+ ['A','A strip, first in the deck','Reading takes the front. Other strips wait behind it as lips.',
+  win(`${lips(1)}${read}`)],
+ ['B','Under the answer','The controls take over that answer\'s foot line. The strips stay as they are.',
+  win(cache(),'',footTh)],
+ ['C','Mini player','Floats on its own, above the strips by default, and can be moved.',
+  win(`${lips(1)}${ctx()}`,mp('bottom:94px;left:50%;transform:translateX(-50%)'))],
+]);
+const seg=(pos,hl)=>`<div class="seg" style="${pos}">${['left','center','right'].map(s=>`<span class="${s===hl?'hl':''}">${s}</span>`).join('')}</div>`;
+opt('drag',[
+ ['','Dragging','Both rows appear. Here it is over top right.',
+  win(cache(),seg('top:38px','right')+seg('bottom:96px','')+mp('top:62px;right:24px;opacity:.92'))],
+ ['','Dropped top right','It stays there, in new sessions too, until you move it.',
+  win(cache(),mp('top:38px;right:12px'))],
+]);
+</script></body></html>

@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as src from './sources.mjs';
 import { readTranscript, outputFromTranscript, forgetEarly, PICTURE_ROOT, PICTURE_ID, previewKind, fileEntry } from './transcript.mjs';
-import { runs, startTurn, answer, setMode, stop, stopStep, liveOutput, taskOutput, publicRun, listCommands, addToTurn, unqueue, sendNow, contextOf, rewindFilesOf } from './runs.mjs';
+import { runs, startTurn, answer, setMode, stop, stopStep, backgroundStep, liveOutput, taskOutput, publicRun, listCommands, addToTurn, unqueue, sendNow, contextOf, rewindFilesOf } from './runs.mjs';
 import { terms, openTerm, attach, typeInto, resize, closeTerm, closeAll } from './terminals.mjs';
 import { changesFor, changeOf } from './changes.mjs';
 import * as home from './home.mjs';
@@ -738,6 +738,7 @@ async function api(req, res, url) {
   if (parts[0] === 'sessions' && parts[2] === 'answer') { answer(parts[1], b); pushState(); return send(res, 200, { ok: true }); }
   if (parts[0] === 'sessions' && parts[2] === 'unqueue') return send(res, 200, { items: unqueue(parts[1], b.ids) });
   if (parts[0] === 'sessions' && parts[2] === 'now') { try { await sendNow(parts[1], b.id); } catch (e) { return send(res, 409, { error: e.message }); } return send(res, 200, { ok: true }); }
+  if (parts[0] === 'sessions' && parts[2] === 'bg-step') { try { await backgroundStep(parts[1], b.id); } catch (e) { return send(res, 409, { error: e.message }); } return send(res, 200, { ok: true }); }
   if (parts[0] === 'sessions' && parts[2] === 'stop-step') { try { await stopStep(parts[1], b.id); } catch (e) { return send(res, 409, { error: e.message }); } return send(res, 200, { ok: true }); }
   if (parts[0] === 'sessions' && parts[2] === 'stay') { dropAuto(parts[1]); return send(res, 200, { ok: true }); }   // cancel continuing by itself
   if (parts[0] === 'sessions' && parts[2] === 'stop') { await stop(parts[1]); return send(res, 200, { ok: true }); }

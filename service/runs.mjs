@@ -252,7 +252,11 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
             if (m.tool_use_id) { run.tasks.set(m.tool_use_id, m.task_id); sayItems(run.builder.touchStep(m.tool_use_id, st => { st.task = m.task_id; if (m.is_backgrounded) st.bg = true; })); }
             if (m.is_backgrounded || run.bg.has(m.task_id)) { addBg(m.task_id); sayState(); }
           } else if (m.type === 'system' && m.subtype === 'task_updated') {
-            if (m.patch?.is_backgrounded && run.known.has(m.task_id)) { addBg(m.task_id); sayState(); }
+            if (m.patch?.is_backgrounded && run.known.has(m.task_id)) {
+              // moved there while its step ran: the step's end says so, whatever its result's words
+              const tool = run.known.get(m.task_id).tool; if (tool) sayItems(run.builder.touchStep(tool, st => { st.bg = true; }));
+              addBg(m.task_id); sayState();
+            }
           } else if (m.type === 'system' && m.subtype === 'background_tasks_changed') {
             // the whole set of what runs in the background, whenever it changes
             const now = new Set((m.tasks || []).map(t => t.task_id));
@@ -283,7 +287,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
             const f = failedCommand(m); if (f && !run.stopped) run.stopped = f;
             run.builder.closeText(); run.builder.toolsDone();
             sayItems(run.builder.results(m.message?.content, null, { result: m.tool_use_result }));
-            handOver();
+            if (!run.interrupted) handOver();   // a stopped step's end is no step to hand a message to: the turn's end decides
             if (run.status === 'working') { run.activity = 'Thinking'; sayState(); }
           } else if (m.type === 'result') {
             // Resuming a session with work left over from a closed Claude Code, it reports that work first, with a result
@@ -295,9 +299,15 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
             // What the context holds now, as Claude Code counts it: after /compact the last reply's size is no longer it.
             const exact = await Promise.race([run.q.getContextUsage().catch(() => null), sleep(3000).then(() => null)]);
             if (exact?.rawMaxTokens) { learnWindow(exact.model, exact.rawMaxTokens); run.context = { ...run.context, used: exact.totalTokens, window: exact.rawMaxTokens }; }
-            if (m.is_error && !run.stopped) run.stopped = { reason: /limit/i.test(m.result || '') ? 'limit' : 'error', text: m.result || 'The turn ended with an error.' };
+            if (m.is_error && !run.stopped && !run.interrupted) run.stopped = { reason: /limit/i.test(m.result || '') ? 'limit' : 'error', text: m.result || 'The turn ended with an error.' };
             sayItems(run.stopped ? run.builder.flushWork() : run.builder.done(m.duration_ms, new Date().toISOString()));
             for (const u of m.user_message_uuids || []) run.sent.delete(u);
+            // Stopped, with a message Claude Code is still to answer (sent with "Send now", or one it had already taken):
+            // the same Claude Code goes on with it, and so does the conversation. Left alone, it would answer unseen.
+            if (run.interrupted && !run.stopped && ((run.sendNow && run.held.length) || run.sent.size || inbox.length || m.queued_turn_count > 0)) {
+              sayItems([run.builder.push({ kind: 'note', text: 'Interrupted' })]);
+              run.interrupted = false; run.sendNow = false;
+            }
             // What you wrote meanwhile and the agent has not read yet runs as a turn of its own, straight away.
             const given = run.stopped || run.interrupted ? 0 : handOver();
             // The queue count leaves out a message Claude Code has already taken off its queue to run next (as it has after
@@ -316,6 +326,8 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
         if (!run.sessionId) reject(new Error(run.stopped?.text || e.message));
       } finally {
         endTurn(); clearInterval(run.timer); await readNotes().catch(() => {});
+        // Nothing reads what Claude Code says from here on, so it must not go on working: it is closed, with what it still ran.
+        try { run.q?.close(); } catch {}
         run.pending = null; run.q = null; run.endedAt = Date.now(); run.lingering = false; run.bg.clear();
         // Only a limit or a lost sign-in holds the session for you to act on; any other error ends the turn, with a note saying what went wrong.
         run.status = run.stopped && run.stopped.reason !== 'error' ? 'stopped' : 'idle';
@@ -428,12 +440,18 @@ export function unqueue(sessionId, ids) {
   return out.map(h => ({ id: h.id, text: h.text, attachments: h.attachments || [] }));
 }
 
-/** Sends a queued message right away: the step the agent is on is cut short and the message starts the next turn. */
+/** Sends a queued message right away: what the agent waits on is moved to the background, or else cut short. */
 export async function sendNow(sessionId, id) {
   const run = runs.get(sessionId), i = run?.held?.findIndex(h => h.id === id) ?? -1;
   if (i < 0) throw new Error('That message is no longer waiting.');
   if (!run.q) throw new Error('This session is not working right now.');
   run.held.unshift(...run.held.splice(i, 1));
+  // A command or agent it is waiting on goes on in the background, as Ctrl+B does in Claude Code: its step returns at
+  // once, and the message goes to the agent then. Only when nothing could be moved is the step cut short.
+  const waited = run.pending ? [] : [...run.tasks].filter(([, task]) => !run.bg.has(task)).map(([tool]) => tool);
+  let moved = false;
+  for (const tool of waited) moved = await run.q.backgroundTasks(tool).catch(() => false) || moved;
+  if (moved) { run.notify?.(); return; }
   run.sendNow = true; run.notify?.();
   await stop(sessionId);
 }
@@ -480,6 +498,13 @@ export async function stopStep(sessionId, toolUseId) {
   const run = runs.get(sessionId), task = run?.tasks?.get(toolUseId) || (run?.bg?.has(toolUseId) ? toolUseId : null);
   if (!run?.q || !task) throw new Error('That command is no longer running.');
   await run.q.stopTask(task);
+}
+
+/** Moves one command or agent the turn waits on to the background: its step returns at once and the agent carries on. */
+export async function backgroundStep(sessionId, toolUseId) {
+  const run = runs.get(sessionId), task = run?.tasks?.get(toolUseId);
+  if (!run?.q || !task || run.bg.has(task)) throw new Error('That step is no longer waited on.');
+  if (!await run.q.backgroundTasks(toolUseId)) throw new Error('That step is no longer waited on.');
 }
 
 /** The end of what a background task has printed so far (its output file), up to `max` bytes. */

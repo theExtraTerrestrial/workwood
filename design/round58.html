@@ -1,0 +1,75 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 58 — Move a running step to the background</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<!-- the app's own stylesheet: the thread, steps and message box below are drawn by it -->
+<link rel="stylesheet" href="../ui/app.css">
+<style>
+html,body{height:auto}
+body{overflow:auto;background:var(--bg);padding:36px 24px 80px}
+.top{max-width:1320px;margin:0 auto 8px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top>span{color:var(--faint);font-size:12.5px}
+.tg{margin-left:auto;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:8px;box-shadow:0 0 0 1px var(--line2)}
+.lede{max-width:1320px;margin:0 auto 28px;color:var(--faint);font-size:12.5px}.lede b{color:var(--dim);font-weight:650}
+.two{max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:24px}
+.two h2{font-size:14px;margin:0 0 2px;font-weight:700}
+.two p{margin:0 0 12px;color:var(--faint);font-size:12.5px;min-height:18px}
+
+.frame{background:var(--bg);border-radius:14px;box-shadow:0 0 0 1px var(--line2);height:440px;display:flex;overflow:hidden;position:relative}
+.frame .conv{height:100%;flex:1;display:flex;flex-direction:column}
+.frame .scroll{flex:1;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:20px 30px 4px}
+.frame .col{width:100%}
+.frame .composer{padding:8px 22px 12px;position:relative}
+
+/* the new button sits before Stop; the one being pointed at shows its note */
+.stx.hov{background:var(--surface2)}
+.stx .ks{color:var(--faint);font-weight:600;margin-left:2px}
+.ntip{position:absolute;bottom:calc(100% + 7px);right:0;white-space:nowrap;font-size:11.5px;padding:6px 9px;border-radius:8px;background:var(--surface2);box-shadow:0 0 0 1px var(--line2),0 8px 24px rgba(0,0,0,.35);color:var(--text);font-weight:600;z-index:3;text-align:left}
+.ntip small{display:block;color:var(--faint);font-weight:500;margin-top:2px}
+.sth{position:relative}.frame .scroll,.frame .col,.frame .steps,.frame .acts,.frame .step,.frame .sth{overflow:visible}
+/* the moment it goes: the tag slides in where the buttons were */
+.stt.bg.new{animation:tagin .5s ease-out}
+@keyframes tagin{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:none}}
+
+.uh{max-width:1320px;margin:28px auto 0;color:var(--faint);font-size:12.5px}
+.uh summary{cursor:pointer;color:var(--dim);font-weight:650}
+.uh ul{margin:8px 0 0;padding-left:18px;line-height:1.6}
+.oq{max-width:1320px;margin:22px auto 0;font-size:12.5px;color:var(--dim)}
+.oq h3{font-size:13px;margin:0 0 6px;color:var(--text)}.oq ol{margin:0;padding-left:18px;line-height:1.7}
+</style></head><body>
+<div class="top"><h1>Move a running step to the background</h1><span>round 58 · built</span><button class="tg" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<div class="lede">A command or agent the turn is waiting on gets <b>Background</b> beside Stop. It keeps running, the agent goes on, and you can write to it at once.</div>
+
+<div class="two">
+  <div><h2>Running</h2><p>Background sits beside Stop, with its label. No shortcut: B already opens the side panel.</p><div id="a"></div></div>
+  <div><h2>A moment later</h2><p>The step says <i>in background</i>, and the strip above the box lists it while it runs. The agent is on its next step.</p><div id="b"></div></div>
+</div>
+
+<details class="uh"><summary>Under the hood</summary><ul>
+<li>The button calls the SDK's <code>backgroundTasks(toolUseId)</code>; the same call "Send now" makes already.</li>
+<li>Only a step Claude Code runs as a task can move (Bash commands and subagents). Others show Stop alone, as now.</li>
+<li>Its step returns at once with "moved to the background"; the tray, its output panel and the finished-notice work as for any background command.</li>
+</ul></details>
+
+
+<script>
+const I={
+  bg:'<svg viewBox="0 0 24 24"><path d="M12 4v10m-4-4 4 4 4-4M5 19h14"/></svg>',
+  stop:'<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/></svg>',
+  chev:'<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>',
+};
+const box=()=>`<div class="box"><textarea rows="1" placeholder="Message the agent…"></textarea><div class="row"><span class="gap"></span><button class="send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></div>`;
+const done=(v,w)=>`<div class="step s-ok"><div class="sth"><b>${v}</b><span class="std">${w}</span><span class="el">0.4s</span></div></div>`;
+const steps=last=>`<div class="me">Center the play button, then run the tests</div>
+<div class="acts open"><button class="act">${I.chev}Edited 1 file · ran 2 commands</button><div class="steps">
+${done('Edited','ui/app.css')}${done('Ran','Capture the player')}${last}</div></div>`;
+const fr=(t,w,tray='')=>`<div class="frame"><section class="conv"><div class="scroll"><div class="col">${t}${w}</div></div><div class="composer">${tray}${box()}</div></section></div>`;
+const tray=`<div class="tray"><button class="tl"><b>1 running</b><span class="tkk shell">Run full test suite</span><span class="gap"></span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></div>`;
+
+const running=`<div class="step s-run"><div class="sth"><b>Running</b><span class="std">Run full test suite</span>
+<button class="stx hov">${I.bg}Background<span class="ntip">Keep it running in the background<small>The agent carries on</small></span></button>
+<button class="stx">${I.stop}Stop</button><span class="el go">1:12</span></div></div>`;
+const moved=`<div class="step s-bg"><div class="sth"><b>Running</b><span class="std">Run full test suite</span><span class="stt bg new">in background</span><span class="el go">1:14</span></div></div>
+${done('Read','ui/app.js')}`;
+document.getElementById('a').innerHTML=fr(steps(running),`<div class="w1"><i class="spin"></i><span class="shim">Running Run full test suite</span></div>`);
+document.getElementById('b').innerHTML=fr(steps(moved),`<div class="w1"><i class="spin"></i><span class="shim">Reading settings</span></div>`,tray);
+</script>
+</body></html>

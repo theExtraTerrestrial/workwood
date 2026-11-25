@@ -1,7 +1,7 @@
 // A stand-in for the `claude` command, used only by the tests. It speaks the same
 // line-by-line JSON protocol the Agent SDK expects and plays a short scripted
 // turn chosen by a keyword in the message (MOCKUP, ASK, PERMISSION, EDIT, PLAN,
-// LIMIT, AUTH, SLOW). It also records which account it was started under.
+// LIMIT, AUTH, SLOW, STEPS, HOLD). It also records which account it was started under.
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -80,7 +80,7 @@ const finish = (result, extra = {}) => {
 };
 let idle = null;
 const stepDone = (id, r = {}) => out({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'ok', ...r }] }, parent_tool_use_id: null, session_id: sessionId, uuid: randomUUID() });
-let stopTask = null, bgAlive = false;
+let stopTask = null, bgAlive = false, waitedOn = null, onInterrupt = null;   // a step that can be moved to the background; a turn that outlives an interrupt
 const sys = (subtype, o = {}) => out({ type: 'system', subtype, ...o, session_id: sessionId, uuid: randomUUID() });
 // a turn Claude Code starts by itself when background work moves on: the note it saves for the agent, then a reply
 const notice = (inner, reply) => {
@@ -148,12 +148,47 @@ async function turn(prompt, said = prompt, uuid) {
     await wait(1200);
     return finish('ok');
   }
-  if (/\bSTEPS\b/.test(prompt)) {      // one slow step: what you write meanwhile waits for its end
+  if (/\bSTEPS\b/.test(prompt)) {      // one slow step: what you write meanwhile waits for its end, unless the step is moved to the background
     record({ type: 'user', uuid: turnUuid || randomUUID(), message: { role: 'user', content: said } });
     say([{ type: 'tool_use', id: 'toolu_slow', name: 'Bash', input: { command: 'make slowly', description: 'Build slowly' } }]);
-    await new Promise(r => setTimeout(r, 4000)); stepDone('toolu_slow');
-    text('Steps done.');
-    return finish('ok');
+    sys('task_started', { task_id: 'task_slow', tool_use_id: 'toolu_slow', description: 'Build slowly', task_type: 'local_bash' });
+    const moved = await new Promise(r => { const t = setTimeout(() => { waitedOn = null; r(false); }, 4000); waitedOn = { tool: 'toolu_slow', move: () => { clearTimeout(t); waitedOn = null; r(true); } }; });
+    if (!moved) {
+      stepDone('toolu_slow'); sys('task_notification', { task_id: 'task_slow', tool_use_id: 'toolu_slow', status: 'completed', output_file: '', summary: 'Build slowly' });
+      text('Steps done.');
+      return finish('ok');
+    }
+    // in the background: the step returns at once, the turn goes on with what you wrote, and the build ends a moment later
+    bgAlive = true;
+    sys('task_updated', { task_id: 'task_slow', patch: { is_backgrounded: true } });
+    sys('background_tasks_changed', { tasks: [{ task_id: 'task_slow', task_type: 'local_bash', description: 'Build slowly' }] });
+    result('toolu_slow', 'Command was moved to the background with ID: task_slow. You will be notified when it completes.', { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'task_slow' });
+    // a message sent with it comes right behind; moved by itself, the agent carries on alone
+    const m = inbox.shift() || await Promise.race([new Promise(r => { hear = r; }), new Promise(r => setTimeout(() => { hear = null; r(null); }, 400))]);
+    if (m) {
+      record({ type: 'user', uuid: randomUUID(), message: { role: 'user', content: m.message.content } });
+      text('Echo: ' + flat(m.message.content));
+      finish('ok', { user_message_uuids: [m.uuid] });
+    } else { say([{ type: 'tool_use', id: 'toolu_next', name: 'Read', input: { file_path: path.join(cwd, 'README.md') } }]); stepDone('toolu_next'); text('Carried on while it builds.'); finish('ok'); }
+    setTimeout(() => {
+      bgAlive = false;
+      sys('task_notification', { task_id: 'task_slow', tool_use_id: 'toolu_slow', status: 'completed', output_file: '', summary: 'Background command "Build slowly" completed (exit code 0)' });
+      sys('background_tasks_changed', { tasks: [] });
+    }, 800);
+    return;
+  }
+  if (/\bHOLD\b/.test(prompt)) {       // a long step that is no task: it can only be cut short, and Claude Code stays open for what comes next
+    record({ type: 'user', uuid: turnUuid || randomUUID(), message: { role: 'user', content: said } });
+    say([{ type: 'tool_use', id: 'toolu_hold', name: 'Bash', input: { command: 'make all', description: 'Build it all' } }]);
+    const cut = await new Promise(r => { const t = setTimeout(() => { onInterrupt = null; r(false); }, 4000); onInterrupt = () => { clearTimeout(t); onInterrupt = null; r(true); }; });
+    if (!cut) { stepDone('toolu_hold'); text('Held to the end.'); return finish('ok'); }
+    const rejected = { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_hold', is_error: true, content: "The user doesn't want to proceed with this tool use. The tool use was rejected." }] };
+    out({ type: 'user', message: rejected, parent_tool_use_id: null, session_id: sessionId, uuid: randomUUID() }); record({ type: 'user', uuid: randomUUID(), message: rejected });
+    out({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] }, parent_tool_use_id: null, session_id: sessionId, uuid: randomUUID() });
+    out({ type: 'result', subtype: 'error_during_execution', is_error: true, duration_ms: 500, num_turns: 1, session_id: sessionId, result: '', errors: [], usage: {}, modelUsage: {}, permission_denials: [], uuid: randomUUID(), queued_turn_count: inbox.length });
+    if (inbox.length) { const next = inbox.shift(); setTimeout(() => turn(flat(next.message.content), next.message.content, next.uuid), 0); }
+    else idle = setTimeout(() => process.exit(0), 3000);
+    return;
   }
   if (/\bCOMMANDS\b/.test(prompt)) {   // a command that works, one that fails, then one that runs until you stop it on its own
     record({ type: 'user', uuid: turnUuid || randomUUID(), message: { role: 'user', content: said } });
@@ -410,6 +445,8 @@ readline.createInterface({ input: process.stdin }).on('close', () => setTimeout(
     }
     if (m.request.subtype === 'set_permission_mode') { mode = m.request.mode; log('mode ' + mode); ok(); sys('status', { status: null, permissionMode: mode }); modeChanged?.(); return; }
     if (m.request.subtype === 'stop_task') { ok(); log('stopped task ' + m.request.task_id); const f = stopTask; if (f?.length) f(m.request.task_id); else { stopTask = null; f?.(); } return; }
+    if (m.request.subtype === 'background_tasks') { const w = waitedOn, hit = !!w && (!m.request.tool_use_id || m.request.tool_use_id === w.tool); log('background ' + (m.request.tool_use_id || 'all') + (hit ? '' : ' none')); ok({ backgrounded: hit }); if (hit) w.move(); return; }
+    if (m.request.subtype === 'interrupt' && onInterrupt) { ok(); log('interrupted'); onInterrupt(); return; }
     if (m.request.subtype === 'interrupt') { ok(); log('interrupted'); out({ type: 'result', subtype: 'error_during_execution', is_error: true, duration_ms: 500, num_turns: 1, session_id: sessionId, result: '', usage: {}, modelUsage: {}, uuid: randomUUID() }); return setTimeout(() => process.exit(0), 20); }
     return ok();
   }

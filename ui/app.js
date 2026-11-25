@@ -329,6 +329,7 @@ function stepHtml(x,live,inner){
   const limit=run&&x.limit?`<span class="stl">stops after ${x.limit%60000?sdur(x.limit):x.limit/60000+'m'}</span>`:'';
   let h=`<div class="step s-${cls} ${can&&!body?'shut':''}" data-step="${esc(x.id||'')}"><div class="sth"${can?` data-code="${esc(x.id)}" data-on="${body?1:''}" data-tip="${body?'Hide':'Show'} the command"`:''}><b>${esc(verb)}</b>${file?`<span class="stf">${esc(file)}</span>`:x.what?`<span class="std">${esc(x.what)}</span>`:'<span class="std"></span>'}`
     +tags.map(([c,t])=>`<span class="stt ${c}">${t}</span>`).join('')+limit
+    +(run&&x.task&&!x.bg?`<button class="stx" data-bgstep="${esc(x.id)}" data-tip="Keep it running in the background" data-tip-d="The agent carries on.">${svg('bgdown')}Background</button>`:'')
     +(run&&x.task?`<button class="stx" data-stopstep="${esc(x.id)}" data-tip="Stop this command" data-tip-d="The agent carries on.">${svg('stop')}Stop</button>`:'')+time+'</div>';
   if(inner)return h+'</div>';                     // an agent's own steps: one line each
   if(x.cmd&&body){const n=x.cmd.split('\n').length,clip=n>4&&!V.cmdAll.has(x.id);
@@ -1233,13 +1234,14 @@ $('thread').onclick=e=>{const st=e.target.closest('[data-astep]');if(st){const c
   const fp=e.target.closest('[data-fpath]');if(fp){if(getSelection().toString())return;e.preventDefault();hideTip();const sid=V.sel;
     fpath(fp.dataset.fpath,true).then(f=>{if(!f||V.sel!==sid){if(f===null&&fp.isConnected&&fp.matches(':hover')){tipFor=fp;showTip(fp)}return}
       if(!V.work.some(w=>w.path===f.path))V.work=V.work.concat(f);showWork(f.path)});return}
-  const t=e.target.closest('[data-copy],[data-cmdall],[data-out],[data-stopstep],[data-suball],[data-repall],[data-code]');
+  const t=e.target.closest('[data-copy],[data-cmdall],[data-out],[data-stopstep],[data-bgstep],[data-suball],[data-repall],[data-code]');
   if(t){const d=t.dataset;
     if(d.code){if(getSelection().toString())return;if(d.on){V.codeOpen.delete(d.code);V.codeShut.add(d.code)}else{V.codeOpen.add(d.code);V.codeShut.delete(d.code)}renderThread();return}
     if(d.suball||d.repall){const s=d.suball?V.subAll:V.repAll,k=d.suball||d.repall;s.has(k)?s.delete(k):s.add(k);renderThread();return}
     if(d.copy){const x=stepById(d.copy);if(x?.cmd)navigator.clipboard.writeText(x.cmd).then(()=>{t.classList.add('done');setTimeout(()=>t.classList.remove('done'),1200)}).catch(()=>{})}
     else if(d.cmdall){V.cmdAll.add(d.cmdall);renderThread()}
     else if(d.out)toggleOutput(d.out);
+    else if(d.bgstep){t.disabled=true;api(`sessions/${V.sel}/bg-step`,{id:d.bgstep}).catch(err=>{t.disabled=false;oops(err.message)})}
     else if(d.stopstep){t.disabled=true;api(`sessions/${V.sel}/stop-step`,{id:d.stopstep}).catch(err=>{t.disabled=false;oops(err.message)})}
     return}
   const b=e.target.closest('[data-tools]');if(!b)return;const n=+b.dataset.tools;
@@ -2236,7 +2238,7 @@ function renderQueue(){renderTray();
   if(el.hidden){el.innerHTML='';return}
   el.innerHTML=`<div class="qh"><span>${busy?'Queued: the agent reads '+(q.length>1?'these':'this')+' when its current step ends':'Waiting to be sent'}</span><span class="gap"></span><span class="hint"><kbd>↑</kbd> to edit</span></div>`
     +q.map(m=>`<div class="qm${m.tmp||V.qNow===m.id?' going':''}" data-q="${esc(m.id)}"><span class="qt">${esc(m.text.replace(/\s+/g,' ').trim()||'Attached files')}</span>${m.files?.length?`<span class="qf">${svg('file')}${m.files.length}</span>`:''}`
-      +(m.tmp?'':`<button class="ib" data-qedit data-tip="Take it back to change it" data-i="pencil"></button><button class="qnow" data-qnow data-tip="${busy?'Cut the current step short and send this now':'Send this now'}">Send now</button>`)+'</div>').join('');
+      +(m.tmp?'':`<button class="ib" data-qedit data-tip="Take it back to change it" data-i="pencil"></button><button class="qnow" data-qnow data-tip="${busy?'Send this now: a command it waits on goes on in the background, anything else is cut short':'Send this now'}">Send now</button>`)+'</div>').join('');
   hydrate(el);
 }
 function backToBox(items){

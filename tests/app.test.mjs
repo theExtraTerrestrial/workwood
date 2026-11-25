@@ -712,12 +712,53 @@ test('the queue: a message waits until the step ends; it can be taken back to ch
   assert.deepEqual((await session(id)).run.queued, []);
   assert.deepEqual((await svc.call(`sessions/${id}/unqueue`, { ids: [first] })).body.items, []);   // taken back once only
 
+  const before = readLog(sb).length;
   const now = (await svc.call(`sessions/${id}/send`, { text: 'go faster' })).body.queued;
   assert.equal((await svc.call(`sessions/${id}/now`, { id: now })).status, 200);
   s = await until(async () => { const x = await session(id); return x.run?.status === 'idle' && /Echo: go faster/.test(lastText(x) || '') && x; }, 'the message sent now to be answered');
   assert.deepEqual(s.items.filter(i => i.kind === 'user').map(i => i.text), ['do these STEPS', 'go faster']);
-  assert.ok(!s.items.some(i => i.kind === 'assistant' && /Steps done/.test(i.text)));   // the slow step was cut short
+  assert.ok(!s.items.some(i => i.kind === 'assistant' && /Steps done/.test(i.text)));   // the turn did not wait for the step
+  const log = readLog(sb).slice(before);
+  assert.ok(log.includes('background toolu_slow'));                                  // the step went on in the background,
+  assert.ok(!log.includes('interrupted'));                                           // not cut short
   assert.equal((await svc.call(`sessions/${id}/now`, { id: now })).status, 409);
+});
+
+test('a step moved to the background: 409 once it is no longer waited on', async () => {
+  const id = await newSession('do these STEPS then move one');
+  await until(async () => { const s = await session(id); return s.items.some(i => i.kind === 'tools'); }, 'the slow step to start');
+  await sleep(150);
+  assert.equal((await svc.call(`sessions/${id}/bg-step`, { id: 'toolu_slow' })).status, 200);
+  assert.equal((await svc.call(`sessions/${id}/bg-step`, { id: 'toolu_slow' })).status, 409);   // already there
+  const s = await until(async () => { const x = await session(id); return /Carried on/.test(lastText(x) || '') && x; }, 'the agent to carry on');
+  const st = s.items.filter(i => i.kind === 'tools').flatMap(i => i.tools).find(t => t.id === 'toolu_slow');
+  assert.equal(st.state, 'bg');
+  await idle(id);
+});
+
+test('Send now on a step that cannot go to the background cuts it short, and the same Claude Code answers in view', async () => {
+  const id = await newSession('do a HOLD step');
+  await until(async () => { const s = await session(id); return s.run?.status === 'working' && s.items.some(i => i.kind === 'tools'); }, 'the long step to start');
+  const before = readLog(sb).length;
+  // the answer must come over the event stream, as the window gets it, not only be read back from the file later
+  const live = new AbortController(), heard = fetch(new URL('/api/events?token=test-token', svc.address), { signal: live.signal }).then(async r => {
+    const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '';
+    for (;;) { const { value, done } = await reader.read(); if (done) return false; buf += dec.decode(value, { stream: true });
+      if (buf.split('\n\n').some(f => f.startsWith('event: item') && f.includes(id) && f.includes('Echo: never mind that'))) return true; }
+  }).catch(() => false);
+  await sleep(100);
+  const now = (await svc.call(`sessions/${id}/send`, { text: 'never mind that' })).body.queued;
+  assert.equal((await svc.call(`sessions/${id}/now`, { id: now })).status, 200);
+  assert.equal(await Promise.race([heard, sleep(6000).then(() => 'silence')]), true, 'the answer to reach the event stream');
+  live.abort();
+  const s = await until(async () => { const x = await session(id); return /Echo: never mind that/.test(lastText(x) || '') && x; }, 'the message sent now to be answered');
+  const order = s.items.filter(i => i.kind === 'user' || (i.kind === 'note' && i.text === 'Interrupted')).map(i => i.text);
+  assert.deepEqual(order, ['do a HOLD step', 'Interrupted', 'never mind that']);
+  const log = readLog(sb).slice(before);
+  assert.ok(log.includes('background toolu_hold none') || !log.some(l => l.startsWith('background')));
+  assert.ok(log.includes('interrupted'));
+  assert.equal(log.filter(l => l.startsWith('session ')).length, 0);                  // no second Claude Code for the session
+  await idle(id);
 });
 
 test('previews: files a command made are offered too, live and when read back; a file it only named is not', async () => {
@@ -1636,7 +1677,8 @@ ui('window: while a turn runs its steps are open: each command in its own block,
   assert.notEqual(await page.locator('.step.s-run .el.live').innerText(), t1, 'the clock counts');
   await page.click('.step.s-bad [data-out]');
   await page.waitForFunction(() => /^line 1\n/.test(document.querySelector('.step.s-bad .cbo pre')?.innerText || ''));
-  await page.click('.step.s-run .stx');
+  assert.equal(await page.locator('.step.s-run [data-bgstep]').innerText(), 'Background');   // beside Stop, with its label
+  await page.click('.step.s-run [data-stopstep]');
   await page.waitForSelector('.ai:has-text("Commands done.")');
   await page.waitForFunction(() => !document.querySelector('.steps'));               // closed again once the turn is over
   await page.click('.acts .act');
@@ -2371,6 +2413,29 @@ ui('window: a message written while the agent works waits on top of the box; ↑
   await page.waitForSelector('.ai:has-text("Echo: second thought, better")');
   await page.waitForSelector('#queue', { state: 'hidden' });
   assert.equal(await page.locator('.ai:has-text("Steps done")').count(), 0);
+});
+
+ui('window: Background on a running step: it goes to the tray and the agent carries on', async () => {
+  await startNew('do these STEPS in the background');
+  await page.waitForSelector('.w1:has-text("Build slowly")');
+  const step = page.locator('.step:has-text("Build slowly")');
+  await step.locator('[data-bgstep]').click();
+  await page.waitForSelector('#tray .tl:has-text("Build slowly")');                 // the strip of what runs in the background
+  await step.locator('.stt.bg').waitFor();
+  assert.equal(await step.locator('[data-bgstep]').count(), 0);
+  await page.waitForSelector('.ai:has-text("Carried on while it builds.")');
+  await page.waitForSelector('#tray', { state: 'hidden' });                           // and it leaves when the build ends
+  assert.equal(await page.locator('.ai:has-text("Steps done")').count(), 0);
+});
+
+ui('window: Send now on a step it cannot move to the background: the answer arrives without a reload', async () => {
+  await startNew('do a HOLD step in the window');
+  await page.waitForSelector('.w1:has-text("Build it all")');
+  await page.fill('#input', 'answer this instead'); await page.press('#input', 'Enter');
+  await page.click('#queue .qm:has-text("answer this instead") [data-qnow]');
+  await page.waitForSelector('.sys:has-text("Interrupted")');
+  await page.waitForSelector('.ai:has-text("Echo: answer this instead")');
+  await page.waitForSelector('#send[data-tip="Send"]');
 });
 
 ui('window: a long conversation has a rail of turns and an outline you can search and jump from', async () => {

@@ -121,6 +121,20 @@ test('the session list names a session as Claude Code titled it, and resumes it 
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('a session whose worktree was removed stays listed, in the checkout the worktree was made from', async () => {
+  const main = sb.projects.beta, wt = path.join(main, '.claude', 'worktrees', 'merged-away');
+  const id = '5b1c2d3e-4f50-4a61-8b72-c83d94e0f1a2', dir = path.join(sb.home, '.claude', 'projects', wt.replace(/[^A-Za-z0-9]/g, '-'));
+  fs.mkdirSync(dir, { recursive: true });   // the worktree's folder itself is not there
+  fs.writeFileSync(path.join(dir, id + '.jsonl'), [
+    { type: 'user', cwd: wt, sessionId: id, message: { role: 'user', content: 'work in the worktree' } },
+    { type: 'ai-title', aiTitle: 'Merged and cleaned up', sessionId: id },
+  ].map(l => JSON.stringify(l)).join('\n') + '\n');
+  try {
+    const s = await until(async () => (await state()).sessions.find(x => x.id === id), 'the session of the removed worktree', 40000);
+    assert.equal(s.cwd, main); assert.equal(s.project, path.basename(main));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('linking a profile shares everything but what makes it its own account, and keeps what was in the way', async () => {
   const P = path.join(sb.home, '.claude-profiles', 'full'), H = path.join(sb.home, '.claude');
   fs.mkdirSync(path.join(P, 'plans'), { recursive: true }); fs.writeFileSync(path.join(P, 'plans', 'own-plan.md'), 'mine');   // real data where a link goes

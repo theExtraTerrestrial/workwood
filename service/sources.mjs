@@ -241,7 +241,12 @@ async function scanSessions() {
   for (const f of files.slice(0, 400)) {
     const h = await headOf(path.join(PROJECTS_ROOT, f.dirkey, f.id + '.jsonl'), f.mtimeMs, f.dirkey);
     if (!h.cwd || h.side) continue;
-    out.push({ id: f.id, dirkey: f.dirkey, cwd: h.cwd, branch: h.branch, label: h.label, mts: Math.floor(f.mtimeMs / 1000), exists: fss.existsSync(h.cwd) });
+    let cwd = h.cwd, exists = fss.existsSync(cwd);
+    // A worktree is removed once its work is merged; its sessions stay, in the checkout it was made from, where
+    // Claude Code still finds them to resume.
+    const wt = !exists && /^(.*?)[\\/]\.claude[\\/]worktrees[\\/][^\\/]+(?:[\\/].*)?$/.exec(cwd);
+    if (wt && fss.existsSync(wt[1])) { cwd = wt[1]; exists = true; }
+    out.push({ id: f.id, dirkey: f.dirkey, cwd, branch: h.branch, label: h.label, mts: Math.floor(f.mtimeMs / 1000), exists });
   }
   return out;
 }

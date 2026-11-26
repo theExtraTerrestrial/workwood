@@ -27,7 +27,9 @@ On macOS and Linux the app runs straight from this folder: keep the folder where
 it is. Workwood checks GitHub for updates when it starts and every three hours
 (or under Settings, About), and offers a restart that pulls them, runs
 `npm install` when the dependencies changed, and starts again. In the Windows
-window (with WSL) the restart also makes the Windows copy again. It will not
+window (with WSL) the restart also makes the Windows copy again, and when this
+folder changes some other way (a `git pull` by hand, a merge) the window offers
+the same restart, so its copy never stays behind. It will not
 update over uncommitted changes in this folder, except a `package-lock.json`
 that only npm rewrote. The Windows window from before
 this feature has no restart: run `npm run install-app` once more after pulling. `npm run install-app -- --remove`
@@ -68,8 +70,8 @@ double-click "Install Workwood.cmd"; nothing else needs installing except
 Claude Code for Windows. Only the Windows side exists there. "Remove
 Workwood.cmd" takes it away again.
 
-Run `npm run shortcut` again after pulling changes (the Windows side is a copy);
-`npm run shortcut -- --remove` takes it all away. `npm start` still opens the
+The Windows side is a copy; when this folder changes, the window offers a
+restart that makes it again. `npm run shortcut -- --remove` takes it all away. `npm start` still opens the
 Linux window through WSLg.
 
 When started from a terminal: keep the terminal open while you use the app; closing it or pressing Ctrl+C quits.
@@ -277,6 +279,19 @@ On a fresh WSL install the Electron window needs GTK once:
     `~/.claude` is signed in to cannot be removed (switch with Claudius first),
     and a profile cannot be renamed or removed while a session is using it.
 - Dark and light theme (gear, bottom left).
+- Your phone, on your home Wi-Fi (Settings, Phone; off until you turn it on). Scan the code with the
+  phone's camera; a setup page walks it through trusting this PC (Workwood makes its own certificate
+  authority, limited to home-network addresses) and opening the app. Each phone gets its own key, which
+  Settings can revoke. The phone has Home, Sessions, New and its own Settings: it answers cards, starts
+  sessions, opens previews, dictates, and switches profile, model, effort and permissions from one pill
+  in the message box. Notifications (a session needs you, a turn ends, work stops, a limit clears, and
+  three more that start off) go through the phone's push service, encrypted end to end. No account and
+  no outside server; it works while this PC is on and Workwood is open. Inside WSL, the Windows window
+  opens the port on Windows (Windows asks once) and passes connections through to the service. Set up
+  once: pairing, certificates and notifications outlast restarts. Where the phone finds the PC by its
+  name (DESKTOP-AX.local), the app opens there and keeps working when the router gives the PC another
+  address; a phone that knows only the old address is marked in Settings, and Pair again makes a code
+  that pairs it again as itself, keeping its name and notifications.
 
 Not yet tried on a real machine: the macOS app, and installing on a Windows PC without WSL from this folder.
 
@@ -302,7 +317,10 @@ The last test checks that nothing leaked out of the sandbox.
   under the shared lock (`oauth.mjs`), asks `claude agents --json` what is
   running, and runs turns with the Claude
   Agent SDK. It listens on this machine only, and every request needs the random
-  token made at start-up.
+  token made at start-up. With the phone turned on it also listens on one more port
+  (`phone.mjs`): plain HTTP gives only the setup page and the certificate, HTTPS
+  is the app for paired phones. Previews reach the phone from that address with
+  a sandbox header, so a page cannot read the phone's key.
 - Previews are served from a second local address with its own random key, so a
   page an agent made is a different site from the app and cannot reach it. It
   can load files from the session's project folder and from next to any file the

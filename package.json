@@ -12,7 +12,7 @@
     "install-app": "node shell/install-app.mjs",
     "shortcut": "node shell/windows-shortcut.mjs",
     "service": "node service/server.mjs",
-    "test": "node --test tests/app.test.mjs",
+    "test": "node --test tests/app.test.mjs tests/phone.test.mjs tests/copy.test.mjs",
     "package": "node shell/windows-package.mjs",
     "site": "node site/build.mjs"
   },

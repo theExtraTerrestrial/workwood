@@ -31,7 +31,7 @@ async function sureToQuit(win, more = 0) {
 function startWsl() {
   return new Promise((resolve, reject) => {
     // A login shell, so node is found the same way as in your terminal. The service ends when its input closes.
-    const inside = `cd '${cfg.dir.replace(/'/g, `'\\''`)}' && WORKWOOD_PARENT=1 exec node service/server.mjs 2>> ~/.cache/workwood/workwood.log`;
+    const inside = `cd '${cfg.dir.replace(/'/g, `'\\''`)}' && WORKWOOD_PARENT=1${/^[0-9a-f]+$/.test(cfg.stamp || '') ? ' WORKWOOD_COPY_STAMP=' + cfg.stamp : ''} exec node service/server.mjs 2>> ~/.cache/workwood/workwood.log`;
     wsl = spawn('wsl.exe', ['-d', cfg.distro, '--', 'bash', '-lic', inside], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
     let out = '';
     const timer = setTimeout(() => reject(new Error('The Workwood service in WSL did not start within a minute.')), 60000);
@@ -116,6 +116,35 @@ async function open() {
     }
     try { win?.webContents.send('env:status', out); } catch {}
   }, 4000);
+  // Workwood on your phone. The service in WSL listens only inside WSL; with its Phone setting on, this window opens the
+  // port on your home network and passes each connection through untouched (the encryption ends in the service).
+  // Windows asks once whether to allow it. It tells the service this PC's addresses and name, which WSL cannot see.
+  const net = require('node:net'), os = require('node:os');
+  let relay = null, relayAt = '', relayErr = null;
+  const lanIps = () => Object.entries(os.networkInterfaces()).filter(([n]) => !/vEthernet|WSL|Hyper-V|VirtualBox|VMware|Loopback|Tailscale|ZeroTier|Docker|Bluetooth/i.test(n))
+    .flatMap(([, l]) => l || []).filter(a => a.family === 'IPv4' && !a.internal).map(a => a.address);
+  const closeRelay = () => { try { relay?.close(); } catch {} relay = null; relayAt = ''; };
+  function openRelay(port, inner) {
+    closeRelay(); relayErr = null; relayAt = port + '>' + inner;
+    const r = relay = net.createServer(c => {
+      const s = net.connect(inner, '127.0.0.1'), end = () => { c.destroy(); s.destroy(); };
+      c.pipe(s).pipe(c); for (const x of [c, s]) { x.on('error', end); x.on('close', end); }
+    });
+    r.on('listening', () => { r.ok = true; });
+    r.on('error', e => { relayErr = e.code === 'EADDRINUSE' ? `Port ${port} is taken by another program on Windows.` : e.message; if (relay === r) { relay = null; relayAt = 'failed'; } });
+    r.listen(port, '0.0.0.0');
+  }
+  setInterval(async () => {
+    if (quitting || !started.wsl) return;
+    try {
+      const u = new URL(await started.wsl);
+      const r = await fetch(`${u.origin}/api/phone/relay`, { method: 'POST', signal: AbortSignal.timeout(3000), headers: { 'x-workwood-token': u.searchParams.get('token'), 'content-type': 'application/json' },
+        body: JSON.stringify({ ips: lanIps(), name: os.hostname(), listening: !!relay?.ok, error: relayErr }) });
+      const want = await r.json();
+      if (want.on && relayAt !== want.port + '>' + want.inner && relayAt !== 'failed') openRelay(want.port, want.inner);
+      if (!want.on && relayAt) { closeRelay(); relayErr = null; }
+    } catch {}
+  }, 3000);
   // Set up from WSL, sessions run there unless you chose Windows before.
   let first = (envs.find(x => x.id === 'wsl') || envs[0])?.id; try { const kept = JSON.parse(fs.readFileSync(remembered, 'utf8')); if (kept.chosen && envs.some(x => x.id === kept.env)) first = kept.env; } catch {}
   if (!first) { dialog.showErrorBox('Workwood could not start', 'Nothing is installed to run sessions with. Run "npm run shortcut" again.'); return app.quit(); }

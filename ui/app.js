@@ -67,10 +67,11 @@ const svg=(n,c='')=>`<svg viewBox="0 0 24 24" class="${c}">${P[n]||''}</svg>`;
 const hydrate=(r=document)=>r.querySelectorAll('[data-i]').forEach(e=>{e.innerHTML=svg(e.dataset.i)});
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const TOKEN=document.body.dataset.token;
+const TOKEN=document.body.dataset.token,PHONE=document.body.dataset.phone==='1';
 async function api(path,body){
   const r=await fetch('/api/'+path,{method:body?'POST':'GET',headers:{'x-workwood-token':TOKEN,'content-type':'application/json'},body:body?JSON.stringify(body):undefined});
   const j=await r.json().catch(()=>({}));
+  if(r.status===401&&j.unpaired&&PHONE)phGone();
   if(!r.ok)throw new Error(j.error||'Something went wrong.');
   return j;
 }
@@ -456,7 +457,7 @@ function thumb(f,url=fileUrl(f)){
 function workCards(it,latest){
   // the ones that get a picture: a video or page before the stills that went into it
   const cards=it.files.filter(f=>latest.get(f.path)===it.n).sort((a,b)=>(RANK[a.kind]??9)-(RANK[b.kind]??9)),old=it.files.filter(f=>latest.get(f.path)!==it.n);
-  const show=cards.slice(0,3),rest=cards.length-show.length;
+  const show=PHONE?cards:cards.slice(0,3),rest=cards.length-show.length;
   return `<div>${show.length?`<div class="hero n${show.length}">${show.map(f=>`<button class="hc" data-open="${esc(f.path)}" data-tip-path="${esc(f.path)}"><span class="ht k-${f.kind}">${thumb(f)}</span><span class="cap"><b>${esc(f.name)}</b><span>${KIND[f.kind]}${folderOf(f)?' · '+esc(folderOf(f)):''}</span></span></button>`).join('')}</div>`:''}${rest>0?`<button class="morework" data-open="${esc(cards[3].path)}">and ${rest} more</button>`:''}${old.length?`<div class="sknote wk">${svg('file')}<span>Worked on ${old.map(f=>`<button data-open="${esc(f.path)}" data-tip-path="${esc(f.path)}">${esc(f.name)}</button>`).join(', ')}</span></div>`:''}</div>`;
 }
 function fitThumbs(){document.querySelectorAll('.ht iframe').forEach(f=>{const w=f.parentNode.clientWidth,h=f.parentNode.clientHeight;if(!w)return;const k=w/1280;f.style.transform=`scale(${k})`;f.style.height=Math.ceil(h/k)+'px'})}
@@ -1501,7 +1502,7 @@ document.addEventListener('keydown',e=>{if(!(e.ctrlKey&&e.shiftKey&&!e.altKey&&!
   e.preventDefault();if(R){if(!R.done)stopVoice();return}startVoice(document.activeElement?.id==='qText'?'qText':'input')});
 
 /* ---------- settings dialog ---------- */
-const STABS=['General','Profiles','Skills','About','Look','Sessions','Speech'],SORDER=[0,5,6,4,-1,1,2,3],LANGS=['english','latvian','russian','german','french','spanish','italian','polish','lithuanian','estonian','finnish','swedish','ukrainian'];
+const STABS=['General','Profiles','Skills','About','Look','Sessions','Speech','Phone'],SORDER=[0,5,6,7,4,-1,1,2,3],LANGS=['english','latvian','russian','german','french','spanish','italian','polish','lithuanian','estonian','finnish','swedish','ukrainian'];
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 let stab=0,about=null,L=null,PE=null,PSel=null,PAdd=false,PD=null; // PSel: the profile open on the Profiles page; PAdd: the add form is showing; PD: its Claude Code defaults {name, d}
  // L: the sign-in terminal on screen {name, term, es, ro}; PE: a profile being renamed or asked about {name, kind}
@@ -1558,6 +1559,7 @@ function renderSettings(){
   else if(stab===6)pg.innerHTML=`<div class="pgh">Speech</div>
     <div class="lgrp">Dictation</div><div class="srow"><span>Language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>${speechRow()}${readRows(pf)}`;
   else if(stab===1)renderProfilePage(pg);
+  else if(stab===7)renderPhonePage(pg);
   else if(stab===4)renderLook(pg);
   else if(stab===2){needSkills();const all=skillList();pg.innerHTML=`<div class="pgh">Skills</div>`+(!all?'<div class="cap2">Loading skills…</div>':V.sk.err?`<div class="cap2">${esc(V.sk.err)}</div>`:all.map(s=>`<div class="srow" data-tip="${esc(s.about)}"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">/${esc(s.name)}</span><span class="sstate">${s.from}</span></div>`).join('')+`<div class="cap2" style="padding:10px 8px">As Claude Code reports them for ${V.isNew?'a new session here':'the open session'}.</div>`)}
   else{pg.innerHTML=`<div class="pgh">About</div>`+(about?`<div class="srow"><span>Workwood</span><span class="sstate">${esc(about.version)}</span></div>
@@ -1566,6 +1568,72 @@ function renderSettings(){
     <div class="srow"><span>Speech model<small>${esc(about.speech.model)}, on ${about.speech.device==='cuda'?'the graphics card':'the processor'}.</small></span><span class="sstate ${about.speech.state==='failed'?'bad':''}">${{idle:'Loads when you dictate',loading:'Loading…',ready:'Ready',failed:'Could not be loaded'}[about.speech.state]}</span></div>
     <div class="srow"><span>Service<small>Node ${esc(about.node)}</small></span><span class="sstate">Running</span></div>`:'<div class="cap2">Loading…</div>');
     if(!about)api('about').then(a=>{about=a;renderSettings()}).catch(()=>{})}
+}
+// A QR code (byte mode, error correction M, versions 1-10) as a grid of booleans, for the pairing code. Null if too long.
+function qrGrid(text){
+  const data=[...new TextEncoder().encode(text)],ECC=[0,10,16,26,18,24,16,18,22,22,26],NB=[0,1,1,1,2,2,4,4,4,5,5];
+  const raw=v=>{let r=(16*v+128)*v+64;if(v>=2){const n=Math.floor(v/7)+2;r-=(25*n-10)*n-55;if(v>=7)r-=36}return r};
+  const dcw=v=>Math.floor(raw(v)/8)-ECC[v]*NB[v];
+  let v=1;while(v<=10&&4+(v<10?8:16)+data.length*8>dcw(v)*8)v++;if(v>10)return null;
+  const bits=[],put=(x,n)=>{for(let i=n-1;i>=0;i--)bits.push(x>>>i&1)};
+  put(4,4);put(data.length,v<10?8:16);for(const b of data)put(b,8);
+  const cap=dcw(v)*8;put(0,Math.min(4,cap-bits.length));put(0,(8-bits.length%8)%8);for(let p=0xEC;bits.length<cap;p^=0xEC^0x11)put(p,8);
+  const cw=[];for(let i=0;i<bits.length;i+=8)cw.push(bits.slice(i,i+8).reduce((a,b)=>a<<1|b,0));
+  const mul=(x,y)=>{let z=0;for(let i=7;i>=0;i--){z=(z<<1)^((z>>>7)*0x11D);z^=((y>>>i)&1)*x}return z};
+  const deg=ECC[v],div=new Array(deg).fill(0);div[deg-1]=1;for(let i=0,r=1;i<deg;i++){for(let j=0;j<deg;j++){div[j]=mul(div[j],r);if(j+1<deg)div[j]^=div[j+1]}r=mul(r,2)}
+  const rem=d=>{const r=new Array(deg).fill(0);for(const b of d){const f=b^r.shift();r.push(0);div.forEach((c,i)=>r[i]^=mul(c,f))}return r};
+  const nb=NB[v],tot=Math.floor(raw(v)/8),sh=nb-tot%nb,sl=Math.floor(tot/nb),blocks=[];
+  for(let i=0,k=0;i<nb;i++){const d=cw.slice(k,k+sl-deg+(i<sh?0:1));k+=d.length;const e=rem(d);if(i<sh)d.push(0);blocks.push(d.concat(e))}
+  const all=[];for(let i=0;i<blocks[0].length;i++)blocks.forEach((b,j)=>{if(i!==sl-deg||j>=sh)all.push(b[i])});
+  const n=v*4+17,M=[...Array(n)].map(()=>new Array(n).fill(false)),F=[...Array(n)].map(()=>new Array(n).fill(false)),set=(x,y,d)=>{M[y][x]=d;F[y][x]=true};
+  for(let i=0;i<n;i++){set(6,i,i%2===0);set(i,6,i%2===0)}
+  for(const [cx,cy] of [[3,3],[n-4,3],[3,n-4]])for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){const d=Math.max(Math.abs(dx),Math.abs(dy)),x=cx+dx,y=cy+dy;if(x>=0&&x<n&&y>=0&&y<n)set(x,y,d!==2&&d!==4)}
+  const AL=[[],[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50]][v],L=AL.length-1;
+  AL.forEach((a,i)=>AL.forEach((b,j)=>{if((!i&&!j)||(!i&&j===L)||(i===L&&!j))return;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)set(a+dx,b+dy,Math.max(Math.abs(dx),Math.abs(dy))!==1)}));
+  const fmt=m=>{let r=m;for(let i=0;i<10;i++)r=(r<<1)^((r>>>9)*0x537);const b=(m<<10|r)^0x5412,g=i=>(b>>>i&1)===1;
+    for(let i=0;i<=5;i++)set(8,i,g(i));set(8,7,g(6));set(8,8,g(7));set(7,8,g(8));for(let i=9;i<15;i++)set(14-i,8,g(i));
+    for(let i=0;i<8;i++)set(n-1-i,8,g(i));for(let i=8;i<15;i++)set(8,n-15+i,g(i));set(8,n-8,true)};
+  fmt(0);
+  if(v>=7){let r=v;for(let i=0;i<12;i++)r=(r<<1)^((r>>>11)*0x1F25);const b=v<<12|r;for(let i=0;i<18;i++){const t=(b>>>i&1)===1,a=n-11+i%3,c=Math.floor(i/3);set(a,c,t);set(c,a,t)}}
+  for(let right=n-1,i=0;right>=1;right-=2){if(right===6)right=5;for(let k=0;k<n;k++)for(let j=0;j<2;j++){const x=right-j,y=((right+1)&2)===0?n-1-k:k;if(!F[y][x]&&i<all.length*8){M[y][x]=(all[i>>>3]>>>(7-(i&7))&1)===1;i++}}}
+  const MASK=[(x,y)=>(x+y)%2===0,(x,y)=>y%2===0,x=>x%3===0,(x,y)=>(x+y)%3===0,(x,y)=>(Math.floor(x/3)+Math.floor(y/2))%2===0,(x,y)=>x*y%2+x*y%3===0,(x,y)=>(x*y%2+x*y%3)%2===0,(x,y)=>((x+y)%2+x*y%3)%2===0];
+  const flip=m=>{for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(!F[y][x]&&MASK[m](x,y))M[y][x]=!M[y][x]};
+  // the mask with the fewest long runs, solid squares and imbalance (the standard's rules 1, 2 and 4)
+  const score=()=>{let s=0,dark=0;for(let a=0;a<n;a++){for(const row of [0,1]){let run=1;for(let b=1;b<n;b++){const p=row?M[a][b-1]:M[b-1][a],q=row?M[a][b]:M[b][a];if(p===q){run++;if(run===5)s+=3;else if(run>5)s++}else run=1}}
+    for(let b=0;b<n;b++){if(M[a][b])dark++;if(a<n-1&&b<n-1&&M[a][b]===M[a][b+1]&&M[a][b]===M[a+1][b]&&M[a][b]===M[a+1][b+1])s+=3}}
+    return s+Math.floor(Math.abs(dark*20-n*n*10)/(n*n))*10};
+  let best=0,low=Infinity;for(let m=0;m<8;m++){flip(m);fmt(m);const s=score();if(s<low){low=s;best=m}flip(m)}
+  flip(best);fmt(best);return M;
+}
+/** The QR code as an SVG, with its quiet zone. */
+const qrSvg=text=>{const M=qrGrid(text);if(!M)return '';const n=M.length;let d='';M.forEach((r,y)=>r.forEach((on,x)=>{if(on)d+=`M${x+4} ${y+4}h1v1h-1z`}));
+  return `<svg viewBox="0 0 ${n+8} ${n+8}" shape-rendering="crispEdges"><rect width="${n+8}" height="${n+8}" style="fill:#fff;stroke:none"/><path d="${d}" style="fill:#111;stroke:none"/></svg>`};
+/* ---------- Phone: Workwood on your phone over your home Wi-Fi (see service/phone.mjs). The page asks the service
+   every few seconds while it shows: a step ticks, a phone pairs, the code renews. ---------- */
+let PH=null,phBusy=false,phRep=null;   // phRep: the code that pairs a phone again, while it shows
+function phonePoll(){if(phBusy)return;phBusy=true;
+  const go=()=>{if($('sdim').hidden||stab!==7){phBusy=false;return}
+    api('phone').then(p=>{PH=p;if(!$('sdim').hidden&&stab===7&&!$('spage').querySelector('.phq:hover'))renderSettings()}).catch(()=>{}).finally(()=>setTimeout(go,2500))};
+  go()}
+function renderPhonePage(pg){
+  phonePoll();
+  const p=PH,head='<div class="pgh">Phone</div>';
+  if(!p){pg.innerHTML=head+'<div class="cap2">Loading…</div>';return}
+  const step=(t,d,wait,bad)=>`<div class="srow phs"><span>${t}<small>${d}</small>${bad?`<small class="bad">${esc(bad)}</small>`:wait?`<small class="phw"><i></i>${wait}</small>`:''}</span></div>`;
+  let body='';
+  if(p.on){
+    if(p.error)body+=step('The phone port could not be opened','Workwood listens on port '+p.port+'.',null,p.error);
+    else if(p.wsl&&!p.relay.fresh)body+=step('Open Workwood from its Windows window','Inside WSL, the Windows window opens the way in for your phone.');
+    else if(p.wsl&&!p.relay.listening)body+=step('Let your Wi-Fi reach this PC','Windows will ask once. Choose <b>Private networks</b> and Allow.','Waiting for Windows…',p.relay.error);
+    else if(!p.url)body+=step('Looking for this PC on your Wi-Fi','Connect this PC to your home network.','Looking…');
+    else body+=`<div class="phq">${qrSvg(p.url)}<div><b>Scan with your phone's camera</b><span>Your phone must be on the same Wi-Fi. It walks you through the rest.</span>
+      <code><i class="phl"></i>${esc(p.ips[0])} · ${esc(p.name)}</code>${Date.now()-p.setupSeen<120000?'<span class="ok">A phone opened the setup page</span>':''}</div></div>`;
+    if(phRep&&(phRep.until<Date.now()||!(p.phones.find(x=>x.id===phRep.id)?.paired<phRep.at)))phRep=null;   // ran out, used, or the phone was revoked
+    body+='<div class="lgrp">Paired phones</div>'+(p.phones.length?p.phones.map(x=>`<div class="srow"><span>${esc(x.name)}<small>${x.seen?(Date.now()-x.seen<90000?'Seen just now':'Seen '+ago(x.seen/1000)+' ago'):'Not opened yet'}${x.push?' · notifications on':''}</small>${x.lost?`<small class="bad">This PC's address changed since. Pair it again to reach it.</small>`:''}</span><span class="phb"><button class="sval" data-phrep="${esc(x.id)}">Pair again</button><button class="sval" data-phrev="${esc(x.id)}">Revoke</button></span></div>`
+      +(phRep?.id===x.id&&phRep.url?`<div class="phq">${qrSvg(phRep.url)}<div><b>Scan with ${esc(x.name)}</b><span>Pairs it again as itself: its name and notifications stay. The code lasts 10 minutes.</span></div></div>`:'')).join('')
+      :'<div class="cap2" style="padding:8px">No phones yet.</div>')+'<div class="cap2" style="padding:10px 8px">Works while this PC is on and Workwood is open.</div>';
+  }
+  pg.innerHTML=head+`<div class="srow"><span>Open Workwood on your phone<small>On your home Wi-Fi · only phones you pair</small></span><i class="stog ${p.on?'on':''}" data-set="phone"></i></div>`+body;
 }
 /* ---------- updates: Workwood runs from a git checkout; when GitHub has more, a card above the sidebar footer offers a restart ---------- */
 const U={later:localStorage.getItem('ww.updLater'),busy:false,err:''};   // later: the upstream commit you said Later to; busy: pulling, then restarting
@@ -1762,6 +1830,9 @@ $('spage').onclick=async e=>{
   if(s?.dataset.set==='getspeech'){try{VS=await api('voice/better',{});renderSettings()}catch(err){oops(err.message)}return}
   if(s?.dataset.set==='speech'){try{A.prefs=await api('settings',{speech:A.prefs?.speech==='turbo'?'small':'turbo'});VS=null;renderSettings()}catch(err){oops(err.message)}return}
   if(s?.dataset.set==='login'){await setLogin(!loginOn);renderSettings()}
+  if(s?.dataset.set==='phone'){try{PH=await api('phone/on',{on:!PH?.on});renderSettings()}catch(err){oops(err.message)}return}
+  {const pr=e.target.closest('[data-phrep]');if(pr){try{phRep=phRep?.id===pr.dataset.phrep?null:{...await api('phone/repair',{id:pr.dataset.phrep}),at:Date.now()};renderSettings()}catch(err){oops(err.message)}return}}
+  {const pr=e.target.closest('[data-phrev]');if(pr){try{PH=await api('phone/revoke',{id:pr.dataset.phrev});renderSettings()}catch(err){oops(err.message)}return}}
   if(s?.dataset.set==='auto'){try{A.prefs=await api('settings',{autoContinue:!A.prefs?.autoContinue});renderSettings()}catch(err){oops(err.message)}}
   if(s?.dataset.set==='bypass'){try{A.prefs=await api('settings',{bypass:!A.prefs?.bypass});renderSettings();renderComposer()}catch(err){oops(err.message)}}
   if(s?.dataset.set==='updcheck'){U.err='';U.later=null;localStorage.removeItem('ww.updLater');api('update/check',{}).catch(err=>oops(err.message));setTimeout(renderSettings,50)}
@@ -1810,7 +1881,7 @@ let sidePref=localStorage.getItem('ww.side')||'auto';
 const autoCompact=()=>{if(innerWidth<1000)return true;
   if($('panel').hidden||$('split').classList.contains('full'))return false;
   return (innerWidth-268)*(innerWidth<=1100?.46:.54)<480};     // a side panel must leave the conversation room to read
-function fitSide(){const c=sidePref==='compact'||(sidePref==='auto'&&autoCompact());if(c===V.compact)return;
+function fitSide(){const c=!PHONE&&(sidePref==='compact'||(sidePref==='auto'&&autoCompact()));if(c===V.compact)return;
   V.compact=c;document.querySelector('.app').classList.toggle('compact',c);hideTip();
   $('bSide').dataset.tip=c?'Show the full sidebar':'Compact sidebar';$('newBtn').dataset.tip=c?'Home':'';renderList()}
 function setSide(p){sidePref=p;localStorage.setItem('ww.side',p);fitSide()}
@@ -2461,7 +2532,7 @@ function renderHome(){
   d.hidden=!on;$('dseg').hidden=$('hset').hidden=!on;$('main').classList.toggle('home',on);renderHomeBg();
   if(!on)return;
   $('dseg').innerHTML=HVIEWS.map(([k,n,t])=>`<button class="${H.view===k?'on':''}" data-hv="${k}" data-tip="${t}">${n}</button>`).join('');
-  const parts=H.view==='projects'?projectsView():H.view==='time'?timeView():[leftOff(),limits(),notCommitted(),madeLately()].filter(Boolean);
+  const parts=PHONE?[leftOff(),limits()].filter(Boolean):H.view==='projects'?projectsView():H.view==='time'?timeView():[leftOff(),limits(),notCommitted(),madeLately()].filter(Boolean);
   patch(d,parts.map(([k,h])=>[H.view+':'+k,h]));fitThumbs();
   // A section fades in when it first appears, not each time a reading redraws it.
   for(const el of d.children){if(H.seen.has(el.dataset.k))el.style.animation='none';H.seen.add(el.dataset.k)}
@@ -2475,7 +2546,7 @@ $('dash').onclick=async e=>{
   const tst=t.closest('[data-tstep]');if(tst){TV.back=Math.max(0,Math.min(TMAX[TV.scale],TV.back+ +tst.dataset.tstep));renderHome();return}
   const td=t.closest('[data-tday]');if(td){TV.scale='day';TV.back=+td.dataset.tday;hideTip();renderHome();return}
   if(t.closest('[data-limrefresh]')){api('limits/refresh',{}).catch(err=>oops(err.message));A.profiles.forEach(p=>p.reading=true);renderHome();return}
-  const pr=t.closest('[data-prof]');if(pr){hideTip();openSettings(STABS.indexOf('Profiles'),pr.dataset.prof);return}
+  const pr=t.closest('[data-prof]');if(pr){if(PHONE)return;hideTip();openSettings(STABS.indexOf('Profiles'),pr.dataset.prof);return}
   const m=t.closest('[data-made]');if(m){hideTip();await openSession(m.dataset.sid);if(V.sel===m.dataset.sid&&V.work.some(f=>f.path===m.dataset.made))showWork(m.dataset.made,true);return}
   const c=t.closest('[data-ch]');if(c){hideTip();await openSession(c.dataset.ch);if(V.sel===c.dataset.ch){V.side='changes';V.pv=null;renderPanel();loadChanges()}return}
   const s=t.closest('[data-sid]');if(s){hideTip();openSession(s.dataset.sid)}
@@ -2647,6 +2718,7 @@ function render(){
   renderList();renderUpd();renderThread();renderHome();renderCard();renderQueue();renderComposer();renderPanel();renderTerm();renderHead();raSeen();
   $('tools').style.visibility=nw||!s?'hidden':'visible';
   $('main').classList.toggle('newmode',nw&&!V.pend);
+  if(PHONE)phRender();
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)render()});
 $('bDone').onclick=()=>{const s=selSession();if(s)setDone(s,!s.done)};
@@ -2698,6 +2770,7 @@ function connect(){
   const es=new EventSource('/api/events?token='+TOKEN);
   es.addEventListener('state',e=>{
     Object.assign(A,JSON.parse(e.data));
+    if(PHONE&&A.preview)A.preview=location.origin+'/preview'+new URL(A.preview).pathname;   // the phone reaches previews through the app's own address
     if(first&&A.ready){first=false;const s=A.sessions.find(x=>x.id===location.hash.slice(1));if(s)openSession(s.id);else newSession();return}   // home, unless the address names a session
     if(!V.isNew&&V.sel&&A.fresh&&!V.loading&&!A.sessions.some(x=>x.id===V.sel)){leave(V.sel);return} // deleted somewhere else
     if(V.isNew){if(!V.profile)V.profile=startProfile()?.name;if(!V.project)V.project=A.projects[0]?.cwd||null}
@@ -2713,4 +2786,158 @@ function connect(){
     else{V.handing=null;render();oops('The handoff was not written: '+(d.error||'something went wrong'))}});
   es.onerror=()=>{};
 }
-hydrate();setTheme(themePref());render();connect();
+/* ---------- the phone: the same app, laid out for one hand (design/round60.html to round69.html). Only a paired phone
+   gets it, from the phone port (see service/phone.mjs). Four tabs: Home, Sessions, New and Settings; a session opens
+   full screen. Limits and controls sit in one pill in the message box, which opens a drawer. ---------- */
+const PH_KINDS=[['needs','A session needs you','A question, a plan or a permission to answer'],['turn','A turn ends','In a session you are not looking at'],['stopped','Work stops mid-turn','A limit, a sign-out or an error'],['cleared','A limit has cleared','A profile has room again'],['near','A limit is near','Above 80% of 5h or 7d'],['cool','The cache is about to cool','Ten minutes before, in a session at rest'],['context','Context is large','Time to continue in a new session']];
+const MODE_SAY={default:'asks first',acceptEdits:'edits freely',plan:'plans first',auto:'auto mode',bypassPermissions:'never asks'};
+const MODE_SHORT={default:'Ask',acceptEdits:'Edits',plan:'Plan',auto:'Auto',bypassPermissions:'Bypass'};
+let PT='home',phMe=null,phDr=null,phAfter=null,phLastV={id:undefined,at:0},phVT=0,phInstall=null,phEdit=false;
+const phStandalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const phIos=()=>/iPhone|iPad|iPod/.test(navigator.userAgent);
+const phScreen=()=>PT==='sessions'||PT==='settings'?PT:V.isNew?(PT==='new'?'new':'home'):'session';
+function phInit(){
+  document.documentElement.classList.add('ph');
+  {const m=/^#s=([^&]+)(?:&do=(\w+))?/.exec(location.hash);if(m){phAfter={s:decodeURIComponent(m[1]),act:m[2]||null};PT='session';history.replaceState(null,'','#'+phAfter.s)}}
+  const nav=document.createElement('nav');nav.className='ptabs';nav.id='ptabs';
+  nav.innerHTML=[['home','home','Home'],['sessions','list','Sessions'],['new','plus','New'],['settings','cog','Settings']].map(([k,i,n])=>`<button data-pt="${k}">${svg(i)}<span>${n}</span><u></u></button>`).join('');
+  document.body.appendChild(nav);nav.onclick=e=>{const b=e.target.closest('[data-pt]');if(b)phGo(b.dataset.pt)};
+  const back=document.createElement('button');back.className='ib phback';back.id='phBack';back.innerHTML=svg('chev-l');back.onclick=()=>history.state?.ph?history.back():phGo('sessions');
+  document.querySelector('.head').prepend(back);
+  const cache=document.createElement('div');cache.id='phCache';cache.className='phcache';document.querySelector('.hd').appendChild(cache);
+  const pill=document.createElement('button');pill.className='phpill';pill.id='phPill';pill.onclick=e=>{e.stopPropagation();phOpen('main')};$('bAttach').after(pill);
+  const use=document.createElement('button');use.className='phuse';use.id='phUse';use.hidden=true;pill.after(use);
+  use.onclick=e=>{e.stopPropagation();const n=use.dataset.to;if(!n)return;if(V.isNew){V.profile=n;loadDefaults()}else choose('profile',n);V.limBase=null;render()};
+  const sum=document.createElement('button');sum.className='phsum';sum.id='phSum';sum.onclick=()=>phOpen('main');$('box').after(sum);
+  const d=document.createElement('div');d.id='phDim';d.className='phdim';d.hidden=true;d.innerHTML='<div class="phdr" id="phDr"></div>';document.body.appendChild(d);
+  d.addEventListener('pointerdown',e=>{if(e.target===d)phClose()});$('phDr').onclick=phDrawerClick;
+  const s=document.createElement('div');s.id='phSet';s.className='phset';$('main').appendChild(s);s.onclick=phSetClick;s.addEventListener('change',phSetChange);
+  $('hello').textContent='What are we working on?';
+  $('bAttach').dataset.i='plus';hydrate($('bAttach').parentNode);   // the phone's own picker offers the camera, photos and files
+  let y0=null;$('box').addEventListener('touchstart',e=>{y0=e.touches[0].clientY},{passive:true});
+  $('box').addEventListener('touchend',e=>{if(y0!=null&&y0-e.changedTouches[0].clientY>40)phOpen('main');y0=null},{passive:true});
+  $('list').addEventListener('click',e=>{const b=e.target.closest('.sess[data-id]');if(b&&!e.target.closest('[data-dots]'))PT='session'},true);
+  $('dash').addEventListener('click',e=>{if(e.target.closest('[data-sid],[data-made],[data-ch]'))PT='session'},true);
+  addEventListener('popstate',()=>{if(!V.isNew&&PT==='session'){PT='sessions';render()}});
+  addEventListener('beforeinstallprompt',e=>{e.preventDefault();phInstall=e;phSettings()});
+  navigator.serviceWorker?.addEventListener('message',e=>{if(e.data?.ww==='open')phFromNote(e.data.session,e.data.act)});
+  navigator.serviceWorker?.register('/sw.js').then(()=>phResubscribe()).catch(()=>{});
+  api('phone/me').then(m=>{phMe=m;phRender()}).catch(()=>{});
+  setInterval(()=>{phViewing();phCache()},30000);document.addEventListener('visibilitychange',phViewing);
+}
+function phGo(k){phClose();if(k==='home'||k==='new'){PT=k;newSession();if(k==='home')$('input').blur()}else{PT=k;render()}if(k==='settings')phSettings();$('scroll').scrollTop=0}
+function phFromNote(sid,act){if(!sid)return;phAfter={s:sid,act};PT='session';openSession(sid)}
+function phRender(){
+  const sc=phScreen();document.documentElement.dataset.pt=sc;
+  $('ptabs').querySelectorAll('[data-pt]').forEach(b=>b.classList.toggle('on',b.dataset.pt===sc));
+  $('ptabs').querySelector('[data-pt=sessions] u').textContent=A.sessions.filter(s=>s.status==='wait').length||'';
+  if(sc==='session'&&history.state?.ph!==V.sel)history.pushState({ph:V.sel},'','#'+V.sel);
+  if(sc==='new')$('title').textContent='New session';
+  if(sc==='settings')$('title').textContent='Settings';
+  if(phAfter&&V.sel===phAfter.s&&!V.loading){const {s,act}=phAfter;phAfter=null;if(act==='stay')api(`sessions/${s}/stay`,{}).catch(()=>{});if(act==='go')api(`sessions/${s}/go-now`,{}).catch(err=>oops(err.message))}
+  phPill();phCache();clearTimeout(phVT);phVT=setTimeout(phViewing,300);
+  if(sc==='settings'&&document.activeElement?.id!=='phName')phSettings();
+  if(!$('phDim').hidden)phDrawer();
+}
+// The one window that matters in the pill: 5h, unless 7d is closer to its limit. Amber or red always shows; amber shows
+// when it resets instead of a bar; full shows when it clears, and the profile with the most room next to it.
+function phPill(){
+  const cur=profile(curProfile()),h5=cur?.h5,d7=cur?.d7;let k='5h',v=h5,r=cur?.r5;
+  if(d7!=null&&(h5==null||d7>h5)){k='7d';v=d7;r=cur?.r7}
+  const m=shownModel()?modelName(shownModel()).split(' ')[0]:'Default';
+  const lim=v==null?'':v>=100?`<b>${k} full</b>${r?`<small> · clears ${clock(r*1000)}</small>`:''}`:v>=80?`<b>${k} ${Math.round(v)}%</b>${r?`<small> · ${clock(r*1000)}</small>`:''}`
+    :`<span class="pk">${k}</span><span class="pbr"><i style="width:${Math.max(4,v)}%"></i></span>${Math.round(v)}%`;
+  $('phPill').innerHTML=(lim?`<span class="pl">${lim}</span><i class="pdot">·</i>`:'')+`<span>${esc(m)}</span>${svg('chev-d','cv')}`;
+  $('phPill').className='phpill '+lvl(v??0);
+  const alt=v>=100?roomOrder(A.profiles).find(p=>p.name!==cur?.name&&Math.max(p.h5||0,p.d7||0)<100):null,u=$('phUse');
+  u.hidden=!alt;if(alt){u.dataset.to=alt.name;u.innerHTML=`Use ${esc(alt.name)} ${svg('chev-r')}`}
+  if(V.isNew){const pr=A.projects.find(p=>p.cwd===V.project),eff=EFFORTS.find(x=>x[0]===shownEffort())?.[1];
+    $('phSum').innerHTML=`<b>${esc(pr?.name||'Pick a project')}</b> on <b>${esc(curProfile()||'a profile')}</b>, ${esc(shownModel()?modelName(shownModel()):'default model')}${eff&&eff!=='Default'?' '+esc(eff.toLowerCase()):''}, ${esc(MODE_SAY[shownMode()]||modeName(shownMode()))} ${svg('chev-d','cv')}`}
+}
+// Under the session's title: whether its prompt cache is still warm.
+function phCache(){
+  const el=$('phCache'),s=selSession();if(!el)return;
+  if(V.isNew||!s){el.innerHTML='';return}
+  const end=s.status!=='idle'?null:coldAt(s.reply),left=end?warmLeft(end):0;
+  el.className='phcache '+(s.status!=='idle'?'go':left>600000?'go':left>0?'mid':'');
+  el.innerHTML=s.status==='work'?'<i></i>Working':s.status==='wait'?'<i></i>Waiting for you':left>600000?`<i></i>Warm · ${hm(left)}`:left>0?`<i></i>Cools in ${hm(left)}`:'<i></i>Cache cold';
+}
+function phViewing(){const id=!document.hidden&&!V.isNew&&V.sel?V.sel:null;if(id===phLastV.id&&Date.now()-phLastV.at<25000)return;phLastV={id,at:Date.now()};api('phone/viewing',{sessionId:id}).catch(()=>{})}
+
+/* the drawer: "Start in" for a new session, "This session" for one open; the context page behind it */
+function phOpen(k){if(phScreen()==='home')return;phDr=k;$('phDim').hidden=false;phDrawer();if(k==='main')loadDefaults()}
+function phClose(){phDr=null;$('phDim').hidden=true}
+const phBar=(v,r)=>`<span class="dbar ${lvl(v??0)}"><span class="db"><i style="width:${Math.min(100,v||0)}%"></i></span><span class="dv">${v==null?'–':Math.round(v)+'%'}</span><small>${r?until(r):''}</small></span>`;
+function phDrawer(){
+  const nw=V.isNew,dr=$('phDr'),c=!nw&&V.context;
+  if(phDr==='ctx'&&c){
+    const d=V.ctx?.id===V.sel?V.ctx:null,pct=Math.min(100,Math.round(c.used/c.window*100)),COL=['var(--accent)','var(--warn)','var(--go)','var(--dim)','var(--hot)'],rows=d?.rows||[];
+    dr.innerHTML=`<div class="pdg"></div><div class="pdh"><button class="ib" data-dback>${svg('chev-l')}</button><b>What fills the context</b></div>
+      <div class="pbig"><b>${kTok(c.used)}</b><small>of ${kTok(c.window)}</small><em>${pct}%</em></div>`
+      +(rows.length?`<div class="cbar">${rows.slice(0,5).map((r,i)=>`<i style="width:${Math.min(100,r.tokens/c.window*100)}%;background:${COL[i]}"></i>`).join('')}</div>`+rows.map((r,i)=>`<div class="pit"><i style="background:${COL[i%5]}"></i><span>${esc(r.name)}</span><b>${kTok(r.tokens)}</b></div>`).join('')
+        :`<div class="cbar"><i style="width:${pct}%;background:var(--accent)"></i></div><div class="cap2">${d?.err?esc(d.err):'Counting what fills it…'}</div>`);
+    return}
+  const seg=(k,list,cur)=>`<div class="pseg">${list.map(([v,n])=>`<button class="${v===cur?'on':''}" data-${k}="${esc(v)}">${esc(n)}</button>`).join('')}</div>`;
+  const dm=V.def.model,de=V.def.effort,cur=curProfile();
+  const models=MODELS.filter(x=>x[0]||!dm).map(([v,n])=>[v,n.split(' ')[0]]),effs=EFFORTS.filter(x=>x[0]||!de).map(([v,n])=>[v,n==='Medium'?'Med':n]);
+  const recent=[...A.projects].sort((a,b)=>(b.recent?1:0)-(a.recent?1:0)).slice(0,8);
+  const off=isWorking()||!!V.handing;
+  dr.innerHTML=`<div class="pdg"></div><div class="pdh"><b>${nw?'Start in':'This session'}</b></div>`
+    +(nw?`<div class="pdl">Project</div><div class="pchips">${recent.map(p=>`<button class="${p.cwd===V.project?'on':''}" data-dproj="${esc(p.cwd)}">${esc(p.name)}</button>`).join('')}</div>`:'')
+    +`<div class="pdl">Profile</div>`+roomOrder(A.profiles).map(p=>`<button class="prw ${p.name===cur?'on':''}" data-dprof="${esc(p.name)}">${p.name===cur?svg('check','ck'):'<span class="ck"></span>'}<b>${esc(p.name)}</b><span class="pk">5h</span>${phBar(p.h5,p.r5)}<span class="pk">7d</span>${phBar(p.d7,p.r7)}</button>`).join('')
+    +`<div class="pdl">Model</div>${seg('dm',models,shownModel())}<div class="pdl">Effort</div>${seg('de',effs,shownEffort())}<div class="pdl">Permissions</div>${seg('dmode',modeList().map(([v])=>[v,MODE_SHORT[v]||v]),shownMode())}`
+    +(c?`<div class="pdl">Context</div><button class="pctx" data-dctx><i class="ring" style="--p:${Math.min(100,Math.round(c.used/c.window*100))}"></i><b>${kTok(c.used)}</b><span>${Math.min(100,Math.round(c.used/c.window*100))}%</span><span class="gap"></span><em>What fills it</em>${svg('chev-r')}</button>
+      <div class="pact"><button class="pri" data-dho ${off?'disabled':''}>${svg('arrow-r')}<span><b>Continue in a new session</b><small>A handoff carries the work over</small></span></button><button data-dcompact ${off?'disabled':''}>${svg('compress')}<span><b>Summarise to make room</b><small>Compact · earlier detail fades</small></span></button></div>`:'');
+}
+async function phDrawerClick(e){
+  const t=e.target.closest('button');if(!t)return;const d=t.dataset;
+  if('dback' in d){phDr='main';return phDrawer()}
+  if(d.dproj){V.project=d.dproj;render();await loadDefaults()}
+  else if(d.dprof){if(V.isNew){V.profile=d.dprof;await loadDefaults()}else{choose('profile',d.dprof);V.limBase=null}render()}
+  else if('dm' in d){choose('model',d.dm);renderComposer()}
+  else if('de' in d){choose('effort',d.de);renderComposer()}
+  else if(d.dmode){await pickMode(d.dmode)}
+  else if('dctx' in d){phDr='ctx';const id=V.sel;V.ctx={id,at:Date.now()};
+    api(`sessions/${id}/context`).then(r=>{V.ctx={id,at:Date.now(),rows:r.rows}},err=>{V.ctx={id,at:0,err:'The breakdown is not available ('+err.message+')'}}).then(()=>{if(phDr==='ctx'&&V.sel===id)phDrawer()})}
+  else if('dho' in d){if(isWorking()||V.handing)return;phClose();handOff();return}
+  else if('dcompact' in d){if(isWorking())return;phClose();sendText('/compact');return}
+  phRender();phDrawer();
+}
+
+/* this phone's settings: its name, what it is told, and unpairing. Until it is set up, how to finish. */
+function phSettings(){
+  const el=$('phSet');if(!el||PT!=='settings')return;const me=phMe;
+  if(!me){el.innerHTML='<div class="cap2">Loading…</div>';return}
+  const sa=phStandalone(),perm=typeof Notification==='undefined'?'none':Notification.permission,pushOk=me.push&&perm==='granted';
+  const sw=(on,attr)=>`<i class="stog ${on?'on':''}" ${attr}></i>`;
+  const setup=sa&&pushOk?'':`<div class="pgl">Finish setting up</div><div class="pgrp">
+    <div class="pitm"><span class="pn2 ${sa?'ok':''}">${sa?svg('check'):'1'}</span><span class="tx">Add to Home Screen<small>${sa?'Done':phInstall?'Opens like an app.':phIos()?'Share › Add to Home Screen, then open it from there.':'Browser menu › Add to Home screen.'}</small></span>${!sa&&phInstall?'<button class="sval pri" data-pinstall>Add</button>':''}</div>
+    <div class="pitm"><span class="pn2 ${pushOk?'ok':''}">${pushOk?svg('check'):'2'}</span><span class="tx">Allow notifications<small>${pushOk?'Done':perm==='denied'?'Blocked. Allow them for Workwood in the phone\'s settings.':phIos()&&!sa?'Open Workwood from your Home Screen first.':'When a session needs you or a turn ends.'}</small></span>${!pushOk&&perm!=='denied'&&!(phIos()&&!sa)?'<button class="sval pri" data-ppush>Allow</button>':''}</div></div>`;
+  el.innerHTML=setup+`<div class="pgl">This phone</div><div class="pgrp"><div class="pitm"><span class="tx">Name</span>${phEdit?`<input class="sval sin" id="phName" value="${esc(me.name)}" maxlength="40">`:`<button class="pval" data-pname>${esc(me.name)}</button>`}</div>
+    <div class="pitm"><span class="tx">Connected to</span><span class="pval">${esc(me.pc||'')}</span></div></div>
+    <div class="pgl">Notify me when</div><div class="pgrp">${PH_KINDS.map(([k,n,dd])=>`<div class="pitm"><span class="tx">${n}<small>${dd}</small></span>${sw(me.kinds?.[k],`data-pkind="${k}"`)}</div>`).join('')}</div>
+    ${!pushOk?'<div class="cap2" style="padding:0 6px 14px">Notifications start once they are allowed above.</div>':''}
+    <div class="pgrp"><button class="pitm red" data-punpair>Unpair this phone</button></div>`;
+}
+const b64bytes=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4)),c=>c.charCodeAt(0));
+async function phSubscribe(){
+  const reg=await navigator.serviceWorker.ready;
+  const sub=await reg.pushManager.getSubscription()||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64bytes(phMe.vapid)});
+  phMe=await api('phone/me',{push:sub.toJSON()});
+}
+// Permission given before (or the app installed again): keep the PC's copy of the subscription in step, quietly.
+async function phResubscribe(){try{if(typeof Notification!=='undefined'&&Notification.permission==='granted'){await (phMe?Promise.resolve():api('phone/me').then(m=>{phMe=m}));await phSubscribe();phSettings()}}catch{}}
+async function phSetClick(e){
+  const t=e.target;
+  try{
+    if(t.closest('[data-pinstall]')&&phInstall){phInstall.prompt();await phInstall.userChoice.catch(()=>{});phInstall=null;phSettings();return}
+    if(t.closest('[data-ppush]')){const p=await Notification.requestPermission();if(p==='granted')await phSubscribe();phSettings();return}
+    const k=t.closest('[data-pkind]');if(k){const kinds={...phMe.kinds,[k.dataset.pkind]:!phMe.kinds[k.dataset.pkind]};phMe={...phMe,kinds};phSettings();phMe=await api('phone/me',{kinds});return}
+    if(t.closest('[data-pname]')){phEdit=true;phSettings();const i=$('phName');i.focus();i.select();return}
+    if(t.closest('[data-punpair]')){if(!confirm('Unpair this phone? Scan the code on the PC again to use it.'))return;await api('phone/unpair',{});phGone();return}
+  }catch(err){oops(err.message)}
+}
+async function phSetChange(e){if(e.target.id==='phName'){phEdit=false;try{phMe=await api('phone/me',{name:e.target.value})}catch(err){oops(err.message)}phSettings()}}
+function phGone(){document.body.innerHTML='<div class="phgone"><h1>This phone is not paired</h1><p>Open Settings › Phone in Workwood on your PC and scan the code with this phone.</p></div>'}
+
+hydrate();setTheme(themePref());if(PHONE)phInit();render();connect();

@@ -3022,7 +3022,7 @@ ui('window: the settings dialog: tabs, default profile for new sessions, sign in
   await page.click('#bGear'); await page.click('#gAll');
   await page.waitForSelector('#spage .pgh:has-text("General")');
   // General, Sessions and Speech come first; a line sets them apart from Profiles, Skills and About
-  assert.deepEqual(await page.locator('#stabs').evaluate(t => [...t.children].map(c => c.tagName === 'I' ? '—' : c.textContent)), ['General', 'Sessions', 'Speech', 'Look', '—', 'Profiles', 'Skills', 'About']);
+  assert.deepEqual(await page.locator('#stabs').evaluate(t => [...t.children].map(c => c.tagName === 'I' ? '—' : c.textContent)), ['General', 'Sessions', 'Speech', 'Phone', 'Look', '—', 'Profiles', 'Skills', 'About']);
   await page.click('#stabs [data-st="6"]'); await page.waitForSelector('#spage .lgrp:has-text("Dictation")');
   await page.selectOption('#sLang', 'german');
   await page.click('#stabs [data-st="5"]'); await page.waitForSelector('#spage [data-set="bypass"]');

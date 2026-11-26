@@ -1,0 +1,335 @@
+// Workwood on the phone, end to end against the real service in a throwaway HOME (see sandbox.mjs): the setup page,
+// the certificate, pairing, what a phone may do, previews from the app's own address, revoking, and notifications
+// (decrypted here with the phone's keys, as a phone's browser would). The Windows window is played by the test: it
+// tells the service the PC's address, as the real one does from Windows.
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import http from 'node:http';
+import https from 'node:https';
+import tls from 'node:tls';
+import crypto from 'node:crypto';
+import { makeSandbox, startService, removeSandbox } from './sandbox.mjs';
+
+let sb, svc, pushSrv;
+const IP = '192.168.77.5', PORT = 47000 + Math.floor(Math.random() * 900), INNER = PORT + 1000, KEYDIR = () => path.join(sb.root, 'phone');
+const NAMED = `testpc.local:${PORT}`;   // the PC by its name on the home network, as Windows answers for it
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function until(fn, what, ms = 8000) {
+  const end = Date.now() + ms; let last;
+  while (Date.now() < end) { try { last = await fn(); if (last) return last; } catch (e) { last = e; } await sleep(60); }
+  throw new Error('timed out waiting for ' + what + (last instanceof Error ? ': ' + last.message : ''));
+}
+// A request to the phone port, as a phone on the Wi-Fi makes it: to the PC's address, trusting only Workwood's authority.
+function req(p, { secure = true, method = 'GET', headers = {}, body, host = `${IP}:${PORT}` } = {}) {
+  return new Promise((resolve, reject) => {
+    const opts = { host: '127.0.0.1', port: INNER, path: p, method, headers: { host, ...headers } };
+    if (secure) Object.assign(opts, { ca: fs.readFileSync(path.join(KEYDIR(), 'ca.crt')), servername: '', checkServerIdentity: (h, cert) => tls.checkServerIdentity(host.startsWith(NAMED) ? 'testpc.local' : IP, cert), agent: false });
+    const r = (secure ? https : http).request(opts, res => { const c = []; res.on('data', d => c.push(d)); res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(c) })); });
+    r.on('error', reject); if (body) r.write(typeof body === 'string' ? body : JSON.stringify(body)); r.end();
+  });
+}
+const api = (key, p, body, host) => req('/api/' + p, { method: body ? 'POST' : 'GET', headers: { 'x-workwood-token': key, 'content-type': 'application/json' }, body, host }).then(r => ({ status: r.status, body: JSON.parse(r.body.toString() || '{}') }));
+const relay = (ip = IP) => svc.call('phone/relay', { ips: [ip, '172.20.0.9', '8.8.8.8'], name: 'TESTPC', listening: true });
+const fingerprint = f => new crypto.X509Certificate(fs.readFileSync(path.join(KEYDIR(), f))).fingerprint256;
+async function pair() {
+  const st = (await svc.call('phone')).body, code = new URL(st.url).searchParams.get('pair');
+  const r = await req('/?pair=' + code, { headers: { 'user-agent': 'Mozilla/5.0 (Linux; Android 15; Pixel 9 Build/AP3A) Chrome/131 Mobile' } });
+  assert.equal(r.status, 303);
+  return { code, key: /ww=([^;]+)/.exec(r.headers['set-cookie'][0])[1] };
+}
+
+// The push service a phone's browser would use: it keeps what it is sent.
+const got = [];
+before(async () => {
+  sb = makeSandbox();
+  pushSrv = http.createServer((q, s) => { const c = []; q.on('data', d => c.push(d)); q.on('end', () => { got.push({ path: q.url, headers: q.headers, body: Buffer.concat(c) }); s.writeHead(q.url.includes('gone') ? 410 : 201); s.end(); }); });
+  await new Promise(r => pushSrv.listen(0, '127.0.0.1', r));
+  svc = await startService(sb, { WORKWOOD_PHONE_DIR: path.join(sb.root, 'phone'), WORKWOOD_PHONE_PORT: String(PORT), WORKWOOD_PHONE_INNER: String(INNER), WORKWOOD_PHONE_HOST: '127.0.0.1',
+    WORKWOOD_PHONE_WSL: '1', WORKWOOD_PUSH_HTTP: '1', WORKWOOD_PREVIEW_KEY: 'pvkey' });
+});
+after(() => { svc?.stop(); pushSrv?.close(); if (sb && !process.env.KEEP_SANDBOX) removeSandbox(sb); });
+
+test('the phone is off until turned on, and nothing listens', async () => {
+  const st = (await svc.call('phone')).body;
+  assert.equal(st.on, false); assert.equal(st.url, null); assert.deepEqual(st.phones, []);
+  await assert.rejects(req('/', { secure: false }));
+  assert.deepEqual((await svc.call('phone/relay', { ips: [IP] })).body, { on: false, port: PORT, inner: INNER });
+});
+
+test('turned on: a pairing code for the address the Windows window reports, and a certificate only for home addresses', async () => {
+  assert.equal((await svc.call('phone/on', { on: true })).status, 200);
+  await relay();
+  const st = await until(async () => { const s = (await svc.call('phone')).body; return s.listening && s.ips.length && s; }, 'the phone port');
+  assert.deepEqual(st.ips, [IP, '172.20.0.9']);   // public addresses are left out; home Wi-Fi first
+  assert.equal(st.name, 'TESTPC'); assert.equal(st.wsl, true);
+  assert.match(st.url, new RegExp(`^http://${IP.replace(/\./g, '\\.')}:${PORT}/\\?pair=[\\w-]{20,}$`));
+  assert.ok(st.until > Date.now() + 9 * 60_000);
+  const ca = new crypto.X509Certificate(fs.readFileSync(path.join(KEYDIR(), 'ca.crt'))), srv = await until(async () => {
+    const c = new crypto.X509Certificate(fs.readFileSync(path.join(KEYDIR(), 'server.crt'))); return c.subjectAltName.includes('testpc') && c; }, 'a certificate with the address and name');
+  assert.ok(srv.verify(ca.publicKey)); assert.ok(ca.ca);
+  assert.match(srv.subjectAltName, /DNS:testpc\.local/); assert.doesNotMatch(srv.subjectAltName, /8\.8\.8\.8/);
+  assert.equal((fs.statSync(path.join(KEYDIR(), 'ca.key')).mode & 0o077), 0, 'the authority key is private');
+});
+
+test('plain HTTP gives only the setup page and the certificate; other hosts are refused', async () => {
+  const code = new URL((await svc.call('phone')).body.url).searchParams.get('pair');
+  const r = await req('/?pair=' + code, { secure: false });
+  assert.equal(r.status, 200);
+  const html = r.body.toString();
+  assert.ok(html.includes(`https://${IP}:${PORT}/?pair=${code}`)); assert.ok(html.includes('TESTPC'));
+  assert.ok(html.includes(`'https://${NAMED}'`), 'the setup page tries the PC by its name');
+  const crt = await req('/workwood.crt', { secure: false });
+  assert.equal(crt.headers['content-type'], 'application/x-x509-ca-cert');
+  assert.ok(new crypto.X509Certificate(crt.body).ca);
+  assert.equal((await req('/api/sessions', { secure: false })).status, 302);
+  assert.equal((await req('/', { secure: false, host: 'evil.example:' + PORT })).status, 403);
+  assert.equal((await req('/', { host: 'evil.example:' + PORT })).status, 403);
+  assert.ok((await svc.call('phone')).body.setupSeen > Date.now() - 5000);
+  assert.equal((await req('/phone/ping')).headers['access-control-allow-origin'], '*');
+});
+
+test('a pairing code pairs one phone; its key opens the app, and a used or wrong code does not', async () => {
+  assert.equal((await req('/')).status, 401);
+  assert.equal((await req('/?pair=not-a-real-code-at-all')).status, 410);
+  const { code, key } = await pair();
+  assert.equal((await req('/?pair=' + code)).status, 410, 'one phone per code');
+  const st = (await svc.call('phone')).body;
+  assert.equal(st.phones.length, 1); assert.equal(st.phones[0].name, 'Pixel 9');
+  assert.notEqual(new URL(st.url).searchParams.get('pair'), code, 'a new code shows once one is used');
+  const r = await req('/', { headers: { cookie: 'ww=' + key } });
+  assert.equal(r.status, 200);
+  const html = r.body.toString();
+  assert.ok(html.includes(`data-token="${key}" data-phone="1"`)); assert.ok(html.includes('rel="manifest"'));
+  assert.equal(r.headers['x-frame-options'], 'DENY');
+  assert.ok(!html.includes('test-token'), 'the desktop token never reaches the phone');
+  assert.match(fs.readFileSync(path.join(KEYDIR(), 'phones.json'), 'utf8'), /"keys"/);
+  assert.ok(!fs.readFileSync(path.join(KEYDIR(), 'phones.json'), 'utf8').includes(key), 'only a hash of the key is kept');
+});
+
+test('a phone may look and answer, not change Workwood or open a terminal; its key is no good on the PC side', async () => {
+  const { key } = await pair();
+  assert.equal((await api(key, 'sessions/' + sb.sessions.alphaLive)).status, 200);
+  const me = await api(key, 'phone/me');
+  assert.equal(me.status, 200); assert.equal(me.body.pc, 'TESTPC'); assert.match(me.body.vapid, /^[\w-]{80,}$/);
+  assert.deepEqual(me.body.kinds, { needs: true, turn: true, stopped: true, cleared: true, near: false, cool: false, context: false });
+  for (const [p, b] of [['phone', null], ['phone/on', { on: false }], ['settings', { bypass: true }], ['sessions/' + sb.sessions.alphaLive + '/term', {}], ['open-editor', { sessionId: sb.sessions.alphaLive }], ['profiles/live/login', {}]])
+    assert.equal((await api(key, p, b)).status, 403, p);
+  assert.equal((await api('test-token', 'sessions/' + sb.sessions.alphaLive)).status, 401, 'the desktop token is not a phone key');
+  const local = await fetch(new URL('/api/sessions/' + sb.sessions.alphaLive, svc.address), { headers: { 'x-workwood-token': key } });
+  assert.equal(local.status, 403);
+});
+
+test('previews come from the app\'s address with a sandbox header', async () => {
+  const { key } = await pair();
+  fs.writeFileSync(path.join(sb.projects.alpha, 'page.html'), '<h1>Hi</h1>');
+  const p = '/preview/pvkey/' + sb.sessions.alphaLive + sb.projects.alpha.split('/').map(encodeURIComponent).join('/') + '/page.html';
+  const r = await req(p);
+  assert.equal(r.status, 200); assert.equal(r.body.toString(), '<h1>Hi</h1>');
+  assert.match(r.headers['content-security-policy'], /^sandbox allow-scripts/); assert.doesNotMatch(r.headers['content-security-policy'], /allow-same-origin/);
+  assert.equal((await req(p.replace('pvkey', 'wrong'))).status, 403);
+  void key;
+});
+
+test('the Home Screen app pairs itself from an install code, as the same phone', async () => {
+  const { key } = await pair(), me = (await api(key, 'phone/me')).body, n = (await svc.call('phone')).body.phones.length;
+  const r = await req('/?pair=' + me.install);
+  assert.equal(r.status, 303);
+  const key2 = /ww=([^;]+)/.exec(r.headers['set-cookie'][0])[1];
+  assert.notEqual(key2, key);
+  assert.equal((await api(key2, 'phone/me')).body.id, me.id);
+  assert.equal((await svc.call('phone')).body.phones.length, n);
+  const man = JSON.parse((await req('/manifest.webmanifest?i=' + me.install)).body);
+  assert.equal(man.start_url, '/?pair=' + me.install); assert.equal(man.display, 'standalone');
+});
+
+test('a phone paired again is the same phone, with its settings; by the PC\'s name it outlasts an address change', async () => {
+  const { key } = await pair(), me = (await api(key, 'phone/me', { kinds: { near: true } })).body, n = (await svc.call('phone')).body.phones.length;
+  assert.equal((await svc.call('phone')).body.phones.find(x => x.id === me.id).via, IP);
+  assert.equal((await svc.call('phone/repair', { id: 'nope' })).status, 404);
+  const rep = (await svc.call('phone/repair', { id: me.id })).body, code = new URL(rep.url).searchParams.get('pair');
+  assert.match(rep.url, new RegExp(`^http://${IP.replace(/\./g, '\\.')}:${PORT}/\\?pair=`)); assert.ok(rep.until > Date.now() + 9 * 60_000);
+  assert.equal((await svc.call('phone/repair', { id: me.id })).body.url, rep.url, 'the same code while it shows');
+  // the phone opens it at the PC's name: the certificate is good for it, and the phone is itself again
+  const r = await req('/?pair=' + code, { host: NAMED });
+  assert.equal(r.status, 303);
+  const key2 = /ww=([^;]+)/.exec(r.headers['set-cookie'][0])[1], again = (await api(key2, 'phone/me', null, NAMED)).body;
+  assert.equal(again.id, me.id); assert.equal(again.name, me.name); assert.equal(again.kinds.near, true);
+  assert.equal((await req('/?pair=' + code, { host: NAMED })).status, 410, 'once only');
+  let st = (await svc.call('phone')).body;
+  assert.equal(st.phones.length, n); assert.equal(st.local, 'testpc.local');
+  assert.equal(st.phones.find(x => x.id === me.id).via, 'testpc.local');
+  // the router gives the PC another address: the phone that knows the PC by its old address is shown as lost
+  const other = await pair(), otherId = (await api(other.key, 'phone/me')).body.id;
+  await relay('192.168.77.40');
+  st = await until(async () => { const s = (await svc.call('phone')).body; return s.ips[0] === '192.168.77.40' && s; }, 'the new address');
+  assert.equal(st.phones.find(x => x.id === otherId).lost, true);
+  assert.equal(st.phones.find(x => x.id === me.id).lost, false);
+  const certHas = ip => new crypto.X509Certificate(fs.readFileSync(path.join(KEYDIR(), 'server.crt'))).subjectAltName.includes(ip);
+  await until(() => certHas('192.168.77.40'), 'a certificate for the new address');
+  assert.equal((await api(key2, 'phone/me', null, NAMED)).status, 200, 'the phone by name, after the change');
+  await assert.rejects(req('/', { headers: { cookie: 'ww=' + other.key } }), /altnames/, 'the old address is no longer this PC');
+  await relay();
+  await until(() => certHas(IP + ',') || certHas(IP), 'the first address back');
+});
+
+// The phone's side of Web Push: its keys, and decrypting what arrives (RFC 8291).
+function phoneKeys() { const e = crypto.createECDH('prime256v1'); e.generateKeys(); return { e, auth: crypto.randomBytes(16) }; }
+function decrypt({ e, auth }, body) {
+  const salt = body.subarray(0, 16), idlen = body[20], as = body.subarray(21, 21 + idlen), data = body.subarray(21 + idlen);
+  const h = (k, d) => crypto.createHmac('sha256', k).update(d).digest();
+  const ikm = h(h(auth, e.computeSecret(as)), Buffer.concat([Buffer.from('WebPush: info\0'), e.getPublicKey(), as, Buffer.from([1])])), prk = h(salt, ikm);
+  const d = crypto.createDecipheriv('aes-128-gcm', h(prk, Buffer.from('Content-Encoding: aes128gcm\0\x01')).subarray(0, 16), h(prk, Buffer.from('Content-Encoding: nonce\0\x01')).subarray(0, 12));
+  d.setAuthTag(data.subarray(-16));
+  const out = Buffer.concat([d.update(data.subarray(0, -16)), d.final()]);
+  assert.equal(out.at(-1), 2);
+  return JSON.parse(out.subarray(0, -1).toString());
+}
+
+test('a turn that ends is told to the phone, encrypted and signed; not while the phone looks at that session', async () => {
+  const { key } = await pair(), k = phoneKeys(), me = (await api(key, 'phone/me')).body;
+  const sub = { endpoint: `http://127.0.0.1:${pushSrv.address().port}/push/${me.id}`, keys: { p256dh: k.e.getPublicKey().toString('base64url'), auth: k.auth.toString('base64url') } };
+  assert.equal((await api(key, 'phone/me', { push: sub })).body.push, true);
+  const mine = () => got.filter(g => g.path === '/push/' + me.id);
+  const r = await svc.call('sessions', { cwd: sb.projects.alpha, profile: 'live', text: 'Say hello' });
+  assert.equal(r.status, 200);
+  const id = r.body.sessionId;
+  const g = await until(() => mine()[0], 'a push', 15000);
+  const m = decrypt(k, g.body);
+  assert.equal(m.kind, 'turn'); assert.equal(m.session, id); assert.ok(m.title);
+  assert.equal(g.headers['content-encoding'], 'aes128gcm');
+  const [, jwt, vk] = /^vapid t=([^,]+), k=(\S+)$/.exec(g.headers.authorization);
+  assert.equal(vk, me.vapid);
+  const [h64, c64, s64] = jwt.split('.'), claims = JSON.parse(Buffer.from(c64, 'base64url'));
+  assert.equal(claims.aud, `http://127.0.0.1:${pushSrv.address().port}`);
+  const pub = crypto.createPublicKey({ key: { kty: 'EC', crv: 'P-256', x: Buffer.from(vk, 'base64url').subarray(1, 33).toString('base64url'), y: Buffer.from(vk, 'base64url').subarray(33).toString('base64url') }, format: 'jwk' });
+  assert.ok(crypto.verify('sha256', Buffer.from(h64 + '.' + c64), { key: pub, dsaEncoding: 'ieee-p1363' }, Buffer.from(s64, 'base64url')));
+  // looking at it: not told
+  await until(async () => (await svc.call('sessions/' + id)).body.run?.status === 'idle', 'the turn to end');
+  await api(key, 'phone/viewing', { sessionId: id });
+  const before = mine().length;
+  assert.equal((await svc.call('sessions/' + id + '/send', { text: 'Again' })).status, 200);
+  await until(async () => { const s = (await svc.call('sessions/' + id)).body; return s.run?.status === 'idle' && s.items.filter(i => i.kind === 'user').length >= 2; }, 'the second turn');
+  await sleep(600);
+  assert.equal(mine().length, before);
+  // switched off: not told either
+  await api(key, 'phone/viewing', {});
+  await api(key, 'phone/me', { kinds: { turn: false } });
+  assert.equal((await api(key, 'phone/me')).body.kinds.turn, false);
+});
+
+test('a push service that says the subscription is gone makes Workwood forget it', async () => {
+  const { key } = await pair(), k = phoneKeys();
+  await api(key, 'phone/me', { push: { endpoint: `http://127.0.0.1:${pushSrv.address().port}/gone`, keys: { p256dh: k.e.getPublicKey().toString('base64url'), auth: k.auth.toString('base64url') } } });
+  assert.equal((await svc.call('sessions', { cwd: sb.projects.alpha, profile: 'live', text: 'Hello once more' })).status, 200);
+  await until(async () => (await api(key, 'phone/me')).body.push === false, 'the subscription to be dropped', 15000);
+});
+
+test('revoking a phone ends its key at once; unpairing from the phone does the same', async () => {
+  const { key } = await pair(), id = (await api(key, 'phone/me')).body.id;
+  const es = await new Promise((ok, no) => {
+    const r = https.request({ host: '127.0.0.1', port: INNER, path: '/api/events?token=' + key, headers: { host: `${IP}:${PORT}` }, ca: fs.readFileSync(path.join(KEYDIR(), 'ca.crt')), checkServerIdentity: (h, c) => tls.checkServerIdentity(IP, c) }, ok);
+    r.on('error', no); r.end();
+  });
+  const ended = new Promise(r => es.on('end', r).on('close', r)); es.resume();
+  assert.equal((await svc.call('phone/revoke', { id })).status, 200);
+  await ended;
+  assert.equal((await api(key, 'sessions/' + sb.sessions.alphaLive)).status, 401);
+  const other = await pair();
+  assert.equal((await api(other.key, 'phone/unpair', {})).status, 200);
+  assert.equal((await api(other.key, 'phone/me')).status, 401);
+  assert.equal((await svc.call('phone/revoke', { id: 'nope' })).status, 404);
+});
+
+test('turned off: the port closes and keys stop working', async () => {
+  const { key } = await pair();
+  await svc.call('phone/on', { on: false });
+  await assert.rejects(req('/'));
+  assert.equal((await svc.call('phone')).body.url, null);
+  await svc.call('phone/on', { on: true });
+  await until(async () => (await svc.call('phone')).body.listening, 'listening again');
+  assert.equal((await api(key, 'phone/me')).status, 200, 'paired phones stay paired across off and on');
+});
+
+// The phone's layout, in a phone-sized browser on the phone port. Skipped without a Chromium (see app.test.mjs).
+function findChrome() {
+  if (process.env.WORKWOOD_CHROME) return process.env.WORKWOOD_CHROME;
+  const root = path.join(process.env.HOME, ...(process.platform === 'darwin' ? ['Library', 'Caches'] : ['.cache']), 'ms-playwright');
+  const rels = ['chrome-headless-shell-linux64/chrome-headless-shell', 'chrome-linux/chrome', 'chrome-linux64/chrome', 'chrome-headless-shell-mac-arm64/chrome-headless-shell', 'chrome-headless-shell-mac-x64/chrome-headless-shell'];
+  try { for (const d of fs.readdirSync(root).sort().reverse()) for (const rel of rels) { const p = path.join(root, d, rel); if (fs.existsSync(p)) return p; } } catch {}
+  return null;
+}
+const chrome = findChrome();
+test('on the phone: tabs, a session full screen with the pill and its drawer, a new session, and this phone\'s settings', { skip: chrome ? false : 'no Chromium found' }, async () => {
+  const { chromium } = await import('playwright-core');
+  const browser = await chromium.launch({ executablePath: chrome, args: ['--no-sandbox'] });
+  try {
+    const code = new URL((await svc.call('phone')).body.url).searchParams.get('pair');
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ignoreHTTPSErrors: true });
+    const page = await ctx.newPage(); page.setDefaultTimeout(8000);
+    await page.goto(`https://127.0.0.1:${INNER}/?pair=${code}`);
+    await page.waitForSelector('html.ph[data-pt=home]');
+    assert.deepEqual(await page.locator('#ptabs button span').allTextContents(), ['Home', 'Sessions', 'New', 'Settings']);
+    assert.equal(await page.locator('.composer').isVisible(), false, 'Home has no message box');
+    await page.waitForSelector('#dash .hs-lim');
+    // a session, full screen: back, the cache under the title, the pill
+    await page.click('[data-pt=sessions]');
+    await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`);
+    await page.waitForSelector('html[data-pt=session]');
+    assert.equal(await page.locator('#ptabs').isVisible(), false);
+    assert.ok(await page.locator('#phBack').isVisible());
+    assert.match(await page.locator('#phCache').textContent(), /Warm|Cools in|Cache cold/);
+    await page.waitForFunction(() => /7d/.test(document.querySelector('#phPill').textContent));
+    assert.match(await page.locator('#phPill').textContent(), /7d.*41%/, '7d shows because it is closer to its limit (41% vs 34%)');
+    // the drawer: a model picked shows in the pill; the context page
+    await page.click('#phPill');
+    await page.click('[data-dm="claude-opus-5-5"]');
+    assert.match(await page.locator('#phPill').textContent(), /Opus/);
+    assert.ok(await page.locator('[data-dho]').isVisible(), 'Continue in a new session is one tap from the open drawer');
+    await page.click('[data-dctx]');
+    await page.waitForSelector('.phdr .pdh:has-text("What fills the context")');
+    await page.click('[data-dback]');
+    await page.mouse.click(195, 30);
+    await page.click('#phBack');
+    await page.waitForSelector('html[data-pt=sessions]');
+    // a new session: the sentence under the box
+    await page.click('[data-pt=new]');
+    await page.waitForSelector('html[data-pt=new]');
+    assert.equal(await page.locator('#hello').textContent(), 'What are we working on?');
+    assert.match(await page.locator('#phSum').textContent(), /alpha on live/);
+    // this phone's settings: a notification kind switched on reaches the PC
+    await page.click('[data-pt=settings]');
+    await page.click('[data-pkind=near]');
+    await until(async () => (await svc.call('phone')).body.phones.some(p => p.kinds.near), 'the kind to be saved');
+    // the desktop is untouched
+    const desk = await browser.newPage(); await desk.goto(svc.address);
+    await desk.waitForSelector('#list .sess');
+    assert.equal(await desk.evaluate(() => document.documentElement.classList.contains('ph')), false);
+    assert.equal(await desk.locator('#ptabs').count(), 0);
+  } finally { await browser.close(); }
+});
+
+// Set up once: the PC restarts and Workwood opens again; the phone carries on with no new setup, and is told things.
+test('after a restart the phone reconnects with its key, the same certificates, and its notifications', async () => {
+  const { key } = await pair(), k = phoneKeys(), me = (await api(key, 'phone/me')).body;
+  const sub = { endpoint: `http://127.0.0.1:${pushSrv.address().port}/push/r-${me.id}`, keys: { p256dh: k.e.getPublicKey().toString('base64url'), auth: k.auth.toString('base64url') } };
+  await api(key, 'phone/me', { push: sub, kinds: { cool: true } });
+  const ca = fingerprint('ca.crt'), srv = fingerprint('server.crt');
+  svc.stop();
+  await until(async () => { try { await req('/phone/ping'); return false; } catch { return true; } }, 'the old service to go');
+  svc = await startService(sb, { WORKWOOD_PHONE_DIR: path.join(sb.root, 'phone'), WORKWOOD_PHONE_PORT: String(PORT), WORKWOOD_PHONE_INNER: String(INNER), WORKWOOD_PHONE_HOST: '127.0.0.1',
+    WORKWOOD_PHONE_WSL: '1', WORKWOOD_PUSH_HTTP: '1', WORKWOOD_PREVIEW_KEY: 'pvkey' });
+  assert.equal((await svc.call('phone')).body.on, true, 'Phone stays on');
+  await relay();   // the Windows window, opened again
+  await until(async () => (await svc.call('phone')).body.listening, 'the phone port');
+  assert.equal(fingerprint('ca.crt'), ca, 'the phone still trusts the same authority');
+  assert.equal(fingerprint('server.crt'), srv, 'no new certificate when nothing changed');
+  const again = await api(key, 'phone/me');
+  assert.equal(again.status, 200); assert.equal(again.body.id, me.id); assert.equal(again.body.push, true); assert.equal(again.body.kinds.cool, true);
+  assert.equal(again.body.vapid, me.vapid, 'the same push key, so the phone\'s subscription still holds');
+  const mine = () => got.filter(g => g.path === '/push/r-' + me.id);
+  assert.equal((await svc.call('sessions', { cwd: sb.projects.alpha, profile: 'live', text: 'After the restart' })).status, 200);
+  const g = await until(() => mine()[0], 'a push after the restart', 15000);
+  assert.equal(decrypt(k, g.body).kind, 'turn');
+});

@@ -1,0 +1,172 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 59 — Workwood on your phone</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<link rel="stylesheet" href="../ui/app.css">
+<style>
+html,body{height:auto}
+body{overflow:auto;background:var(--bg);padding:36px 24px 80px}
+.top{max-width:1400px;margin:0 auto 8px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top>span{color:var(--faint);font-size:12.5px}
+.tg{margin-left:auto;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:8px;box-shadow:0 0 0 1px var(--line2)}
+.lede{max-width:1400px;margin:0 auto 30px;color:var(--faint);font-size:12.5px}.lede b{color:var(--dim);font-weight:650}
+
+.row4{max-width:1400px;margin:0 auto;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.cap h2{font-size:14px;margin:0 0 2px;font-weight:700}
+.cap p{margin:0 0 12px;color:var(--faint);font-size:12.5px;max-width:300px;min-height:36px}
+
+/* desktop: Settings › Phone */
+.desk{width:420px;height:600px;border-radius:14px;box-shadow:0 0 0 1px var(--line2);background:var(--bg);display:flex;overflow:hidden}
+.dnav{width:120px;border-right:1px solid var(--line);padding:14px 8px;font-size:12.5px;color:var(--dim)}
+.dnav div{padding:6px 9px;border-radius:7px}.dnav .on{background:var(--surface2);color:var(--text);font-weight:650}
+.dnav hr{border:0;border-top:1px solid var(--line);margin:8px 4px}
+.dbody{flex:1;padding:20px 22px;font-size:12.5px}
+.dbody h3{margin:0 0 14px;font-size:15px}
+.tgl{display:flex;align-items:center;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.tgl b{font-weight:650}.tgl small{display:block;color:var(--faint);font-weight:500;margin-top:2px}
+.sw{margin-left:auto;width:30px;height:17px;border-radius:9px;background:var(--go);position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:2px;left:15px;right:auto;width:13px;height:13px;border-radius:50%;background:#fff}
+.qr{display:flex;gap:16px;align-items:center;padding:18px 0;border-bottom:1px solid var(--line)}
+.qr canvas{width:116px;height:116px;border-radius:10px;background:#fff;padding:8px;flex:none}
+.qr .t b{display:block;font-size:13px;margin-bottom:4px}.qr .t span{color:var(--faint);line-height:1.5}
+.qr code{display:block;margin-top:8px;font-size:11px;color:var(--dim)}
+.dev{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.dev small{color:var(--faint);display:block;margin-top:1px}.dev .gap{flex:1}
+.dev button{font-size:11.5px;color:var(--faint);padding:3px 8px;border-radius:6px;box-shadow:inset 0 0 0 1px var(--line2)}
+.lab{color:var(--faint);font-size:11px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;margin:16px 0 2px}
+.live{width:7px;height:7px;border-radius:50%;background:var(--go);box-shadow:0 0 0 0 var(--go);animation:pulse 2s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 6px transparent}}
+
+/* phone */
+.ph{box-sizing:border-box;width:288px;height:600px;border-radius:38px;padding:10px;background:#0b0b0d;box-shadow:0 0 0 1px var(--line2),0 20px 50px rgba(0,0,0,.35)}
+.scr{height:100%;border-radius:30px;background:var(--bg);overflow:hidden;display:flex;flex-direction:column;position:relative}
+.sbar{height:26px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;font-weight:700;color:var(--dim)}
+.ah{display:flex;align-items:center;gap:8px;padding:8px 14px 10px;flex:none}
+.ah h4{margin:0;font-size:17px;font-weight:750}.ah .gap{flex:1}
+.ah .ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;color:var(--dim)}
+.ic svg,.bk svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.lst{flex:1;overflow:hidden;padding:0 8px}
+.xgrp{font-size:11px;color:var(--faint);font-weight:650;padding:10px 8px 4px}
+.xs{display:flex;gap:10px;align-items:center;padding:10px 8px;border-radius:12px}
+.xs.on{background:var(--surface)}
+.xs .xm{flex:1;min-width:0}.xs b{display:block;font-size:13.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xs small{display:block;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.xs .w{color:var(--warn,#e0a73a)}
+.xs .xd{width:8px;height:8px;border-radius:50%;flex:none}
+.xd.run{background:var(--accent);animation:pulse 2s infinite;box-shadow:0 0 0 0 var(--accent)}.xd.wait{background:var(--warn,#e0a73a)}.xd.new{background:var(--text)}.xd.idle{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line2)}
+.home{position:absolute;bottom:6px;left:50%;width:100px;height:4px;margin-left:-50px;border-radius:2px;background:var(--line2)}
+
+.bk{width:30px;height:30px;display:grid;place-items:center;color:var(--dim);margin-left:-6px}
+.ah .tt{min-width:0;flex:1}.ah .tt b{display:block;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ah .tt small{color:var(--faint);font-size:11px}
+.xchip{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:650;padding:4px 8px;border-radius:8px;background:var(--surface);color:var(--dim)}
+.xchip svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8}
+.th{flex:1;overflow:hidden;padding:4px 14px;display:flex;flex-direction:column;justify-content:flex-end;font-size:13px;line-height:1.6}
+.th .me{max-width:86%;font-size:13px;margin-bottom:14px}
+.th p{margin:0 0 10px}
+.xmini{font-size:11.5px;color:var(--faint);display:flex;align-items:center;gap:6px;margin:0 0 10px}
+.xmini svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2}
+.xask{border-radius:14px;box-shadow:0 0 0 1px var(--line2);background:var(--surface);padding:12px;margin:0 0 6px}
+.xask .q{font-size:12px;color:var(--dim);margin-bottom:4px}.xask code{font-size:11.5px;display:block;padding:6px 8px;border-radius:7px;background:var(--bg);margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xask .bb{display:flex;gap:8px}.xask button{flex:1;height:36px;border-radius:10px;font-weight:650;font-size:13px;box-shadow:inset 0 0 0 1px var(--line2)}
+.xask button.y{background:var(--text);color:var(--bg);box-shadow:none}
+.cp{padding:8px 10px 22px;flex:none}
+.cbox{display:flex;align-items:flex-end;gap:6px;background:var(--surface);border:1px solid var(--line2);border-radius:20px;padding:6px 6px 6px 14px}
+.cbox span{flex:1;font-size:13px;color:var(--faint);padding:6px 0}
+.cbox .r{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:var(--dim)}
+.cbox .r.s{background:var(--text);color:var(--bg)}
+.cbox svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cm{display:flex;gap:6px;padding:6px 4px 0;font-size:11px;color:var(--faint)}.cm .gap{flex:1}
+
+/* preview sheet */
+.xdim{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.sheet{position:absolute;left:0;right:0;bottom:0;top:70px;background:var(--bg);border-radius:20px 20px 0 0;box-shadow:0 -1px 0 var(--line2);display:flex;flex-direction:column;animation:up .5s ease-out}
+@keyframes up{from{transform:translateY(40px);opacity:.4}}
+.grab{width:36px;height:4px;border-radius:2px;background:var(--line2);margin:8px auto 4px}
+.shh{display:flex;align-items:center;gap:8px;padding:4px 14px 10px;font-size:12.5px}.shh b{flex:1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabs{display:flex;gap:6px;padding:0 14px 10px;overflow:hidden}.tabs span{font-size:11.5px;padding:4px 9px;border-radius:7px;background:var(--surface);color:var(--dim);white-space:nowrap}.tabs .on{background:var(--text);color:var(--bg);font-weight:650}
+.pg{flex:1;margin:0 10px 22px;border-radius:12px;background:#f6f4ef;color:#222;padding:16px;overflow:hidden;font-size:11px}
+.pg h5{margin:0 0 8px;font-size:15px}.pg .bar{height:8px;border-radius:4px;background:#ddd8cc;margin:6px 0}.pg .bar.s{width:60%}
+.pg .card{height:90px;border-radius:10px;background:#e6e0d2;margin:12px 0}
+
+.uh{max-width:1400px;margin:34px auto 0;color:var(--faint);font-size:12.5px}
+.uh summary{cursor:pointer;color:var(--dim);font-weight:650}
+.uh ul{margin:8px 0 0;padding-left:18px;line-height:1.7}
+.oq{max-width:1400px;margin:22px auto 0;font-size:12.5px;color:var(--dim)}
+.oq h3{font-size:13px;margin:0 0 6px;color:var(--text)}.oq ol{margin:0;padding-left:18px;line-height:1.8}
+</style></head><body>
+<div class="top"><h1>Workwood on your phone</h1><span>round 59 · mockup</span><button class="tg" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<div class="lede">Turn on <b>Phone</b> in Settings, scan the code, and the same Workwood opens on your phone over <b>Tailscale</b>, private to your devices. Sessions keep running on the PC; the phone looks in and answers.</div>
+
+<div class="row4">
+  <div class="cap"><h2>1 · Pair</h2><p>Settings › Phone. One switch, one code. Each phone is listed and can be removed.</p>
+    <div class="desk">
+      <div class="dnav"><div>General</div><div>Sessions</div><div>Speech</div><div class="on">Phone</div><hr><div>Profiles</div><div>Skills</div><div>About</div></div>
+      <div class="dbody"><h3>Phone</h3>
+        <div class="tgl"><div><b>Open Workwood on your phone</b><small>Through Tailscale · only your devices</small></div><span class="sw"></span></div>
+        <div class="qr"><canvas id="qr" width="100" height="100"></canvas><div class="t"><b>Scan with your phone's camera</b><span>Then Add to Home Screen, and it opens like an app.</span><code>workwood.tail3f9c.ts.net</code></div></div>
+        <div class="lab">Paired</div>
+        <div class="dev"><span class="live"></span><div>Pixel 9<small>Open now</small></div><span class="gap"></span><button>Remove</button></div>
+        <div class="dev"><span class="live" style="background:var(--line2);animation:none"></span><div>iPad<small>Yesterday</small></div><span class="gap"></span><button>Remove</button></div>
+      </div>
+    </div></div>
+
+  <div class="cap"><h2>2 · Inbox</h2><p>The sidebar becomes the first screen. What waits on you is on top.</p>
+    <div class="ph"><div class="scr"><div class="sbar"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="ah"><h4>Sessions</h4><span class="gap"></span><span class="ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4-4"/></svg></span><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span></div>
+      <div class="lst">
+        <div class="xgrp">Needs you</div>
+        <div class="xs"><span class="xd wait"></span><div class="xm"><b>Phone pairing for Workwood</b><small class="w">Asks to run npm test</small></div></div>
+        <div class="xgrp">Working</div>
+        <div class="xs"><span class="xd run"></span><div class="xm"><b>Read aloud: skip code blocks</b><small>Editing ui/app.js · 4 min</small></div></div>
+        <div class="xs"><span class="xd run"></span><div class="xm"><b>Claudius limits chart</b><small>Running tests · 12 min</small></div></div>
+        <div class="xgrp">Done, unread</div>
+        <div class="xs"><span class="xd new"></span><div class="xm"><b>Background a running step</b><small>Tests pass. Merge into main?</small></div></div>
+        <div class="xgrp">Earlier</div>
+        <div class="xs"><span class="xd idle"></span><div class="xm"><b>Handoff between profiles</b><small>Yesterday</small></div></div>
+        <div class="xs"><span class="xd idle"></span><div class="xm"><b>Session chains</b><small>Mon</small></div></div>
+      </div><div class="home"></div></div></div></div>
+
+  <div class="cap"><h2>3 · Session</h2><p>Steps fold to one line. An approval is a card with thumb-sized buttons.</p>
+    <div class="ph"><div class="scr"><div class="sbar"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="ah"><span class="bk"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></span><div class="tt"><b>Phone pairing for Workwood</b><small>workwood · Opus</small></div><span class="xchip"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M9 20h6"/></svg>2</span></div>
+      <div class="th">
+        <div class="me">Add the Phone page to Settings and run the tests</div>
+        <div class="xmini"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>Edited 3 files · ran 1 command</div>
+        <p>The Phone page is in. It turns on listening on your Tailscale address and shows the pairing code.</p>
+        <div class="xask"><div class="q">Run this command?</div><code>npm test</code><div class="bb"><button>No</button><button class="y">Allow</button></div></div>
+      </div>
+      <div class="cp"><div class="cbox"><span>Message the agent…</span><i class="r"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></i><i class="r s"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></i></div>
+        <div class="cm"><span>Personal</span><span class="gap"></span><span>Ask first</span><span>· 38%</span></div></div>
+      <div class="home"></div></div></div></div>
+
+  <div class="cap"><h2>4 · Preview</h2><p>What the agent made opens as a sheet over the session. Swipe down to close.</p>
+    <div class="ph"><div class="scr"><div class="sbar"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="ah"><span class="bk"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></span><div class="tt"><b>Phone pairing for Workwood</b><small>workwood · Opus</small></div></div>
+      <div class="xdim"></div>
+      <div class="sheet"><div class="grab"></div>
+        <div class="shh"><b>design/round60.html</b><span class="ic"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4zM16 9a4 4 0 0 1 0 6"/></svg></span></div>
+        <div class="tabs"><span class="on">round60.html</span><span>qr.png</span></div>
+        <div class="pg"><h5>Workwood on your phone</h5><div class="bar"></div><div class="bar s"></div><div class="card"></div><div class="bar"></div><div class="bar"></div><div class="bar s"></div><div class="card"></div></div>
+      </div><div class="home"></div></div></div></div>
+</div>
+
+<details class="uh"><summary>Under the hood</summary><ul>
+<li>With Phone on, the service also listens on the PC's Tailscale address, and <code>tailscale serve</code> puts HTTPS in front (needed for Add to Home Screen, the mic and notifications). Off by default; nothing changes for the window.</li>
+<li>The code carries a one-time pairing key. The phone trades it for its own long-lived key, kept in a cookie; Remove revokes it. The window's start-up token never leaves the PC.</li>
+<li>Requests from the phone are accepted only for the tailnet name and only with a paired key. Previews are served through the main address, so the phone can load them.</li>
+<li>WSL: Tailscale runs on Windows; the Windows window forwards the port, or WSL's mirrored networking is used. Probed before building.</li>
+<li>The layout is the same app below ~700px wide: one pane at a time (list, session, sheet). No second UI to keep in step.</li>
+</ul></details>
+
+<div class="oq"><h3>Open questions</h3><ol>
+<li>On the phone, leave out the terminal view and Changes at first, keeping chat, approvals, previews and dictation?</li>
+<li>Notify the phone when a session needs you or a turn ends? It works once added to the Home Screen.</li>
+<li>Is Tailscale already on your PC and phone, or should Settings walk you through it?</li>
+</ol></div>
+
+<script>
+// a stand-in code (not a real one), drawn so the page reads as a pairing screen
+const c=document.getElementById('qr').getContext('2d');c.fillStyle='#111';let s=7;const r=()=>(s=(s*9301+49297)%233280)/233280;
+const N=25,z=4;for(let y=0;y<N;y++)for(let x=0;x<N;x++){const f=(a,b)=>x>=a&&x<a+7&&y>=b&&y<b+7;const fin=f(0,0)||f(18,0)||f(0,18);
+ if(fin){const lx=x%18%7,ly=y%18%7;if(lx==0||ly==0||lx==6||ly==6||(lx>1&&lx<5&&ly>1&&ly<5))c.fillRect(x*z,y*z,z,z)}else if(r()>.52)c.fillRect(x*z,y*z,z,z)}
+</script>
+</body></html>

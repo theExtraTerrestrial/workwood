@@ -1,6 +1,8 @@
 // The Workwood service: a local web server that the window talks to.
 // It only listens on this machine and every request must carry the start-up token.
 import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
 import fs from 'node:fs/promises';
 import fss from 'node:fs';
 import path from 'node:path';
@@ -21,6 +23,7 @@ import * as prof from './profiles.mjs';
 import * as update from './update.mjs';
 import * as ho from './handoff.mjs';
 import * as rw from './rewind.mjs';
+import * as phone from './phone.mjs';
 import { createRequire } from 'node:module';
 
 const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui');
@@ -99,6 +102,7 @@ const emit = (type, data) => {
   if (type === 'turn-end') { const p = state.profiles.find(x => x.name === runs.get(data.sessionId)?.profile); if (p) setTimeout(() => readings.add([p]), 1500); }   // what the turn cost
   if (type === 'turn-end') { noteStop(runs.get(data.sessionId)); planAuto(runs.get(data.sessionId)); nameLater(data.sessionId); }
   if (type === 'run' && data.run?.status !== 'stopped') dropAuto(data.sessionId);   // a new turn, however it began, answers the wait
+  if (type === 'run' || type === 'turn-end') phoneNews(type, data);
 };
 
 // Limits, read by Workwood itself (see usage.mjs). A reading newer than the one in the profile list wins; a
@@ -159,7 +163,7 @@ const readings = usage.makeQueue((name, ev) => {
   if (ev.queued || ev.reading) reading.add(name); else reading.delete(name);
   if (ev.error) failed.set(name, ev.error);
   else if (ev.at) { failed.delete(name); readout.set(name, { h5: ev.h5, d7: ev.d7, r5: ev.r5, r7: ev.r7, at: ev.at }); state.profiles = state.profiles.map(withReadout); }
-  pushState();
+  pushState(); watchLimits();
 });
 // Profiles being added: their folder exists, but they are not listed until the sign-in has landed in it.
 const adding = new Set();
@@ -394,12 +398,15 @@ const body = req => new Promise((res, rej) => { let s = ''; req.on('data', d => 
 const send = (res, code, data) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(data)); };
 
 const skills = new Map();   // folder|profile -> { at, list }, kept for two minutes
-async function api(req, res, url) {
+async function api(req, res, url, who = null) {
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // after "api"
+  if (who && phoneMayNot(req.method, parts)) return send(res, 403, { error: 'Not from the phone. Use Workwood on the PC for this.' });
+  if (parts[0] === 'phone') return phoneApi(req, res, parts, who);
   if (req.method === 'GET' && parts[0] === 'events') {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
     res.write(`event: state\ndata: ${JSON.stringify(snapshot())}\n\n`);
-    clients.add(res); req.on('close', () => clients.delete(res));
+    clients.add(res); req.on('close', () => { clients.delete(res); phoneClients.delete(res); });
+    if (who) phoneClients.set(res, who.id);
     return;
   }
   if (req.method === 'GET' && parts[0] === 'status') {    // for the Windows window: is anything here working or waiting, while you look at the other side?
@@ -745,6 +752,11 @@ async function api(req, res, url) {
   if (parts[0] === 'sessions' && parts[2] === 'bg-step') { try { await backgroundStep(parts[1], b.id); } catch (e) { return send(res, 409, { error: e.message }); } return send(res, 200, { ok: true }); }
   if (parts[0] === 'sessions' && parts[2] === 'stop-step') { try { await stopStep(parts[1], b.id); } catch (e) { return send(res, 409, { error: e.message }); } return send(res, 200, { ok: true }); }
   if (parts[0] === 'sessions' && parts[2] === 'stay') { dropAuto(parts[1]); return send(res, 200, { ok: true }); }   // cancel continuing by itself
+  if (parts[0] === 'sessions' && parts[2] === 'go-now') {   // continue on the other profile now, without the rest of the wait
+    const a = autos.get(parts[1]), run = runs.get(parts[1]);
+    if (!a || !run) return send(res, 409, { error: 'Nothing is waiting to continue.' });
+    clearTimeout(a.timer); goAuto(parts[1], run); return send(res, 200, { ok: true });
+  }
   if (parts[0] === 'sessions' && parts[2] === 'stop') { await stop(parts[1]); return send(res, 200, { ok: true }); }
   if (parts[0] === 'sessions' && parts[2] === 'term') {
     const s = state.sessions.find(x => x.id === parts[1]);
@@ -871,13 +883,19 @@ const real = async p => { try { return await fs.realpath(p); } catch { return nu
 
 let helper = null;
 const readHelper = async () => helper ??= (await fs.readFile(path.join(UI, 'preview-read.js'), 'utf8')).replace(/<\/(script)/gi, '<\\/$1');
-const previews = http.createServer(async (req, res) => {
+const previews = http.createServer((req, res) => {
+  const host = (req.headers.host || '').split(':')[0];
+  if (host !== '127.0.0.1' && host !== 'localhost') { res.writeHead(403, { 'content-type': 'text/plain' }); return res.end('Not available.'); }
+  servePreview(req, res, new URL(req.url, 'http://localhost').pathname, false);
+});
+// Shown to the phone from the app's own address, a page is sent with a sandbox header instead: the browser then treats
+// it as a site of its own, which cannot read the app's storage or call it with the phone's key.
+const SANDBOX_CSP = 'sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock allow-presentation';
+async function servePreview(req, res, pathname, sandboxed) {
   const deny = (code = 403) => { res.writeHead(code, { 'content-type': 'text/plain' }); res.end(code === 404 ? 'Not found.' : 'Not available.'); };
   try {
-    const host = (req.headers.host || '').split(':')[0];
-    if (host !== '127.0.0.1' && host !== 'localhost') return deny();
     if (req.method !== 'GET' && req.method !== 'HEAD') return deny(405);
-    const [, key, id, ...rest] = new URL(req.url, 'http://localhost').pathname.split('/');
+    const [, key, id, ...rest] = pathname.split('/');
     const s = key === PREVIEW_KEY && state.sessions.find(x => x.id === id);
     if (!s || !rest.length) return deny();
     for (const [sid, run] of runs) if (sid === id) for (const f of run.builder.work()) previewDirs(id).add(path.dirname(f.path)); // written a moment ago
@@ -889,6 +907,7 @@ const previews = http.createServer(async (req, res) => {
     const st = await fs.stat(file);
     if (!st.isFile()) return deny(404);
     const head = { 'content-type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'accept-ranges': 'bytes' };
+    if (sandboxed) head['content-security-policy'] = SANDBOX_CSP;
     // A page shown in the window's preview gets the read-aloud helper added at its end, as it is sent; the file is untouched.
     if (/\.html?$/i.test(file) && new URL(req.url, 'http://localhost').searchParams.has('ra')) {
       const body = Buffer.concat([await fs.readFile(file), Buffer.from(`\n<script>${await readHelper()}</script>\n`)]);
@@ -907,7 +926,233 @@ const previews = http.createServer(async (req, res) => {
     if (req.method === 'HEAD' || !st.size) return res.end();
     fss.createReadStream(file, { start, end }).on('error', () => res.destroy()).pipe(res);
   } catch (e) { console.error('[workwood] preview:', String(e.message).split('\n')[0]); if (!res.headersSent) deny(404); else res.end(); }
-});
+}
+
+// ---- the phone (see phone.mjs) ----
+// One port on the home network, for both: plain HTTP serves only the setup page and the certificate to trust; HTTPS is
+// the app, for paired phones. Inside WSL the port is opened on Windows by the Workwood window, which passes
+// connections through to 127.0.0.1 here and tells us the PC's addresses (`relay`).
+const relay = { ips: [], name: null, listening: false, error: null, at: 0 };
+const viewing = new Map();        // phone id -> { sessionId, at }: what it shows, so it is not told what it sees
+const phoneClients = new Map();   // event stream -> phone id
+const phoneState = { error: null, setupSeen: 0, cert: null };
+let phoneNet = null, phoneTls = null, phoneSetup = null;
+const phoneSockets = new Set();
+const phoneIps = () => {
+  const rank = ip => /^192\.168\./.test(ip) ? 0 : /^10\./.test(ip) ? 1 : /^172\./.test(ip) ? 2 : 3;
+  return [...new Set(phone.IN_WSL ? relay.ips : phone.localIps())].filter(phone.privateIp).sort((a, b) => rank(a) - rank(b));
+};
+const phoneName = () => relay.name || os.hostname();
+const phoneUrl = () => { const ip = phoneIps()[0], c = phone.pairCode(); return ip && c ? `http://${ip}:${phone.PORT}/?pair=${c.value}` : null; };
+async function phoneUp() {
+  if (!phone.isOn()) return phoneDown();
+  // Inside WSL, wait for the Windows window to say the PC's name and addresses: a certificate made before would be for
+  // the wrong ones, and made again a moment later.
+  if (phone.IN_WSL && !relay.at) return;
+  try {
+    const c = phoneState.cert = await phone.certFor(phoneIps(), phoneName());
+    if (phoneTls) return phoneTls.setSecureContext({ cert: c.cert, key: c.key });
+    phoneTls = https.createServer({ cert: c.cert, key: c.key }, phoneHandler);
+    phoneSetup = http.createServer(setupHandler);
+    const net0 = net.createServer(sock => {
+      sock.on('error', () => {}); phoneSockets.add(sock); sock.on('close', () => phoneSockets.delete(sock));
+      sock.once('data', buf => { sock.pause(); sock.unshift(buf); (buf[0] === 22 ? phoneTls : phoneSetup)?.emit('connection', sock); process.nextTick(() => sock.resume()); });
+    });
+    await new Promise((ok, no) => { net0.once('error', no); net0.listen(phone.INNER_PORT, phone.HOST, ok); });
+    net0.on('error', e => console.error('[workwood] phone:', e.message));
+    phoneNet = net0; phoneState.error = null;
+  } catch (e) {
+    phoneState.error = e.code === 'EADDRINUSE' ? `Port ${phone.INNER_PORT} is taken by another program.` : String(e.message).split('\n')[0];
+    phoneTls = phoneSetup = null;
+    console.error('[workwood] phone:', phoneState.error);
+  }
+}
+function phoneDown() {
+  try { phoneNet?.close(); } catch {}
+  for (const sock of phoneSockets) sock.destroy();   // open connections too, kept alive by the phone's browser
+  for (const res of phoneClients.keys()) try { res.end(); } catch {}
+  phoneNet = phoneTls = phoneSetup = null;
+}
+// Phones may look and answer, not change Workwood itself or open a terminal on this PC.
+function phoneMayNot(method, parts) {
+  if (parts[0] === 'phone') return !['me', 'viewing', 'unpair'].includes(parts[1]);
+  if (parts[0] === 'sessions' && ['term', 'terminal', 'delete', 'rewind', 'unrewind'].includes(parts[2])) return true;
+  if (parts[0] === 'profiles') return parts[2] === 'login' || (method !== 'GET' && parts[2] !== 'dismiss');
+  if (parts[0] === 'voice' && parts[1] === 'better') return true;
+  return ['settings', 'open-editor', 'update', 'default-mode', 'projects'].includes(parts[0]) && method !== 'GET';
+}
+function endPhone(id) { for (const [res, pid] of phoneClients) if (pid === id) try { res.end(); } catch {} viewing.delete(id); }
+async function phoneApi(req, res, parts, who) {
+  const b = req.method === 'POST' ? await body(req) : {};
+  if (who) {   // the phone itself
+    if (parts[1] === 'me' && req.method === 'POST') { phone.update(who.id, b); }
+    if (parts[1] === 'viewing') { if (b.sessionId) viewing.set(who.id, { sessionId: String(b.sessionId), at: Date.now() }); else viewing.delete(who.id); return send(res, 200, { ok: true }); }
+    if (parts[1] === 'unpair') { phone.revoke(who.id); setTimeout(() => endPhone(who.id), 50); return send(res, 200, { ok: true }); }
+    const me = phone.list().find(p => p.id === who.id);
+    return send(res, 200, { ...me, pc: phoneName(), vapid: phone.vapidPublic(), install: phone.installCode(who.id) });
+  }
+  if (parts[1] === 'relay') {   // the Windows window: whether to open the port, and what it found
+    if (req.method === 'POST') {
+      const ips = Array.isArray(b.ips) ? b.ips.filter(x => typeof x === 'string' && phone.privateIp(x)).slice(0, 8) : [];
+      const changed = ips.join() !== relay.ips.join() || (b.name && b.name !== relay.name);
+      Object.assign(relay, { ips, name: typeof b.name === 'string' ? b.name.slice(0, 63) : relay.name, listening: b.listening === true, error: b.error ? String(b.error).slice(0, 200) : null, at: Date.now() });
+      if (changed && phone.isOn()) phoneUp();
+    }
+    return send(res, 200, { on: phone.isOn(), port: phone.PORT, inner: phone.INNER_PORT });
+  }
+  if (parts[1] === 'on' && req.method === 'POST') { phone.setOn(b.on === true); await phoneUp(); }
+  if (parts[1] === 'revoke' && req.method === 'POST') { if (!phone.revoke(String(b.id || ''))) return send(res, 404, { error: 'No such phone.' }); endPhone(String(b.id)); }
+  if (parts[1] === 'repair' && req.method === 'POST') {   // a code that pairs this phone again, as itself
+    const ip = phoneIps()[0], c = phone.pairCode(String(b.id || ''));
+    if (!c) return send(res, 404, { error: 'No such phone.' });
+    return send(res, 200, { id: String(b.id), url: ip ? `http://${ip}:${phone.PORT}/?pair=${c.value}` : null, until: c.until });
+  }
+  if (parts[1] === 'rename' && req.method === 'POST') { if (!phone.update(String(b.id || ''), { name: b.name })) return send(res, 404, { error: 'No such phone.' }); }
+  const on = phone.isOn();
+  return send(res, 200, { on, port: phone.PORT, wsl: phone.IN_WSL, name: phoneName(), ips: phoneIps(),
+    listening: !!phoneNet, error: phoneState.error, relay: { listening: relay.listening, error: relay.error, fresh: Date.now() - relay.at < 15000 },
+    url: on ? phoneUrl() : null, until: on ? phone.pairCode()?.until : null, setupSeen: phoneState.setupSeen,
+    local: phoneLocal(), phones: phone.list().map(x => ({ ...x, lost: !!x.via && /^\d+\.\d+\.\d+\.\d+$/.test(x.via) && !phoneIps().includes(x.via) })) });
+}
+const hostOf = req => (req.headers.host || '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
+// The PC's name on the home network (DESKTOP-AX.local), answered by Windows itself (or the Mac, or Avahi on Linux). A phone
+// that reaches the PC by it keeps working when the router gives the PC another address; the setup page uses it when
+// the phone can (see phone-setup.html).
+const phoneLocal = () => phoneState.cert ? phoneState.cert.host.toLowerCase() + '.local' : null;
+const okPhoneHost = h => h === '127.0.0.1' || h === 'localhost' || phoneIps().includes(h) || (!!phoneLocal() && h === phoneLocal());
+const cookieOf = (req, name) => { const m = new RegExp('(?:^|;\\s*)' + name + '=([^;]+)').exec(req.headers.cookie || ''); return m ? m[1] : null; };
+const page = (res, code, title, text) => {
+  res.writeHead(code, { 'content-type': TYPES['.html'], 'cache-control': 'no-store', 'x-frame-options': 'DENY' });
+  res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Workwood</title><style>body{font:16px/1.5 system-ui,sans-serif;background:#18191c;color:#e8e6e3;margin:0;padding:48px 24px}h1{font-size:21px;margin:0 0 8px}p{color:#9a9894;margin:0}</style><h1>${title}</h1><p>${text}</p>`);
+};
+async function setupHandler(req, res) {
+  try {
+    if (!okPhoneHost(hostOf(req))) { res.writeHead(403); return res.end(); }
+    const url = new URL(req.url, 'http://x');
+    phoneState.setupSeen = Date.now();
+    if (url.pathname === '/workwood.crt') {
+      const der = phone.caDer(); if (!der) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert', 'content-disposition': `attachment; filename="Workwood ${phoneName()}.crt"`, 'cache-control': 'no-store' });
+      return res.end(der);
+    }
+    if (url.pathname !== '/') { res.writeHead(302, { location: '/' }); return res.end(); }
+    const code = /^[\w-]{10,40}$/.test(url.searchParams.get('pair') || '') ? url.searchParams.get('pair') : '';
+    const html = (await fs.readFile(path.join(UI, 'phone-setup.html'), 'utf8'))
+      .replaceAll('__HTTPS__', `https://${req.headers.host}`).replaceAll('__NAMED__', phoneLocal() ? `https://${phoneLocal()}:${phone.PORT}` : '').replaceAll('__CODE__', code).replaceAll('__NAME__', phoneName().replace(/[<>&"]/g, ''));
+    res.writeHead(200, { 'content-type': TYPES['.html'], 'cache-control': 'no-store', 'x-frame-options': 'DENY' }); res.end(html);
+  } catch (e) { console.error('[workwood] phone setup:', e.message); if (!res.headersSent) { res.writeHead(500); res.end(); } }
+}
+const ICONS = { '/icon-192.png': 'icon-192.png', '/icon-512.png': 'icon-512.png', '/apple-touch-icon.png': 'icon-192.png' };
+async function phoneHandler(req, res) {
+  try {
+    if (!okPhoneHost(hostOf(req))) { res.writeHead(403); return res.end(); }
+    const url = new URL(req.url, 'https://x'), p = url.pathname;
+    if (p === '/phone/ping') { res.writeHead(200, { 'content-type': 'text/plain', 'cache-control': 'no-store', 'access-control-allow-origin': '*' }); return res.end('ok'); }
+    if (ICONS[p]) { res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'max-age=86400' }); return res.end(await fs.readFile(path.join(UI, ICONS[p]))); }
+    if (p === '/sw.js') { res.writeHead(200, { 'content-type': TYPES['.js'], 'cache-control': 'no-store', 'service-worker-allowed': '/' }); return res.end(await fs.readFile(path.join(UI, 'sw.js'))); }
+    if (p === '/manifest.webmanifest') {
+      const i = url.searchParams.get('i'), start = /^[\w-]{10,40}$/.test(i || '') ? '/?pair=' + i : '/';
+      res.writeHead(200, { 'content-type': 'application/manifest+json', 'cache-control': 'no-store' });
+      return res.end(JSON.stringify({ name: 'Workwood', short_name: 'Workwood', id: '/', start_url: start, scope: '/', display: 'standalone', background_color: '#18191c', theme_color: '#18191c',
+        icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }] }));
+    }
+    if (p.startsWith('/api/')) {
+      const who = phone.phoneOf(req.headers['x-workwood-token'] || url.searchParams.get('token'), hostOf(req));
+      if (!who) return send(res, 401, { error: 'This phone is not paired.', unpaired: true });
+      return await api(req, res, url, who);
+    }
+    if (p.startsWith('/preview/')) return servePreview(req, res, p.slice('/preview'.length), true);
+    if (p === '/') {
+      let key = cookieOf(req, 'ww'), who = phone.phoneOf(key, hostOf(req));
+      const pair = url.searchParams.get('pair');
+      if (!who && pair) {
+        const r = phone.redeem(pair, req.headers['user-agent']);
+        if (!r) return page(res, 410, 'This code has run out', 'Open Settings › Phone in Workwood on your PC and scan the new code.');
+        phone.phoneOf(r.key, hostOf(req));   // seen, and by which name or address
+        res.writeHead(303, { location: '/', 'set-cookie': `ww=${r.key}; Path=/; Max-Age=315360000; Secure; HttpOnly; SameSite=Lax`, 'cache-control': 'no-store' });
+        return res.end();
+      }
+      if (pair) { res.writeHead(303, { location: '/' }); return res.end(); }
+      if (!who) return page(res, 401, 'This phone is not paired', 'Open Settings › Phone in Workwood on your PC and scan the code with this phone.');
+      const html = (await fs.readFile(path.join(UI, 'index.html'), 'utf8'))
+        .replace('<meta name="viewport" content="width=device-width,initial-scale=1">', `<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<link rel="manifest" href="/manifest.webmanifest?i=${phone.installCode(who.id)}"><meta name="theme-color" content="#18191c"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Workwood"><link rel="apple-touch-icon" href="/apple-touch-icon.png">`)
+        .replace('<body data-token="__TOKEN__">', `<body data-token="${key}" data-phone="1">`);
+      res.writeHead(200, { 'content-type': TYPES['.html'], 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer' }); return res.end(html);
+    }
+    if (!await serveStatic(res, url)) { res.writeHead(404); res.end(); }
+  } catch (e) {
+    console.error('[workwood] phone:', e);
+    if (!res.headersSent) send(res, 500, { error: String(e.message || e).split('\n')[0] }); else res.end();
+  }
+}
+// What a phone is told, encrypted end to end (see phone.mjs). Not about the session it is looking at.
+const pushed = new Map();   // session -> the question it was told about
+const limitSeen = new Map();   // profile -> { full, near }
+const titleOf = id => state.sessions.find(s => s.id === id)?.title || runs.get(id)?.title || 'A session';
+const lastAnswer = run => { const a = [...(run?.builder?.items || [])].reverse().find(i => i.kind === 'assistant'); return a ? a.text.replace(/\s+/g, ' ').trim().slice(0, 160) : ''; };
+function phoneNews(type, data) {
+  if (!phone.isOn()) return;
+  const id = data.sessionId, tag = x => x + String(id).slice(0, 12);
+  const looking = pid => { const v = viewing.get(pid); return !!v && v.sessionId === id && Date.now() - v.at < 90_000; };
+  if (type === 'run' && data.run?.status === 'waiting' && data.run.pending && pushed.get(id) !== data.run.pending.id) {
+    pushed.set(id, data.run.pending.id);
+    phone.notify('needs', { title: titleOf(id), body: waitingLine(data.run.pending), session: id, tag: tag('n') }, looking);
+  }
+  if (type !== 'turn-end') return;
+  setTimeout(() => {   // after planAuto, so a move to another profile is known
+    const run = runs.get(id); if (!run || run.interrupted) return;
+    if (run.stopped) {
+      const a = autos.get(id), why = { limit: `Limit reached on ${run.profile}.`, auth: `Signed out of ${run.profile}.` }[run.stopped.reason] || 'Stopped: something went wrong.';
+      phone.notify('stopped', { title: titleOf(id), body: a ? `${why} Moves to ${a.to} in ${Math.round(AUTO_WAIT / 60000)} min.` : why, session: id, tag: tag('s'), auto: a ? a.to : null }, looking);
+    } else phone.notify('turn', { title: titleOf(id), body: lastAnswer(run) || 'Turn ended.', session: id, tag: tag('t') }, looking);
+    const c = run.context, used = c?.used ?? c?.tokens;
+    if (used && used >= prefs.handoff.offer && pushed.get('ctx:' + id) !== true) {
+      pushed.set('ctx:' + id, true);
+      phone.notify('context', { title: titleOf(id), body: `Context is at ${Math.round(used / 1000)}k. Continue in a new session to keep it quick.`, session: id, tag: tag('c') }, looking);
+    }
+  }, 50);
+}
+// A session's prompt cache about to go cold (its last ten minutes), once per reply: only sessions in the inbox, at rest.
+function watchCaches() {
+  if (!phone.isOn() || !prefs.cacheMinutes) return;
+  for (const s of state.sessions) {
+    const d = decorate(s), r = s.reply;
+    if (d.done || d.status !== 'idle' || !r?.at) continue;
+    const left = r.at + Math.min(prefs.cacheMinutes * 60, r.ttl || Infinity) * 1000 - Date.now();
+    if (left > 0 && left <= 10 * 60_000 && pushed.get('cool:' + s.id) !== r.at) {
+      pushed.set('cool:' + s.id, r.at);
+      phone.notify('cool', { title: s.title, body: `Its cache cools in ${Math.max(1, Math.round(left / 60000))} min. A reply before then is cheaper.`, session: s.id, tag: 'c' + s.id.slice(0, 12) });
+    }
+  }
+}
+// A limit that cleared, or one getting near: told once per crossing.
+function watchLimits() {
+  if (!phone.isOn()) return;
+  watchCaches();
+  for (const p0 of state.profiles) {
+    const p = withReadout(p0), h5 = p.h5 ?? null, d7 = p.d7 ?? null;
+    if (h5 == null && d7 == null) continue;
+    const full = (h5 ?? 0) >= 100 || (d7 ?? 0) >= 100, near = !full && Math.max(h5 ?? 0, d7 ?? 0) >= 80, was = limitSeen.get(p.name);
+    limitSeen.set(p.name, { full, near });
+    if (!was) continue;
+    if (was.full && !full) phone.notify('cleared', { title: `${p.name} has room again`, body: `5h at ${Math.round(h5 ?? 0)}%. Sessions stopped by its limit can go on.`, tag: 'l' + p.name });
+    else if (near && !was.near && !was.full) phone.notify('near', { title: `${p.name} is near its limit`, body: (h5 ?? 0) >= 80 ? `5h at ${Math.round(h5)}%.` : `7d at ${Math.round(d7)}%.`, tag: 'l' + p.name });
+  }
+}
+
+// The app's own script, styles and the terminal's library. False for anything else.
+async function serveStatic(res, url) {
+  const name = path.basename(url.pathname);
+  if (url.pathname === '/vendor/' + name && VENDOR[name]) {
+    res.writeHead(200, { 'content-type': TYPES[path.extname(name)], 'cache-control': 'max-age=86400' });
+    res.end(await fs.readFile(lib.resolve(VENDOR[name]))); return true;
+  }
+  if (url.pathname !== '/' + name || !['app.js', 'app.css'].includes(name)) return false;
+  res.writeHead(200, { 'content-type': TYPES[path.extname(name)], 'cache-control': 'no-store' });
+  res.end(await fs.readFile(path.join(UI, name))); return true;
+}
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -924,14 +1169,7 @@ const server = http.createServer(async (req, res) => {
       const html = (await fs.readFile(path.join(UI, 'index.html'), 'utf8')).replace('__TOKEN__', TOKEN);
       res.writeHead(200, { 'content-type': TYPES['.html'], 'cache-control': 'no-store' }); return res.end(html);
     }
-    const name = path.basename(url.pathname);
-    if (url.pathname === '/vendor/' + name && VENDOR[name]) {
-      res.writeHead(200, { 'content-type': TYPES[path.extname(name)], 'cache-control': 'max-age=86400' });
-      return res.end(await fs.readFile(lib.resolve(VENDOR[name])));
-    }
-    if (!['app.js', 'app.css'].includes(name)) { res.writeHead(404); return res.end(); }
-    res.writeHead(200, { 'content-type': TYPES[path.extname(name)], 'cache-control': 'no-store' });
-    res.end(await fs.readFile(path.join(UI, name)));
+    if (!await serveStatic(res, url)) { res.writeHead(404); return res.end(); }
   } catch (e) {
     console.error('[workwood]', e);
     if (!res.headersSent) send(res, 500, { error: String(e.message || e).split('\n')[0] }); else res.end();
@@ -951,6 +1189,8 @@ export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
   setInterval(refreshAll, 30000).unref();
   setInterval(() => readings.add(state.profiles), 5 * 60000).unref();   // limits, every five minutes
   update.watch(pushState);
+  if (phone.isOn()) phoneUp();
+  setInterval(watchLimits, 60000).unref();
   process.on('exit', closeAll); process.on('exit', speech.stop);
   return { address };
 }

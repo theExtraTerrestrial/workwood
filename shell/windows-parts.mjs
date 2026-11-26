@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { copyStamp } from '../service/update.mjs';
 
 /** The WSL distribution this runs in, or null outside WSL. WSL_DISTRO_NAME is missing under sudo and in some
  *  shells started without WSL's environment, so the kernel and wslpath are asked too. */
@@ -58,5 +59,6 @@ export function writeApp(appDir, dir, config) {
   fs.copyFileSync(path.join(dir, 'shell', 'icon.ico'), path.join(appDir, 'workwood.ico'));
   const version = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version;
   fs.writeFileSync(path.join(appDir, 'package.json'), JSON.stringify({ name: 'workwood', productName: 'Workwood', version, main: 'main.cjs' }));
-  fs.writeFileSync(path.join(appDir, 'config.json'), JSON.stringify(config));
+  // What the copy is made from, so the service can tell when this folder has moved on (see service/update.mjs).
+  fs.writeFileSync(path.join(appDir, 'config.json'), JSON.stringify({ ...config, stamp: copyStamp(dir) }));
 }

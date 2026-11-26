@@ -2,6 +2,7 @@
 // does not. Checked at start and every few hours; applied by a fast-forward pull (and `npm install` when the
 // dependencies changed), after which the window restarts itself.
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +20,40 @@ const git = (...args) => run('git', args);
 const st = { state: 'none', behind: 0, titles: [], files: [], why: '', error: '', at: 0, checking: false, updating: false, head: '' };
 let changed = () => {};
 const set = patch => { Object.assign(st, patch); changed(); };
-export const status = () => ({ ...st });
+export const status = () => {
+  const s = { ...st };
+  // The Windows window runs from a copy of these files, made by `npm run shortcut`. When this folder changed some other
+  // way (a pull by hand, a merge), the copy is behind: shown as an update to restart for, as Restart makes it again.
+  if (stale && !s.updating && !['ready', 'blocked', 'updated'].includes(s.state)) Object.assign(s, { state: 'updated', head: 'copy:' + stale, why: '' });
+  return s;
+};
+
+/**
+ * A fingerprint of what the Windows window's copy is made from (see shell/windows-parts.mjs): the window's own files,
+ * the service, the page and the dependencies. The same for the same files, wherever the folder is.
+ */
+export function copyStamp(dir = DIR) {
+  const h = createHash('sha256'), files = [];
+  const walk = rel => {
+    const abs = path.join(dir, rel);
+    let st; try { st = fs.statSync(abs); } catch { return; }
+    if (st.isDirectory()) { for (const n of fs.readdirSync(abs).sort()) if (!n.startsWith('.') && n !== '__pycache__') walk(rel + '/' + n); }
+    else files.push(rel);
+  };
+  for (const r of ['shell/windows/main.cjs', 'shell/preload.cjs', 'shell/window-state.cjs', 'shell/page-store.cjs', 'shell/icon.ico', 'package.json', 'package-lock.json', 'service', 'ui']) walk(r);
+  for (const f of files) h.update(f + '\0').update(fs.readFileSync(path.join(dir, f))).update('\0');
+  return h.digest('hex').slice(0, 32);
+}
+// The window's copy, when the Windows window started this service. A window from before the fingerprint (it says only
+// WORKWOOD_PARENT) counts as behind, so it too is offered the Restart that makes it again: no `npm run shortcut` by hand.
+const COPY = process.env.WORKWOOD_COPY_STAMP || (process.env.WORKWOOD_PARENT ? 'none' : '');
+let stale = '';
+function checkCopy() {
+  if (!COPY) return;
+  let now = ''; try { now = copyStamp(); } catch { return; }
+  const s = now === COPY ? '' : now;
+  if (s !== stale) { stale = s; changed(); }
+}
 
 const LOCK = 'package-lock.json';
 /** Local edits that would be lost or block the pull; files git does not track are left alone and do not count.
@@ -79,6 +113,7 @@ export async function apply() {
 /** Checks soon after start (not to slow it down), then every few hours. */
 export function watch(onChange) {
   changed = onChange;
+  checkCopy(); setInterval(checkCopy, Number(process.env.WORKWOOD_COPY_EVERY) || 60_000).unref();
   setTimeout(() => check().catch(() => {}), Number(process.env.WORKWOOD_UPDATE_DELAY ?? 8000)).unref();
   setInterval(() => check().catch(() => {}), EVERY).unref();
 }

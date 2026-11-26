@@ -30,9 +30,12 @@ const CUDA_LIBS = /^lib(cudart|cublas|cublasLt|curand|cudnn(_\w+)?)\.so\.\d+$/;
 const IDLE_MS = +process.env.WORKWOOD_STT_IDLE || 5 * 60e3;   // how long a loaded model waits for more dictation
 const LIB_SHARE = 0.4;   // of the whole download: the libraries are about 1.0 GB, the model 1.6 GB
 
-// better: the GPU model. gpu: the card's name, or null if there is none to use; state: absent | getting | present | failed
+// better: the GPU model. gpu: the card's name, or null if there is none to use; state: absent | getting | present | failed.
+// wsl: this is Linux under Windows, where a card shows only once its Windows driver is installed.
+const WSL = 'WORKWOOD_WSL' in process.env ? !!process.env.WORKWOOD_WSL
+  : process.platform === 'linux' && process.arch === 'x64' && (!!process.env.WSL_DISTRO_NAME || /microsoft/i.test(os.release()));
 export const status = { state: 'idle', progress: 0, error: null, model: MODELS.small.name, device: 'cpu', fallback: null,
-  better: { gpu: null, state: 'absent', progress: 0, error: null, size: '2.7 GB' } };
+  better: { gpu: null, wsl: WSL, state: 'absent', progress: 0, error: null, size: '2.7 GB' } };
 const B = status.better;
 let want = 'small', cur = null, spare = null, queue = Promise.resolve(), busy = 0;
 const firstLine = e => String(e?.message || e).split('\n')[0];
@@ -42,10 +45,11 @@ let have = turboOnDisk();
 if (have) B.state = 'present';
 const wantKind = () => want === 'turbo' && have ? 'turbo' : 'small';
 
+const smi = cmd => new Promise(ok => execFile(cmd, ['--query-gpu=name', '--format=csv,noheader'], { timeout: 8000 }, (e, out) => ok(e ? null : out.split('\n')[0].trim() || null)));
 /** The NVIDIA card here, by name, or null. Only Linux on x64 (WSL included): the only place onnxruntime-node has CUDA. */
 const gpu = ('WORKWOOD_GPU' in process.env ? Promise.resolve(process.env.WORKWOOD_GPU || null)
   : process.platform !== 'linux' || process.arch !== 'x64' ? Promise.resolve(null)
-  : new Promise(ok => execFile('nvidia-smi', ['--query-gpu=name', '--format=csv,noheader'], { timeout: 8000 }, (e, out) => ok(e ? null : out.split('\n')[0].trim() || null))))
+  : smi('nvidia-smi').then(n => n || (WSL ? smi('/usr/lib/wsl/lib/nvidia-smi') : null)))   // WSL keeps it there, not always on PATH
   .then(name => (B.gpu = name));
 
 function spawnEngine(kind) {

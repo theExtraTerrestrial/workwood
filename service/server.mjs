@@ -524,7 +524,7 @@ async function api(req, res, url) {
     return send(res, 200, { ...t, place, ...now, thread: await threadInfo(s.id), handing: handing.get(s.id) || null, rewound: rewoundOf(s.id), continued: cont ? { id: cont.id, n: chainOf(cont.id).length } : null, defaults: await src.defaultsFor(s.cwd, run?.profile || s.profile, state.profiles) });
   }
   if (req.method === 'GET' && parts[0] === 'speak') {   // one sentence, read aloud: a WAV clip
-    if (!speech.available()) return send(res, 404, { error: 'Kokoro is not installed.' });
+    if (!speech.available()) return send(res, 404, { error: 'Read aloud is not set up yet: get Kokoro in Settings, Speech.' });
     try {
       const wav = await speech.speak(url.searchParams.get('text'), url.searchParams.get('voice') || prefs.readVoice);
       res.writeHead(200, { 'content-type': 'audio/wav', 'content-length': wav.length, 'cache-control': 'no-store' });
@@ -532,10 +532,14 @@ async function api(req, res, url) {
     } catch (e) { return send(res, 500, { error: 'Could not read that aloud: ' + String(e.message).split('\n')[0] }); }
   }
   if (parts[0] === 'voice') {
-    if (req.method === 'GET') { if (url.searchParams.has('warm')) voice.warm(); return send(res, 200, voice.status); }
+    if (req.method === 'GET') { if (url.searchParams.has('warm')) voice.warm(); return send(res, 200, { ...voice.status, read: speech.status }); }
+    if (parts[1] === 'read') {   // get Kokoro, for read aloud: it takes a while, so this answers at once and the status tells how far it is
+      speech.get().then(ok => { if (ok) pushState(); });
+      await new Promise(ok => setTimeout(ok, 50)); return send(res, 200, { ...voice.status, read: speech.status });
+    }
     if (parts[1] === 'better') {   // get the GPU model, then use it: it takes minutes, so this answers at once and the status tells how far it is
       voice.getBetter().then(async ok => { if (ok) { prefs.speech = 'turbo'; voice.choose('turbo'); await keep(); pushState(); } }, e => console.error(e.message));
-      await new Promise(ok => setTimeout(ok, 50)); return send(res, 200, voice.status);
+      await new Promise(ok => setTimeout(ok, 50)); return send(res, 200, { ...voice.status, read: speech.status });
     }
     // The body is the recording itself: 16 kHz mono, 32-bit floats. A preview is skipped while another is being worked on.
     if (url.searchParams.has('preview') && voice.isBusy()) { req.resume(); return send(res, 200, { skipped: true }); }

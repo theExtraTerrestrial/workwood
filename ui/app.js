@@ -903,7 +903,7 @@ const raVoice=()=>A.prefs?.readVoice||'af_bella',raPlace=()=>A.prefs?.readPlace|
 const raHere=()=>RA.on&&RA.home===V.sel&&!V.isNew;
 const raIs=it=>raHere()&&RA.n===it.n&&RA.sid===(it.sid||'');
 const RSPEEDS=[1,1.25,1.5,2],spdName=v=>String(v).replace(/^0/,'')+'×';
-const raBtn=it=>A.tts&&lastAnswer(it.n,it.sid)?`<button data-ra="${it.n}"${it.sid?` data-sid="${esc(it.sid)}"`:''} class="${raIs(it)?'ok':''}" data-tip="${raIs(it)?(RA.playing?'Pause':'Go on reading'):'Read aloud'}">${svg('spk')}</button>`:'';
+const raBtn=it=>lastAnswer(it.n,it.sid)?`<button data-ra="${it.n}"${it.sid?` data-sid="${esc(it.sid)}"`:''} class="${raIs(it)?'ok':''}" data-tip="${!A.tts?'Read aloud: set it up':raIs(it)?(RA.playing?'Pause':'Go on reading'):'Read aloud'}">${svg('spk')}</button>`:'';
 // what a turn's speaker reads: its last answer, as Copy takes it, not the lines written on the way there
 function turnNs(n,sid){const L=itemsOf(sid),i=L.findIndex(x=>x.n===n);if(i<0)return[];
   let k=i;while(k+1<L.length&&L[k+1].kind!=='user')k++;
@@ -1013,7 +1013,7 @@ function raAct(e){const b=e.target.closest('[data-ra-pp],[data-ra-back],[data-ra
   else{const r=b.getBoundingClientRect();raGo(Math.floor((e.clientX-r.left)/r.width*RA.sents.length))}
   return true}
 document.addEventListener('click',e=>{if(raAct(e))return;
-  const b=e.target.closest('[data-ra]');if(b){e.stopPropagation();const n=+b.dataset.ra,sid=b.dataset.sid||'';
+  const b=e.target.closest('[data-ra]');if(b){e.stopPropagation();if(!A.tts){hideTip();openSettings(STABS.indexOf('Speech'));return}const n=+b.dataset.ra,sid=b.dataset.sid||'';
     if(raHere()&&RA.n===n&&RA.sid===sid)raToggle();else raStart(sid,n);return}
   // a click on a sentence of the answer being read reads from there
   if(!raHere()||e.target.closest('button,a,pre,.tfoot')||!getSelection().isCollapsed)return;
@@ -1022,7 +1022,7 @@ document.addEventListener('click',e=>{if(raAct(e))return;
   const i=RA.sents.findIndex(x=>{const r=raRange(x);try{return r&&r.isPointInRange(p.startContainer,p.startOffset)}catch{return false}});
   if(i>=0){RA.playing=true;raGo(i)}});
 // pointing at a speaker starts making its first sentence, so it plays sooner
-document.addEventListener('pointerover',e=>{const b=e.target.closest?.('[data-ra]');if(!b||b._warm)return;b._warm=1;
+document.addEventListener('pointerover',e=>{const b=e.target.closest?.('[data-ra]');if(!b||b._warm||!A.tts)return;b._warm=1;
   const S=raSentences(b.dataset.sid||'',turnNs(+b.dataset.ra,b.dataset.sid||undefined));if(S[0])raFetch(S[0].say).catch(()=>{})});
 // Esc stops; with the message box empty (or nothing typed into), Space pauses and ← → step a sentence, with Shift a paragraph.
 addEventListener('keydown',e=>{if(!raHere()||e.ctrlKey||e.metaKey||e.altKey)return;
@@ -1087,11 +1087,19 @@ function raDrag(e){if(!e.target.closest('[data-ra-grip],.r1')||e.target.closest(
     ov.querySelectorAll('[data-spot]').forEach(s=>s.classList.toggle('hl',s.dataset.spot===spot))};
   const up=()=>{removeEventListener('pointermove',move);removeEventListener('pointerup',up);ov.remove();m.classList.remove('drag');localStorage.setItem('ww.raSpot',spot);raPin(m)};
   addEventListener('pointermove',move);addEventListener('pointerup',up);move(e)}
+// Until Kokoro is here: one row to get it, then how far the download is.
+function readGet(){
+  const r=VS?.read;if(!r)return'';
+  if(r.state==='getting'){clearTimeout(vsT);vsT=setTimeout(readVS,800)}
+  const say=r.state==='getting'?`Getting Kokoro… ${r.progress}%<i class="pbar"><i style="width:${r.progress}%"></i></i>`
+    :r.state==='failed'?`<b class="bad">${esc(r.error)}</b>`:r.state==='present'?'Kokoro is here.':`Kokoro, on this computer. Nothing you read leaves it. A ${r.size} download, once.`;
+  const right=r.state==='getting'?`<span class="sstate">${r.progress}%</span>`:r.state==='present'?'':`<button class="sval go" data-set="getread">${r.state==='failed'?'Try again':'Download'}</button>`;
+  return `<div class="lgrp">Read aloud</div><div class="srow"><span>Read answers aloud<small>${say}</small></span>${right}</div>`}
 // Settings: the voice (with a sample), where the player shows (three pictures), the speed, and reading when a turn ends.
 let raSampleEl=null;
 function raSample(){const v=raVoice(),name={af_bella:'Bella',af_heart:'Heart',af_nicole:'Nicole'}[v];
   raSampleEl?.pause();raFetch(`Hi, I'm ${name}. This is how your answers will sound.`,v).then(u=>{raSampleEl=new Audio(u);raSampleEl.playbackRate=raSpeed();raSampleEl.preservesPitch=true;raSampleEl.play()},e=>oops(e.message))}
-function readRows(pf){if(!A.tts)return'';const v=pf.readVoice||'af_bella',pl=pf.readPlace||'strip',sp=pf.readSpeed||1;
+function readRows(pf){if(!A.tts)return readGet();const v=pf.readVoice||'af_bella',pl=pf.readPlace||'strip',sp=pf.readSpeed||1;
   const ln=w=>`<i class="ln" style="width:${w}%"></i>`,base=`<i class="bm"></i>${ln(85)}`;
   const card=(k,t,d,sk)=>`<button class="rlc ${pl===k?'on':''}" data-rplace="${k}">${pl===k?`<span class="ok">${svg('check')}</span>`:''}<span class="rsk">${sk}</span><b>${t}</b><small>${d}</small></button>`;
   return `<div class="lgrp">Read aloud</div><div class="srow"><span>Voice and speed<small>Kokoro, on this computer. The player's speed button changes it too.</small></span><button class="sib" data-set="hearvoice" data-tip="Hear it">${svg('rplay')}</button><select class="sval" id="sVoice">${[['af_bella','Bella'],['af_heart','Heart'],['af_nicole','Nicole']].map(([k,n])=>`<option value="${k}" ${v===k?'selected':''}>${n}</option>`).join('')}</select><div class="lseg">${RSPEEDS.map(x=>`<button data-rspd="${x}" class="${x===sp?'on':''}">${spdName(x)}</button>`).join('')}</div></div>
@@ -1503,7 +1511,8 @@ let VS=null,vsT=0;   // the speech status, while Settings is open
 const readVS=()=>api('voice').then(v=>{VS=v;renderSettings()}).catch(()=>{});
 function speechRow(){
   if(!VS){readVS();return''}
-  const b=VS.better,on=A.prefs?.speech==='turbo';if(!b?.gpu)return'';
+  const b=VS.better,on=A.prefs?.speech==='turbo';
+  if(!b?.gpu)return b?.wsl?`<div class="srow"><span>Better dictation<small>Needs an NVIDIA graphics card. If this computer has one, install its Windows driver, then restart Workwood.</small></span><a class="sval" href="https://www.nvidia.com/Download/index.aspx" target="_blank" rel="noopener">Get the driver${svg('ext')}</a></div>`:'';
   if(b.state==='getting'||on&&VS.state==='loading'){clearTimeout(vsT);vsT=setTimeout(readVS,800)}
   const say=b.state==='failed'?`<b class="bad">${esc(b.error)}</b>`:on&&VS.fallback?`<b class="bad">${esc(VS.fallback)}</b>`
     :`Whisper Large v3 Turbo on your ${esc(b.gpu)}: more accurate, and faster.${b.state==='present'?'':` A ${b.size} download, once.`}`;
@@ -1749,6 +1758,7 @@ $('spage').onclick=async e=>{
   if(e.target.closest('[data-add]')){const n=$('sNew').value.trim();if(!n){$('sNew').focus();return}PE=null;PAdd=false;PSel=n;startLogin(n,true);return}
   if(e.target.closest('#sBrowse')){const f=await window.workwood.pickFolder();if(!f)return;
     try{A.prefs=await api('settings',{folders:[...(A.prefs.folders||[]),f]});renderSettings()}catch(err){oops(err.message)}return}
+  if(s?.dataset.set==='getread'){try{VS=await api('voice/read',{});renderSettings()}catch(err){oops(err.message)}return}
   if(s?.dataset.set==='getspeech'){try{VS=await api('voice/better',{});renderSettings()}catch(err){oops(err.message)}return}
   if(s?.dataset.set==='speech'){try{A.prefs=await api('settings',{speech:A.prefs?.speech==='turbo'?'small':'turbo'});VS=null;renderSettings()}catch(err){oops(err.message)}return}
   if(s?.dataset.set==='login'){await setLogin(!loginOn);renderSettings()}

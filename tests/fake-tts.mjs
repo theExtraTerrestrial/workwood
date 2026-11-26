@@ -1,4 +1,4 @@
-// Stands in for Kokoro (service/speech-worker.py), speaking its protocol: a JSON request a line, a JSON line back once
+// Stands in for Kokoro (service/speech-worker.mjs), speaking its protocol: a JSON request a line, a JSON line back once
 // the clip is written. The clip is silence, a fifth of a second a sentence (twenty with "slowly" in it), so tests need no model and make no sound.
 import fs from 'node:fs';
 import readline from 'node:readline';

@@ -1353,6 +1353,22 @@ test('dictation: the GPU model is downloaded only when asked, then used, and can
   assert.deepEqual(await say(), { text: 'dictated words' });
 });
 
+test('read aloud: on a computer without Kokoro it is got from Settings, then reads; with no card on WSL, dictation names the driver', async () => {
+  const bare = await startService(sb, { WORKWOOD_TTS_ABSENT: '1', WORKWOOD_GPU: '', WORKWOOD_WSL: '1' });
+  try {
+    const st = async () => (await bare.call('voice')).body;
+    let v = await st();
+    assert.deepEqual([v.read.state, v.read.size, v.better.gpu, v.better.wsl], ['absent', '327 MB', null, true]);
+    const r = await fetch(new URL('/api/speak?text=Hello.', bare.address), { headers: { 'x-workwood-token': 'test-token' } });
+    assert.equal(r.status, 404);
+    assert.match((await r.json()).error, /not set up yet/);
+    assert.equal((await bare.call('voice/read', {})).body.read.state, 'getting');
+    await until(async () => (await st()).read.state === 'present', 'Kokoro to be here');
+    const ok = await fetch(new URL('/api/speak?text=Hello.', bare.address), { headers: { 'x-workwood-token': 'test-token' } });
+    assert.equal([ok.status, ok.headers.get('content-type')].join(' '), '200 audio/wav');
+  } finally { bare.stop(); }
+});
+
 test('settings: default profile and dictation language are kept; sign-in again runs Claudius in a terminal', async () => {
   const handoff = { model: 'auto', effort: 'medium', offer: 400000 };
   assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, handoff });
@@ -2537,6 +2553,28 @@ ui('window: an answer is read aloud from the speaker before Copy, sentence by se
   await page.click('#spage [data-rspd="1.5"]'); await page.waitForSelector('#spage [data-rspd="1.5"].on');
   assert.equal((await svc.call('settings', {})).body.readSpeed, 1.5);
   await svc.call('settings', { readSpeed: 1 }); await page.keyboard.press('Escape');
+});
+
+ui('window: before Kokoro is here the speaker opens Speech settings, where Download gets it and the speaker then reads', async () => {
+  const bare = await startService(sb, { WORKWOOD_TTS_ABSENT: '1', WORKWOOD_TTS_GET_MS: '1500', WORKWOOD_GPU: '', WORKWOOD_WSL: '1' });
+  const p = await browser.newPage({ viewport: { width: 1400, height: 880 } });
+  try {
+    p.setDefaultTimeout(8000);
+    await p.goto(bare.address + '#' + sb.sessions.alphaLive);
+    await p.waitForSelector('.ai:has-text("The readme is tidied.")');
+    await p.click('.tfoot [data-ra]');
+    await p.waitForSelector('#spage .pgh:has-text("Speech")');
+    await p.waitForSelector('#spage [data-set="getread"]');
+    assert.match(await p.innerText('#spage'), /Needs an NVIDIA graphics card[\s\S]*Get the driver[\s\S]*Read answers aloud[\s\S]*A 327 MB download, once/);
+    assert.equal(await p.getAttribute('#spage a.sval', 'href'), 'https://www.nvidia.com/Download/index.aspx');
+    await p.click('#spage [data-set="getread"]');
+    await p.waitForSelector('#spage .pbar');
+    await p.waitForSelector('#spage #sVoice');                                            // here: the voice and player rows
+    assert.equal(await p.locator('#spage [data-set="readauto"].on').count(), 0);           // and nothing more turned on
+    await p.keyboard.press('Escape'); await p.waitForSelector('#sdim', { state: 'hidden' });
+    await p.click('.tfoot [data-ra]');
+    await p.waitForSelector('#hstrip.ply:has-text("Reading aloud")');
+  } finally { await p.close(); bare.stop(); }
 });
 
 ui('window: a previewed page is read aloud from its header, open questions first; Read section by a heading; full width, the player is in the header', async () => {

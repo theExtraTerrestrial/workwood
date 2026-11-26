@@ -71,6 +71,8 @@ test('turned on: a pairing code for the address the Windows window reports, and 
   assert.ok(srv.verify(ca.publicKey)); assert.ok(ca.ca);
   assert.match(srv.subjectAltName, /DNS:testpc\.local/); assert.doesNotMatch(srv.subjectAltName, /8\.8\.8\.8/);
   assert.equal((fs.statSync(path.join(KEYDIR(), 'ca.key')).mode & 0o077), 0, 'the authority key is private');
+  // both start an hour back, so a clock a little behind (a phone's, or this PC's set back by WSL) finds them valid
+  for (const c of [ca, srv]) assert.ok(Date.parse(c.validFrom) < Date.now() - 50 * 60_000, c.validFrom);
 });
 
 test('plain HTTP gives only the setup page and the certificate; other hosts are refused', async () => {

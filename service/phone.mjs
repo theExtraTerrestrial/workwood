@@ -122,6 +122,23 @@ const PRIVATE = ['10.0.0.0/255.0.0.0', '172.16.0.0/255.240.0.0', '192.168.0.0/25
 /** True for an address on a home network (the only kind the authority may vouch for). */
 export const privateIp = ip => /^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(ip) && /^\d+\.\d+\.\d+\.\d+$/.test(ip);
 let making = null;
+// Certificates start an hour before they are made: a phone whose clock is a little behind this PC's (or this PC's own
+// clock, which WSL can set back by most of a second) would otherwise find a new one not yet valid. Only openssl ca
+// can set the start, so it signs both the authority and the server's certificate, keeping its books in ca-db.
+const stamp = ms => new Date(ms).toISOString().replace(/[-:T]|\.\d+/g, '').slice(2);   // YYMMDDHHMMSSZ
+async function sign({ csr, out, days, extfile, extensions, self }) {
+  const db = file('ca-db'); fs.mkdirSync(db, { recursive: true, mode: 0o700 });
+  const index = path.join(db, 'index.txt'), serial = path.join(db, 'serial');
+  fs.writeFileSync(index, '');   // nothing is looked up in it, and it would only grow
+  if (!fs.existsSync(serial)) fs.writeFileSync(serial, crypto.randomBytes(8).toString('hex').replace(/^./, '1') + '\n');
+  const cnf = path.join(db, 'ca.cnf');
+  fs.writeFileSync(cnf, ['[ca]', 'default_ca=ww', '[ww]', `database=${index}`, `new_certs_dir=${db}`, `serial=${serial}`, 'default_md=sha256',
+    'policy=pol', 'unique_subject=no', 'copy_extensions=none', 'email_in_dn=no', '[pol]', 'commonName=supplied', 'organizationName=optional'].join('\n'));
+  const now = Date.now();
+  await run('openssl', ['ca', '-batch', '-notext', '-preserveDN', '-config', cnf, '-in', csr, '-out', out, '-keyfile', file('ca.key'), ...(self ? ['-selfsign'] : ['-cert', file('ca.crt')]),
+    '-startdate', stamp(now - 3600_000), '-enddate', stamp(now + days * 86400_000), '-extfile', extfile, ...(extensions ? ['-extensions', extensions] : [])]);
+  for (const n of fs.readdirSync(db)) if (n.endsWith('.pem')) fs.rmSync(path.join(db, n), { force: true });   // its own copy of each one signed
+}
 /**
  * The certificate and key for these addresses: made once for the authority, and again for the server whenever the
  * addresses change or it is a month from running out.
@@ -137,8 +154,8 @@ async function makeCert(ips, name) {
     fs.writeFileSync(cnf, ['[req]', 'distinguished_name=dn', 'prompt=no', '[dn]', `CN=Workwood on ${host}`, 'O=Workwood', '[v3]',
       'basicConstraints=critical,CA:TRUE,pathlen:0', 'keyUsage=critical,keyCertSign,cRLSign', 'subjectKeyIdentifier=hash',
       'nameConstraints=critical,' + [...PRIVATE.map(r => 'permitted;IP:' + r), 'permitted;DNS:local'].join(',')].join('\n'));
-    await run('openssl', ['req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1', '-nodes', '-keyout', file('ca.key'), '-out', file('ca.crt'),
-      '-days', '3650', '-config', cnf, '-extensions', 'v3']);
+    await run('openssl', ['req', '-new', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1', '-nodes', '-keyout', file('ca.key'), '-out', file('ca.csr'), '-config', cnf]);
+    await sign({ csr: file('ca.csr'), out: file('ca.crt'), days: 3650, extfile: cnf, extensions: 'v3', self: true });
     fs.chmodSync(file('ca.key'), 0o600); fs.rmSync(file('server.crt'), { force: true });
   }
   const want = [...new Set(ips.filter(privateIp))].sort();
@@ -149,7 +166,7 @@ async function makeCert(ips, name) {
     fs.writeFileSync(ext, ['basicConstraints=critical,CA:FALSE', 'authorityKeyIdentifier=keyid', 'subjectKeyIdentifier=hash', 'keyUsage=critical,digitalSignature', 'extendedKeyUsage=serverAuth',
       'subjectAltName=' + [...want.map(ip => 'IP:' + ip), `DNS:${host.toLowerCase()}.local`].join(',')].join('\n'));
     await run('openssl', ['req', '-new', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1', '-nodes', '-keyout', file('server.key'), '-out', file('server.csr'), '-subj', `/CN=${host}`]);
-    await run('openssl', ['x509', '-req', '-in', file('server.csr'), '-CA', file('ca.crt'), '-CAkey', file('ca.key'), '-CAcreateserial', '-days', '390', '-sha256', '-extfile', ext, '-out', file('server.crt')]);
+    await sign({ csr: file('server.csr'), out: file('server.crt'), days: 390, extfile: ext });
     fs.chmodSync(file('server.key'), 0o600);
     writeJson('server.json', { ips: want, host, until: Date.now() + 390 * 86400_000 });
   }

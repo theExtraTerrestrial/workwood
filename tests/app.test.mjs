@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import http from 'node:http';
 import { makeSandbox, startService, readLog, setLive, assertContained, removeSandbox, addSession, upstreamCommit } from './sandbox.mjs';
 
 let sb, svc, browser, page;
@@ -1574,15 +1575,50 @@ function findChrome() {
   return null;
 }
 const chrome = findChrome();
+/* ---------- evidence: what a failing window test leaves behind ---------- */
+// In <tmp>/workwood-test-failures/<test>/, from that test alone: trace.zip (npx playwright show-trace trace.zip: the page,
+// its requests and console, step by step), screenshot.png, what the fake agent logged, the service's events and stderr,
+// and any step of this computer's clock. npm test (and npm run test:stress) empty the folder first.
+const EVIDENCE = path.join(os.tmpdir(), 'workwood-test-failures');
+const ev = { events: [], jumps: [], on: false };
+function watch() {
+  if (ev.on) return; ev.on = true;
+  const t0 = Date.now(), m0 = performance.now(); let last = 0;
+  setInterval(() => { const d = (Date.now() - t0) - (performance.now() - m0); if (Math.abs(d - last) > 50) { ev.jumps.push({ at: Date.now(), ms: Math.round(d - last) }); last = d; } }, 20).unref();
+  http.get(new URL('/api/events?token=test-token', svc.address), res => {
+    let buf = ''; res.setEncoding('utf8');
+    res.on('data', c => { buf += c; for (let i; (i = buf.indexOf('\n\n')) >= 0; buf = buf.slice(i + 2)) ev.events.push({ at: Date.now(), text: buf.slice(0, i) }); });
+  }).on('socket', so => so.unref()).on('error', () => {});
+}
+const hms = at => new Date(at).toISOString().slice(11, 23);
+async function keepEvidence(name, from, logFrom, errFrom) {
+  const base = path.join(EVIDENCE, name.replace(/^window: /, '').replace(/[^\w.-]+/g, '-').slice(0, 80));
+  let dir = base; for (let k = 2; fs.existsSync(dir); k++) dir = `${base}-${k}`;   // the same test failing again, in a later run
+  fs.mkdirSync(dir, { recursive: true });
+  await page.screenshot({ path: path.join(dir, 'screenshot.png') }).catch(() => {});
+  await page.context().tracing.stopChunk({ path: path.join(dir, 'trace.zip') }).catch(() => {});
+  const lines = (list, f) => list.filter(x => x.at >= from).map(f).join('\n') + '\n';
+  fs.writeFileSync(path.join(dir, 'fake-agent.log'), readLog(sb).slice(logFrom).join('\n') + '\n');
+  fs.writeFileSync(path.join(dir, 'events.txt'), lines(ev.events, x => hms(x.at) + '  ' + x.text.replace(/\n/g, '  ')));
+  fs.writeFileSync(path.join(dir, 'service-stderr.txt'), svc.stderr().slice(errFrom));
+  fs.writeFileSync(path.join(dir, 'clock.txt'), `test ran ${hms(from)} to ${hms(Date.now())}\n` + lines(ev.jumps, x => `${hms(x.at)}  clock stepped ${x.ms > 0 ? '+' : ''}${x.ms} ms`));
+  return dir;
+}
 const ui = (name, fn) => test(name, { skip: chrome ? false : 'no Chromium found; set WORKWOOD_CHROME or run: npx playwright install chromium-headless-shell' }, async () => {
   if (!page) {
     const { chromium } = await import('playwright-core');
     browser = await chromium.launch({ executablePath: chrome, args: ['--no-sandbox', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
     page = await browser.newPage({ viewport: { width: 1400, height: 880 } });
     page.setDefaultTimeout(8000);
+    await page.context().tracing.start({ screenshots: true, snapshots: true });
     await page.goto(svc.address + '#' + sb.sessions.alphaLive);
   }
-  try { await fn(); } catch (e) { await page.screenshot({ path: path.join(os.tmpdir(), 'workwood-test-failure.png') }).catch(() => {}); throw e; }
+  watch();
+  const from = Date.now(), logFrom = readLog(sb).length, errFrom = svc.stderr().length;
+  ev.events = ev.events.filter(x => x.at >= from - 2000);   // a little before, for what led up to it
+  await page.context().tracing.startChunk({ title: name });
+  try { await fn(); } catch (e) { e.message += '\n  evidence: ' + await keepEvidence(name, from - 2000, logFrom, errFrom); throw e; }
+  await page.context().tracing.stopChunk();
 });
 const send = async text => { await page.fill('#input', text); await page.press('#input', 'Enter'); };
 const startNew = async (text, pick = {}) => {

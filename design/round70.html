@@ -1,0 +1,83 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 70 — A draft per session</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<link rel="stylesheet" href="../ui/app.css">
+<style>
+html,body{height:auto}
+body{overflow:auto;background:var(--bg);padding:36px 24px 80px}
+.top{max-width:1400px;margin:0 auto 8px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top>span{color:var(--faint);font-size:12.5px}
+.lede{max-width:1400px;margin:0 auto 30px;color:var(--faint);font-size:12.5px}
+.row{max-width:1400px;margin:0 auto;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.cap h2{font-size:14px;margin:0 0 2px;font-weight:700}
+.cap p{margin:0 0 12px;color:var(--faint);font-size:12.5px;max-width:420px}
+
+.win{width:620px;height:400px;border-radius:14px;box-shadow:0 0 0 1px var(--line2);background:var(--bg);display:flex;overflow:hidden}
+.side{width:220px;flex:none;background:var(--surface);border-right:1px solid var(--line);padding:12px 8px}
+.g{font-size:11px;color:var(--faint);font-weight:650;padding:4px 8px 6px}
+.s{display:flex;gap:10px;align-items:center;padding:7px 8px;border-radius:10px;margin-bottom:1px}
+.s.sel{background:var(--bg)}
+.t{width:22px;height:22px;border-radius:7px;flex:none;display:grid;place-items:center;font-size:10px;font-weight:750;color:#fff}
+.s .x{flex:1;min-width:0}
+.s b{display:block;font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.s small{display:flex;gap:5px;font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;margin-top:1px}
+.s small em{font-style:normal;color:var(--hot,#e5866a);flex:none;font-weight:650}
+.s small span{overflow:hidden;text-overflow:ellipsis}
+.s time{font-size:10.5px;color:var(--faint);flex:none;align-self:flex-start;margin-top:2px}
+
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.hd{padding:12px 18px;font-weight:700;font-size:13px;border-bottom:1px solid var(--line)}
+.th{flex:1;padding:14px 18px;font-size:12.5px;line-height:1.6;color:var(--dim);display:flex;flex-direction:column;justify-content:flex-end}
+.th .me{align-self:flex-end;background:var(--surface);padding:6px 11px;border-radius:12px;margin-bottom:10px;color:var(--text)}
+.th p{margin:0}
+.cp{padding:0 14px 14px}
+.box{border:1px solid var(--line2);border-radius:16px;background:var(--surface);padding:10px 12px 8px}
+.box .tx{font-size:12.5px;min-height:34px;line-height:1.5}
+.box .tx.ph{color:var(--faint)}
+.box .tx i{display:inline-block;width:1.5px;height:14px;background:var(--text);vertical-align:-2px;margin-left:1px;animation:bl 1s steps(1) infinite}
+@keyframes bl{50%{opacity:0}}
+.box .bar{display:flex;align-items:center;gap:8px;margin-top:6px}
+.chip{font-size:10.5px;color:var(--faint);padding:2px 8px;border-radius:7px;box-shadow:inset 0 0 0 1px var(--line2)}
+.fch2{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 8px;border-radius:8px;background:var(--bg);margin-bottom:6px}
+.gap{flex:1}
+.sd{width:26px;height:26px;border-radius:50%;background:var(--text);opacity:.25}
+.sd.on{opacity:1}
+</style></head><body>
+<div class="top"><h1>Round 70</h1><span>A draft per session</span></div>
+<div class="lede">The message box belongs to the session it is in. Unsent text and files stay with it.</div>
+
+<div class="row">
+  <div>
+    <div class="cap"><h2>You go to another session</h2><p>Its box is empty, or holds its own draft. The session you left shows <b>Draft</b> and the start of the text.</p></div>
+    <div class="win">
+      <div class="side">
+        <div class="g">workwood</div>
+        <div class="s"><span class="t" style="background:#6a7de5">W</span><span class="x"><b>Phone pairing over Wi-Fi</b><small><em>Draft</em><span>Yes, but keep the QR code…</span></small></span><time>2m</time></div>
+        <div class="s sel"><span class="t" style="background:#6a7de5">W</span><span class="x"><b>Sessions of removed worktrees</b><small><span>Waiting for you</span></small></span><time>5m</time></div>
+        <div class="s"><span class="t" style="background:#3fae7f">K</span><span class="x"><b>Kokoro in Node</b><small><span>Done</span></small></span><time>1h</time></div>
+      </div>
+      <div class="main">
+        <div class="hd">Sessions of removed worktrees</div>
+        <div class="th"><div class="me">Keep them in the list after the merge</div><p>Done. They're filed under the checkout they came from. Should they resume there too?</p></div>
+        <div class="cp"><div class="box"><div class="tx ph">Reply…<i></i></div><div class="bar"><span class="chip">Opus 5.5</span><span class="gap"></span><span class="sd"></span></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="cap"><h2>You come back</h2><p>The draft is where you left it, files included. Sending it or clearing the box removes the marker.</p></div>
+    <div class="win">
+      <div class="side">
+        <div class="g">workwood</div>
+        <div class="s sel"><span class="t" style="background:#6a7de5">W</span><span class="x"><b>Phone pairing over Wi-Fi</b><small><span>Waiting for you</span></small></span><time>2m</time></div>
+        <div class="s"><span class="t" style="background:#6a7de5">W</span><span class="x"><b>Sessions of removed worktrees</b><small><span>Waiting for you</span></small></span><time>5m</time></div>
+        <div class="s"><span class="t" style="background:#3fae7f">K</span><span class="x"><b>Kokoro in Node</b><small><span>Done</span></small></span><time>1h</time></div>
+      </div>
+      <div class="main">
+        <div class="hd">Phone pairing over Wi-Fi</div>
+        <div class="th"><div class="me">Show a QR code in Settings</div><p>Should the code also be printed in the terminal?</p></div>
+        <div class="cp"><div class="box"><span class="fch2">▤ router.png</span><div class="tx">Yes, but keep the QR code in Settings as the main way<i></i></div><div class="bar"><span class="chip">Opus 5.5</span><span class="gap"></span><span class="sd on"></span></div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

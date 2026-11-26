@@ -210,7 +210,7 @@ function drawList(){
     return `<div class="grp ${shut?'shut':''}" data-grp="${esc(k)}" data-tip-path="${esc(short(k))}">${tile(g.name,'s')}</span><b>${esc(g.name)}</b>${shut?`<small>${n?`<i class="dot"></i>`:''}${g.list.length}</small>`:''}<span class="gnew" data-gnew data-tip="New session in ${esc(g.name)}">${svg('plus')}</span></div>`+(shut?'':
       g.list.map(s=>{const sel=!V.isNew&&s.id===V.sel,tip=V.compact||s.line?` data-tip="${esc(s.title+' — '+s.project+(s.line?' · '+s.line:''))}"`:'';
         return s.id===V.renaming?`<div class="sess ren ${sel?'sel':''}" data-id="${s.id}">${tile(s.project)}</span><input id="renIn" maxlength="120" autocomplete="off" spellcheck="false" aria-label="Session name"></div>`
-        :`<button class="sess ${s.status} ${sel?'sel':''} ${s.unread?'unread':''} ${s.done?'isdone':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}"${tip}>${listWarm(s)}${tile(s.project,s.thread?'stack':'')}${s.status==='work'?'<u class="go"></u>':needsYou(s)?`<u class="${s.status==='wait'?'warn':'new'}"></u>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b>${s.thread?`<span class="thr" data-tip="${s.thread} sessions, one thread">${s.thread<=4?'<i></i>'.repeat(s.thread):s.thread}</span>`:''}${s.outside||s.term?`<em class="xb">${svg('term')}</em>`:''}<span class="st">${stateOf(s)}</span><span class="sact"><span data-done data-tip="${s.done?'Back to the inbox':'Mark done'}"${s.done?'':' data-tip-k="Ctrl D"'}>${svg(s.done?'refresh':'check')}</span><span data-dots>${svg('dots')}</span></span></span>${s.status==='work'&&!s.outside&&!s.term&&s.line?`<span class="l2">${esc(s.line)}</span>`:''}</span></button>`}).join(''));
+        :`<button class="sess ${s.status} ${sel?'sel':''} ${s.unread?'unread':''} ${s.done?'isdone':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}"${tip}>${listWarm(s)}${tile(s.project,s.thread?'stack':'')}${s.status==='work'?'<u class="go"></u>':needsYou(s)?`<u class="${s.status==='wait'?'warn':'new'}"></u>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b>${s.thread?`<span class="thr" data-tip="${s.thread} sessions, one thread">${s.thread<=4?'<i></i>'.repeat(s.thread):s.thread}</span>`:''}${s.outside||s.term?`<em class="xb">${svg('term')}</em>`:''}<span class="st">${stateOf(s)}</span><span class="sact"><span data-done data-tip="${s.done?'Back to the inbox':'Mark done'}"${s.done?'':' data-tip-k="Ctrl D"'}>${svg(s.done?'refresh':'check')}</span><span data-dots>${svg('dots')}</span></span></span>${!sel&&DRAFTS.has(s.id)?`<span class="l2"><em class="dft">Draft</em><span>${esc(draftLine(DRAFTS.get(s.id)))}</span></span>`:s.status==='work'&&!s.outside&&!s.term&&s.line?`<span class="l2">${esc(s.line)}</span>`:''}</span></button>`}).join(''));
   }).join('')||`<div class="none inbox0">Nothing needs you.<br>Older sessions are under Done.</div>`;
 }
 $('list').onclick=e=>{
@@ -276,17 +276,20 @@ $('newBtn').onclick=()=>newSession();
 // The profile last used in a project: the one that ran its most recent session, if that profile is still here.
 const lastProfileIn=cwd=>{const p=A.sessions.filter(s=>(s.root||s.cwd)===cwd&&s.profile).sort((a,b)=>b.mts-a.mts)[0]?.profile;return A.profiles.some(x=>x.name===p)?p:null};
 function newSession(project){
-  resetJump();V.isNew=true;V.sel=null;V.pend=null;V.qLocal=[];V.qNow=null;V.place=null;V.skOpen=false;V.q.auto=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:'',mode:''};V.dismissed=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
+  keepDraft();const was=V.isNew;
+  resetJump();V.isNew=true;V.sel=null;if(!was)takeDraft('new');V.pend=null;V.qLocal=[];V.qNow=null;V.place=null;V.skOpen=false;V.q.auto=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:'',mode:''};V.dismissed=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
   V.profile=startProfile()?.name; // every new session starts on your default profile (the global one unless you chose another); the project stays as last chosen
   if(project){V.project=project;V.profile=lastProfileIn(project)||V.profile} // the + on a project in the sidebar
   else V.project=V.project&&A.projects.some(p=>p.cwd===V.project)?V.project:A.projects[0]?.cwd||null;
   render();$('input').focus();loadDefaults();H.sig='';homeSoon();
 }
 async function openSession(id,sending){
+  const from=sending&&V.isNew?id:draftKey(),move=id!==V.sel||V.isNew;   // a new session's first message just went: what you wrote since goes with it
+  keepDraft(from);
   if(!sending)V.pend=null;
   if(V.sel!==id){V.qLocal=[];V.qNow=null}
   resetJump();
-  V.isNew=false;V.sel=id;V.place=null;V.ans=null;V.skOpen=false;V.q.auto=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:'',mode:''};V.loading=true;V.dismissed=null;V.openTools.clear();V.shutTools.clear();V.codeOpen.clear();V.codeShut.clear();V.outOpen.clear();V.outFull.clear();V.cmdAll.clear();V.subAll.clear();V.repAll.clear();V.task=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
+  V.isNew=false;V.sel=id;if(move)takeDraft(id);V.place=null;V.ans=null;V.skOpen=false;V.q.auto=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:'',mode:''};V.loading=true;V.dismissed=null;V.openTools.clear();V.shutTools.clear();V.codeOpen.clear();V.codeShut.clear();V.outOpen.clear();V.outFull.clear();V.cmdAll.clear();V.subAll.clear();V.repAll.clear();V.task=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
   V.thread=null;V.handing=null;V.rewound=null;V.rw=null;V.rp=null;V.cont=null;V.older=new Map();V.shown=0;V.focus=null;V.hopen.clear();V.olOpen=new Set([id]);
   render();
   try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.thread=d.thread||null;V.handing=d.handing||null;V.rewound=d.rewound||null;V.cont=d.continued||null;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.place=d.place||null;V.used={model:d.model||'',effort:d.effort||'',mode:d.mode||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||'',mode:d.defaults?.mode||''}}
@@ -1371,7 +1374,7 @@ function renderSlash(){
 function useSkill(n){if(n==='rewind'&&!V.isNew){$('input').value='';V.skOpen=false;renderSlash();grow();fitSend();return openPick()}const i=$('input'),rest=/^\/[\w:-]*$/.test(i.value)?'':i.value;V.skOpen=false;i.value='/'+n+' '+rest;renderSlash();grow();fitSend();i.focus();i.setSelectionRange(i.value.length,i.value.length)}
 function slashKey(e){
   if($('slash').hidden)return false;
-  if(e.key==='Escape'){e.preventDefault();if(V.skOpen)V.skOpen=false;else $('input').value='';renderSlash();return true}
+  if(e.key==='Escape'){e.preventDefault();if(V.skOpen)V.skOpen=false;else{$('input').value='';keepDraft()}renderSlash();return true}
   if(!slashOpen())return false;
   if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();slSel=(slSel+(e.key==='ArrowDown'?1:-1)+slHits.length)%slHits.length;renderSlash();return true}
   if((e.key==='Enter'&&!e.shiftKey&&!e.isComposing)||e.key==='Tab'){e.preventDefault();useSkill(slHits[slSel].name);return true}
@@ -1404,6 +1407,7 @@ async function addFiles(files){
   renderAtt();$('input').focus();
 }
 function renderAtt(){
+  keepDraft();
   // Pictures and files share one strip above the text, so a long file name never crowds the buttons below it.
   const im=V.att.filter(a=>a.pic),fl=V.att.filter(a=>!a.pic);
   $('atts').hidden=!V.att.length;
@@ -1411,6 +1415,31 @@ function renderAtt(){
     +fl.map(a=>`<span class="fch"${a.path?` data-tip="${esc(a.path)}"`:''}>${svg('file')}<span class="fn">${esc(a.name)}</span><button data-rm="${a.id}" data-tip="Remove">${svg('x')}</button></span>`).join('');
 }
 function clearAtt(){for(const a of V.att)if(a.url)URL.revokeObjectURL(a.url);V.att=[];renderAtt()}
+/* ---------- drafts: the message box belongs to the session it is in ---------- */
+// What you wrote and did not send stays with its session (or with New session) and comes back when you return to it,
+// so text meant for one session is never sent to another. Kept in this browser, so it outlasts a restart; a file
+// pasted in (not one on disk) is kept over a restart only while the drafts fit.
+const DKEY='ww.drafts',DRAFTS=new Map();let dT=null;
+try{for(const [k,d] of Object.entries(JSON.parse(localStorage.getItem(DKEY)||'{}')))DRAFTS.set(k,{text:d.text||'',att:(d.att||[]).map(a=>{const pic=!!a.pic&&!!a.data;return {...a,id:++attSeq,pic,url:pic?`data:${a.type};base64,${a.data}`:null}})})}catch{}
+const draftKey=()=>V.isNew?'new':V.sel;
+function saveDrafts(){
+  const o={};for(const [k,d] of [...DRAFTS].slice(-50))o[k]={text:d.text,att:d.att.map(({name,type,pic,data,path})=>({name,type,pic,data,path}))};
+  try{localStorage.setItem(DKEY,JSON.stringify(o))}
+  catch{for(const k in o)o[k].att=o[k].att.filter(a=>!a.data);try{localStorage.setItem(DKEY,JSON.stringify(o))}catch{}}   // too big: pasted files stay in memory only
+}
+// The box as it is now, under the session it belongs to; an empty box is no draft.
+function keepDraft(k=draftKey()){
+  if(!k)return;const text=$('input').value,had=DRAFTS.has(k);
+  if(text.trim()||V.att.length){DRAFTS.delete(k);DRAFTS.set(k,{text,att:V.att})}else if(had)DRAFTS.delete(k);else return;
+  clearTimeout(dT);dT=setTimeout(saveDrafts,300);
+}
+function takeDraft(k){const d=DRAFTS.get(k);$('input').value=d?.text||'';V.att=d?d.att:[];renderAtt();grow();fitSend()}
+// A message that could not be sent goes back to its own session's draft, wherever you are now.
+function draftBack(k,text,att){
+  if(k===draftKey()){if(!$('input').value)$('input').value=text;V.att=att.concat(V.att);renderAtt();grow();fitSend();return}
+  const d=DRAFTS.get(k)||{text:'',att:[]};DRAFTS.set(k,{text:d.text||text,att:att.concat(d.att)});saveDrafts();renderList();
+}
+const draftLine=d=>(d.text.replace(/\s+/g,' ').trim()||d.att.map(a=>a.name).join(', '));
 $('bAttach').onclick=()=>$('filePick').click();
 $('filePick').onchange=e=>{addFiles(e.target.files);e.target.value=''};
 $('box').addEventListener('click',e=>{const b=e.target.closest('[data-rm]');if(!b)return;const a=V.att.find(x=>x.id===+b.dataset.rm);if(a?.url)URL.revokeObjectURL(a.url);V.att=V.att.filter(x=>x!==a);hideTip();renderAtt()});
@@ -2122,7 +2151,7 @@ $('qcard').onclick=async e=>{
 // While the agent works the button stops it, unless you have written something: then it sends that to the agent.
 const isWorking=()=>!V.isNew&&!!V.run&&(V.run.status==='working'||V.run.status==='waiting');
 const hasDraft=()=>!!$('input').value.trim()||V.att.length>0;
-function fitSend(){const stop=isWorking()&&!hasDraft(),b=$('send');if(b.dataset.i===(stop?'stop':'up'))return;b.dataset.i=stop?'stop':'up';b.dataset.tip=stop?'Stop':'Send';b.dataset.tipK=stop?'':'Enter';hydrate(b.parentNode)}
+function fitSend(){keepDraft();const stop=isWorking()&&!hasDraft(),b=$('send');if(b.dataset.i===(stop?'stop':'up'))return;b.dataset.i=stop?'stop':'up';b.dataset.tip=stop?'Stop':'Send';b.dataset.tipK=stop?'':'Enter';hydrate(b.parentNode)}
 const curProfile=()=>V.isNew?V.profile:V.pick[V.sel]?.profile||V.run?.profile||selSession()?.profile;
 const lvl=v=>v>=100?'hot':v>=80?'mid':'';
 let limT;
@@ -2244,12 +2273,13 @@ $('send').onclick=async()=>{
     if(r.err)return;                                                       // part of it was not written down: look it over first
   }else if(isWorking()&&!hasDraft()){try{await api(`sessions/${V.sel}/stop`,{})}catch(e){oops(e.message)}return}
   const text=input.value.trim();if(!text&&!V.att.length)return;
+  const dk=draftKey();
   // The box empties at once; if the message could not be sent, what you wrote comes back.
   const att=V.att;V.att=[];input.value='';renderAtt();grow();fitSend();
   // One at a time: a message sent while the one before is still on its way goes right after it.
   const go=sendQ.then(()=>sendText(text,undefined,att.map(({name,type,data,path})=>({name,type,data,path}))));sendQ=go.catch(()=>{});
   if(await go)for(const a of att){if(a.url)URL.revokeObjectURL(a.url)}
-  else{if(!input.value)input.value=text;V.att=att.concat(V.att);renderAtt();grow();fitSend()}
+  else draftBack(dk,text,att);
 };
 let sendQ=Promise.resolve(),qSeq=0;
 

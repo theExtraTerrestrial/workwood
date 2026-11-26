@@ -1633,6 +1633,37 @@ ui('window: shows the inbox by project, the opened conversation, and limits unde
   assert.equal(await page.locator(`.sess[data-id="${sb.sessions.alphaOutside}"] .st .spin`).count(), 1);
 });
 
+ui('window: the message box keeps a draft per session: it never follows you to another session, and comes back with the one it was written in', async () => {
+  const row = id => page.locator(`.sess[data-id="${id}"]`);
+  await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`);
+  await page.waitForSelector('.me:has-text("Tidy the alpha readme")');
+  await page.fill('#input', 'Yes, keep the QR code');
+  await row(sb.sessions.betaOther).click();
+  await page.waitForFunction(() => document.querySelector('#input').value === '');
+  assert.equal(await row(sb.sessions.alphaLive).locator('.l2 .dft').innerText(), 'Draft');
+  assert.match(await row(sb.sessions.alphaLive).locator('.l2').innerText(), /Yes, keep the QR code/);
+  await page.fill('#input', 'For beta');
+  await page.click('#newBtn');
+  assert.equal(await page.inputValue('#input'), '');
+  await page.fill('#input', 'A new one');
+  await row(sb.sessions.alphaLive).click();
+  assert.equal(await page.inputValue('#input'), 'Yes, keep the QR code');
+  assert.equal(await row(sb.sessions.alphaLive).locator('.l2 .dft').count(), 0);   // not on the session you are in
+  assert.equal(await row(sb.sessions.betaOther).locator('.l2 .dft').count(), 1);
+  // kept over a reload
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('ww.drafts') || '{}').new?.text === 'A new one');
+  await page.reload(); await page.waitForSelector('.me:has-text("Tidy the alpha readme")');
+  assert.equal(await page.inputValue('#input'), 'Yes, keep the QR code');
+  await page.click('#newBtn'); assert.equal(await page.inputValue('#input'), 'A new one');
+  // an emptied box is no draft
+  await page.fill('#input', '');
+  await row(sb.sessions.betaOther).click(); assert.equal(await page.inputValue('#input'), 'For beta');
+  await page.fill('#input', '');
+  await row(sb.sessions.alphaLive).click(); await page.fill('#input', '');
+  await page.waitForSelector('.sess .l2 .dft', { state: 'detached' });
+  await page.waitForFunction(() => localStorage.getItem('ww.drafts') === '{}');
+});
+
 ui('window: the line under the message box lets things go as it narrows, and never overflows', async () => {
   const at = w => page.evaluate(async w => {
     const c = document.querySelector('.composer'); c.style.width = w + 'px'; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));

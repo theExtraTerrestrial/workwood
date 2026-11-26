@@ -54,6 +54,7 @@ async function open() {
   });
   if (place.maximized) win.maximize();
   place.track(win);
+  require('./zoom.cjs')(win);
   // The microphone, for dictation, and nothing else.
   win.webContents.session.setPermissionRequestHandler((wc, what, done, d) => {
     if (!(what === 'media' && !(d.mediaTypes || []).includes('video'))) return done(false);

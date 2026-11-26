@@ -76,6 +76,7 @@ async function open() {
   win.setAppDetails({ appId: 'Workwood', appIconPath: path.join(__dirname, 'workwood.ico'), relaunchDisplayName: 'Workwood', relaunchCommand: `"${process.execPath}" "${__dirname}"` });
   win.once('ready-to-show', () => { if (place.maximized) win.maximize(); win.show(); });
   place.track(win);
+  require('./zoom.cjs')(win);
   win.on('closed', () => { win = null; });
   // the other place, when it was started, may have background work of its own
   const elsewhere = async () => { let n = 0; for (const id of Object.keys(started)) { if (id === current) continue;

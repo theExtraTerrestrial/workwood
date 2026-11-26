@@ -1521,6 +1521,17 @@ test('the window has no browser tooltips: every hover note is its own (an iframe
   }
 });
 
+test('the window zooms in browser steps with Ctrl +, Ctrl - and Ctrl 0, and only for those keys', async () => {
+  const { step, keyDir } = (await import('node:module')).createRequire(import.meta.url)('../shell/zoom.cjs');
+  assert.equal(step(1, 1), 1.1); assert.equal(step(1, -1), 0.9); assert.equal(step(1.25, 0), 1);
+  assert.equal(step(2, 1), 2); assert.equal(step(0.5, -1), 0.5);
+  const mod = process.platform === 'darwin' ? { meta: true } : { control: true }, k = o => keyDir({ type: 'keyDown', ...mod, ...o });
+  assert.equal(k({ key: '=' }), 1); assert.equal(k({ key: '+', shift: true }), 1); assert.equal(k({ key: '', code: 'NumpadAdd' }), 1);
+  assert.equal(k({ key: '-' }), -1); assert.equal(k({ key: '0' }), 0);
+  assert.equal(k({ key: 'k' }), null); assert.equal(k({ key: '=', alt: true }), null);
+  assert.equal(keyDir({ type: 'keyDown', key: '=' }), null); assert.equal(keyDir({ type: 'keyUp', ...mod, key: '=' }), null);
+});
+
 /* ---------- the window, driven by real clicks ---------- */
 
 function findChrome() {

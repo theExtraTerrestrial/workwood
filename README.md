@@ -240,6 +240,9 @@ On a fresh WSL install the Electron window needs GTK once:
   from there (the Electron window only; Edge cannot tell where a file lives).
   Anything else, such as a pasted picture, is saved under
   `~/.cache/workwood/attachments`; copies are cleared after 30 days.
+- Zoom: Ctrl + and Ctrl − (Cmd on macOS), or Ctrl with the mouse wheel, make the whole window bigger or smaller in
+  browser steps from 50% to 200%; Ctrl+0 goes back to 100%. The size is kept for next time (Electron window; Edge
+  zooms by itself).
 - Dictation: the mic button (or Ctrl+Shift+Space, from anywhere) records, shows what it has heard so far while you
   speak, and puts the text in the message box after what you typed; nothing is
   sent until you press send. Escape discards the recording. Speech is turned

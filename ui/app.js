@@ -283,6 +283,17 @@ function newSession(project){
   else V.project=V.project&&A.projects.some(p=>p.cwd===V.project)?V.project:A.projects[0]?.cwd||null;
   render();$('input').focus();loadDefaults();H.sig='';homeSoon();
 }
+// A session as the service has it, and the live events that came while it was being read. The two travel apart, so
+// either may arrive first: the events wait until the read has landed, and only those numbered after it are applied,
+// so a read taken a moment before a question (or a step, or a message) never hides it again.
+const held=new Map();   // session -> {tok, ev}: the read in flight, and the events that came meanwhile
+async function readSession(id){
+  const h=held.get(id),tok={};held.set(id,{tok,ev:h?h.ev:[]});
+  let d;try{d=await api('sessions/'+id)}catch(e){if(held.get(id)?.tok===tok)letGo(id,-1);throw e}
+  return held.get(id)?.tok===tok?d:null;   // a newer read of the same session has started: that one counts
+}
+function letGo(id,seq){const h=held.get(id);held.delete(id);for(const [f,d] of h?.ev||[])if(d.seq>seq)f(d)}
+const take=f=>e=>{const d=JSON.parse(e.data),h=held.get(d.sessionId);if(h)h.ev.push([f,d]);else f(d)};
 async function openSession(id,sending){
   const from=sending&&V.isNew?id:draftKey(),move=id!==V.sel||V.isNew;   // a new session's first message just went: what you wrote since goes with it
   keepDraft(from);
@@ -292,9 +303,11 @@ async function openSession(id,sending){
   V.isNew=false;V.sel=id;if(move)takeDraft(id);V.place=null;V.ans=null;V.skOpen=false;V.q.auto=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:'',mode:''};V.loading=true;V.dismissed=null;V.openTools.clear();V.shutTools.clear();V.codeOpen.clear();V.codeShut.clear();V.outOpen.clear();V.outFull.clear();V.cmdAll.clear();V.subAll.clear();V.repAll.clear();V.task=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
   V.thread=null;V.handing=null;V.rewound=null;V.rw=null;V.rp=null;V.cont=null;V.older=new Map();V.shown=0;V.focus=null;V.hopen.clear();V.olOpen=new Set([id]);
   render();
-  try{const d=await api('sessions/'+id);if(V.sel!==id)return;V.thread=d.thread||null;V.handing=d.handing||null;V.rewound=d.rewound||null;V.cont=d.continued||null;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.place=d.place||null;V.used={model:d.model||'',effort:d.effort||'',mode:d.mode||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||'',mode:d.defaults?.mode||''}}
+  let got=null;
+  try{const d=await readSession(id);if(!d)return;if(V.sel!==id){held.delete(id);return}got=d;V.thread=d.thread||null;V.handing=d.handing||null;V.rewound=d.rewound||null;V.cont=d.continued||null;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.place=d.place||null;V.used={model:d.model||'',effort:d.effort||'',mode:d.mode||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||'',mode:d.defaults?.mode||''}}
   catch(e){oops(e.message)}
   V.loading=false;render();toBottom(true);loadChanges();
+  if(got)letGo(id,got.seq);
   if(V.sel===id&&V.thread)showEarlier();   // the session before shows above this one, dimmed
 }
 
@@ -768,8 +781,8 @@ function rwAct(t,from){
 $('rwm').onclick=e=>{e.stopPropagation();rwAct(e.target,$('rwm'))};
 $('thread').addEventListener('click',e=>{const b=e.target.closest('[data-rw]');if(!b)return;e.stopPropagation();const n=+b.dataset.rw;if(V.rw?.n===n&&!$('rwm').hidden)return closePops();openRw(n,b)});
 // The session as the service has it now (after a rewind, or its undo): items, context and the strip.
-async function reread(){const id=V.sel;const d=await api('sessions/'+id);if(V.sel!==id)return;
-  V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.rewound=d.rewound||null;V.ctx=null;render();toBottom(true);loadChanges()}
+async function reread(){const id=V.sel;const d=await readSession(id);if(!d)return;if(V.sel!==id){held.delete(id);return}
+  V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.rewound=d.rewound||null;V.ctx=null;render();toBottom(true);loadChanges();letGo(id,d.seq)}
 async function doRewind(it,files,edit){
   closePops();if(V.rwing)return;V.rwing=true;oops('');
   try{const r=await api(`sessions/${V.sel}/rewind`,{at:it.uid,files});await reread();V.rewound=r;renderStrip();if(edit)rwEdit(it.text)}
@@ -2806,14 +2819,14 @@ function connect(){
     if(V.isNew){if(!V.profile)V.profile=startProfile()?.name;if(!V.project)V.project=A.projects[0]?.cwd||null}
     render();homeSoon();{const f=document.activeElement;if(!$('spage').contains(f)||!/^(SELECT|INPUT)$/.test(f.tagName))renderSettings()}if(!$('mProfile').hidden)renderProfiles();
   });
-  es.addEventListener('run',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const end=!awayNow();const was=V.run?.status;V.run=d.run;if(V.ans&&d.run?.pending?.id!==V.ans)V.ans=null;
+  es.addEventListener('run',take(d=>{if(d.sessionId!==V.sel)return;const end=!awayNow();const was=V.run?.status;V.run=d.run;if(V.ans&&d.run?.pending?.id!==V.ans)V.ans=null;
     if(was==='working'&&d.run?.status!=='working'&&d.run?.status!=='waiting'){const id=V.sel;if(V.ctx?.id===id)V.ctx=null;setTimeout(()=>api('sessions/'+id).then(x=>{if(V.sel===id&&x.place){V.place=x.place;renderHead()}}).catch(()=>{}),900)}   // the agent may have moved to a worktree
-    if(d.run?.context)V.context=d.run.context;if(d.run?.model)V.used.model=d.run.model;if(d.run?.effort)V.used.effort=d.run.effort;if(d.run?.mode){V.used.mode=d.run.mode;if(V.pick[d.sessionId])delete V.pick[d.sessionId].mode}if(V.qNow&&!(d.run?.queued||[]).some(q=>q.id===V.qNow))V.qNow=null;checkSoon();changesSoon();renderThread();renderCard();renderQueue();renderComposer();renderTerm();follow(end)});
-  es.addEventListener('item',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;const i=V.items.findIndex(x=>x.n===d.item.n),end=!awayNow();noteArrival(d.item,i<0);if(i>=0)V.items[i]=d.item;else V.items.push(d.item);if(d.item.kind==='work'){addWork(d.item.files);renderPanel()}checkSoon();changesSoon();renderThread();follow(end,i<0&&d.item.kind==='assistant'?d.item.n:null)});
-  es.addEventListener('handoff',e=>{const d=JSON.parse(e.data);if(d.sessionId!==V.sel)return;
+    if(d.run?.context)V.context=d.run.context;if(d.run?.model)V.used.model=d.run.model;if(d.run?.effort)V.used.effort=d.run.effort;if(d.run?.mode){V.used.mode=d.run.mode;if(V.pick[d.sessionId])delete V.pick[d.sessionId].mode}if(V.qNow&&!(d.run?.queued||[]).some(q=>q.id===V.qNow))V.qNow=null;checkSoon();changesSoon();renderThread();renderCard();renderQueue();renderComposer();renderTerm();follow(end)}));
+  es.addEventListener('item',take(d=>{if(d.sessionId!==V.sel)return;const i=V.items.findIndex(x=>x.n===d.item.n),end=!awayNow();noteArrival(d.item,i<0);if(i>=0)V.items[i]=d.item;else V.items.push(d.item);if(d.item.kind==='work'){addWork(d.item.files);renderPanel()}checkSoon();changesSoon();renderThread();follow(end,i<0&&d.item.kind==='assistant'?d.item.n:null)}));
+  es.addEventListener('handoff',take(d=>{if(d.sessionId!==V.sel)return;
     if(d.state==='writing'){V.handing={model:d.model,effort:d.effort,auto:d.auto};renderThread();renderComposer()}
     else if(d.state==='done'){V.handing=null;openSession(d.to)}
-    else{V.handing=null;render();oops('The handoff was not written: '+(d.error||'something went wrong'))}});
+    else{V.handing=null;render();oops('The handoff was not written: '+(d.error||'something went wrong'))}}));
   es.onerror=()=>{};
 }
 /* ---------- the phone: the same app, laid out for one hand (design/round60.html to round69.html). Only a paired phone

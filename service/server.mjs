@@ -91,8 +91,10 @@ const clients = new Set();
 const workPaths = new Map(); // session -> every previewable file it is known to have made
 const counted = new Map();  // session -> { mt, out }: what fills its context, as of its last reply
 function knownWork(id) { let w = workPaths.get(id); if (!w) workPaths.set(id, w = new Set()); return w; }
+// Every event is numbered, and a session read says the number it was taken at, so a window can tell which is newer.
+let evSeq = 0;
 const emit = (type, data) => {
-  const msg = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
+  const msg = `event: ${type}\ndata: ${JSON.stringify({ ...data, seq: ++evSeq })}\n\n`;
   for (const c of clients) c.write(msg);
   if (type === 'item' && data.item.kind === 'work') for (const f of data.item.files) knownWork(data.sessionId).add(f.path);
   if (type === 'run') pushState();                                   // the sidebar follows every change of a live turn
@@ -511,7 +513,7 @@ async function api(req, res, url, who = null) {
     const cwd = s.file ? await src.lastCwd(s.file, s.cwd) : s.cwd, pl = await src.placeOf(cwd), home = await src.placeOf(s.cwd);
     const place = { cwd, project: path.basename(home.root), worktree: pl.worktree || (pl.root !== home.root ? path.basename(pl.root) : null), branch: pl.branch };
     const t = s.file ? await readTranscript(s.file, 400, s.cwd) : { items: [], context: null, total: 0, work: [], model: null, effort: null };
-    const run = runs.get(s.id);
+    const run = runs.get(s.id), seq = evSeq;   // what has been sent so far; the items and state below are as of then
     if (run && (run.status !== 'idle' || run.q || Date.now() - (run.endedAt || 0) < 5000)) {
       // The current turn (or one that ended a moment ago, before the window had opened it) is still in memory:
       // show it from there, not from what has reached the file so far.
@@ -528,7 +530,7 @@ async function api(req, res, url, who = null) {
     // come back as idle beside items from before it ended (the next read, or the event stream, brings the rest).
     const now = { context: run?.context || t.context, model: run?.builder.model || t.model, effort: run?.effort || t.effort, mode: run?.mode || t.mode || null, run: publicRun(run) };
     const next = [...prevOf].find(([, p]) => p === s.id)?.[0], cont = next && state.sessions.find(x => x.id === next);   // handed off: where the thread goes on
-    return send(res, 200, { ...t, place, ...now, thread: await threadInfo(s.id), handing: handing.get(s.id) || null, rewound: rewoundOf(s.id), continued: cont ? { id: cont.id, n: chainOf(cont.id).length } : null, defaults: await src.defaultsFor(s.cwd, run?.profile || s.profile, state.profiles) });
+    return send(res, 200, { ...t, seq, place, ...now, thread: await threadInfo(s.id), handing: handing.get(s.id) || null, rewound: rewoundOf(s.id), continued: cont ? { id: cont.id, n: chainOf(cont.id).length } : null, defaults: await src.defaultsFor(s.cwd, run?.profile || s.profile, state.profiles) });
   }
   if (req.method === 'GET' && parts[0] === 'speak') {   // one sentence, read aloud: a WAV clip
     if (!speech.available()) return send(res, 404, { error: 'Read aloud is not set up yet: get Kokoro in Settings, Speech.' });

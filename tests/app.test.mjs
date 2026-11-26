@@ -1896,6 +1896,29 @@ ui('window: Stop on a question card ends the turn without an answer, by click or
   assert.ok(readLog(sb).slice(before).some(l => l.includes('interrupted')));
 });
 
+ui('window: a session read that lands after newer live events does not undo them', async () => {
+  // The read and the live events travel apart: here the read is taken while the question waits, and held back
+  // until the question has been answered and the turn has ended. The window must show the end, not the question.
+  await startNew('ASK and then answer while it loads');
+  await page.waitForSelector('#qcard:has-text("Which direction")');
+  const id = await page.locator('.sess.sel').getAttribute('data-id'), p = await pending(id);
+  await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`);
+  await page.waitForSelector('.me:has-text("Tidy the alpha readme")');
+  let stale, release;
+  const gate = new Promise(r => { release = r; });
+  const route = new RegExp(`/api/sessions/${id}(\\?|$)`);
+  await page.route(route, async r => { stale = await r.fetch(); await gate; await r.fulfill({ response: stale }); }, { times: 1 });
+  await page.click(`.sess[data-id="${id}"]`);
+  await until(() => stale, 'the read, taken while the question waits');
+  await svc.call(`sessions/${id}/answer`, { requestId: p.id, action: 'answer', answers: { 'Which direction should I take?': 'Dark', 'What else should it include?': 'Tests' } });
+  await idle(id);
+  await page.waitForFunction(i => !document.querySelector(`.sess[data-id="${i}"]`).textContent.includes('question'), id);   // the window has the events
+  release();
+  await page.waitForSelector('.ai:has-text("ANSWERS")');
+  await page.waitForSelector('#qcard', { state: 'hidden' });
+  assert.equal(await page.locator('#send').getAttribute('data-tip'), 'Send');
+});
+
 ui('window: permission card for a command, and for an edit', async () => {
   await startNew('need PERMISSION here');
   await page.waitForSelector('.cmd:has-text("touch probe.txt")');

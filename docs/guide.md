@@ -245,8 +245,9 @@ Everything Workwood does, one feature at a time. The [README](../README.md) has 
   name (DESKTOP-AX.local), the app opens there and keeps working when the router gives the PC another
   address; a phone that knows only the old address is marked in Settings, and Pair again makes a code
   that pairs it again as itself, keeping its name and notifications.
-- **At the PC or away.** While you are at the PC, a notification waits a minute, and one you handle
-  there meanwhile (you answer it, or open its session) is never sent. With no keyboard or mouse input
+- **At the PC or away.** While you are at the PC, a notification waits until a minute passes with no
+  input there (so it is not sent while you are typing an answer), and one you handle there meanwhile
+  (you answer it, or open its session) is never sent. With no keyboard or mouse input
   anywhere on the PC for 5 minutes (or 2, or 15), or with the PC locked or asleep, you are away and
   notifications go at once. A mark in the sidebar's footer says which: Here, a ring running down to one
   that waits, or Away; click it for Away now or I'm here. Settings, Phone can make it Don't send or Send

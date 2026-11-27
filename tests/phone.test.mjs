@@ -221,7 +221,7 @@ test('a turn that ends is told to the phone, encrypted and signed; not while the
   assert.equal((await api(key, 'phone/me')).body.kinds.turn, false);
 });
 
-test('at this PC a notification waits, and one seen here is not sent; away, it goes at once', async () => {
+test('at this PC a notification waits while you use it, and one seen here is not sent; away, it goes at once', async () => {
   const { key } = await pair(), k = phoneKeys(), me = (await api(key, 'phone/me')).body;
   await api(key, 'phone/me', { push: { endpoint: `http://127.0.0.1:${pushSrv.address().port}/push/pc-${me.id}`, keys: { p256dh: k.e.getPublicKey().toString('base64url'), auth: k.auth.toString('base64url') } } });
   const mine = () => got.filter(g => g.path === '/push/pc-' + me.id).map(g => decrypt(k, g.body));
@@ -240,18 +240,24 @@ test('at this PC a notification waits, and one seen here is not sent; away, it g
     await until(() => mine()[0], 'the push after the wait', 15000);
     assert.ok(performance.now() - t0 > 3500, 'it waited');
     assert.equal(mine()[0].session, id); assert.equal((await here()).body.held.length, 0);
+    // input at the PC while it waits puts it off: it goes only after the wait passes with no input
+    await turn(id, 'Busy here');
+    const t2 = performance.now(); let held;
+    while (performance.now() - t2 < 7000) { held = (await here()).body.held; assert.equal(mine().length, 1, 'not sent while in use'); await sleep(500); }
+    assert.equal(held.length, 1); assert.ok(held[0].until - Date.now() > 3000, 'the ring starts again from the last input');
+    await until(() => mine().length === 2, 'the push once the PC is left alone', 15000);
     // seen here while it waits: never sent
     await turn(id, 'Again'); await here({ viewing: id });
-    await sleep(5000); assert.equal(mine().length, 1);
+    await sleep(5000); assert.equal(mine().length, 2);
     // Don't send: nothing while here
     await svc.call('settings', { pcHold: 'never' }); await here();
     await turn(id, 'Once more'); assert.equal((await here()).body.held.length, 0);
-    await sleep(5000); assert.equal(mine().length, 1);
+    await sleep(5000); assert.equal(mine().length, 2);
     await svc.call('settings', { pcHold: 'wait' });
     // Away now, by hand: at once
     st = (await svc.call('presence', { away: true })).body; assert.equal(st.away, true); assert.equal(st.why, 'manual');
     const t1 = performance.now(); await turn(id, 'And again');
-    await until(() => mine().length === 2, 'the push at once', 15000); assert.ok(performance.now() - t1 < 3500, 'not held');
+    await until(() => mine().length === 3, 'the push at once', 15000); assert.ok(performance.now() - t1 < 3500, 'not held');
     // I'm here: back at once
     assert.equal((await svc.call('presence', { away: false })).body.away, false);
     // no input for longer than Away after, or the screen locked: away

@@ -1,5 +1,5 @@
-// Whether you are at this PC, for the phone's notifications. At the PC a notification waits a minute, and one you
-// handle here meanwhile is never sent; away, it goes at once. Each Workwood page on this PC reports how long since the
+// Whether you are at this PC, for the phone's notifications. At the PC a notification waits until a minute passes with
+// no input here, and one you handle here meanwhile is never sent; away, it goes at once. Each Workwood page on this PC reports how long since the
 // last input (to the whole computer where its window can read that, else to the page itself), whether the screen is
 // locked, and which session it shows. With no page reporting, Workwood is not open here: you are away.
 // Times are performance.now(): this computer's clock steps back now and then (WSL).

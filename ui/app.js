@@ -1704,7 +1704,7 @@ function phonePoll(){if(phBusy)return;phBusy=true;
   go()}
 /* ---------- at this PC or away: what the phone's notifications do (see service/presence.mjs) ----------
    Each page on the PC says how long since the last input (to the whole computer, in the window) and which session it
-   shows. While a phone has notifications on, the sidebar's footer has a mark: Here (they wait a minute, and what you
+   shows. While a phone has notifications on, the sidebar's footer has a mark: Here (they wait for a minute with no input, and what you
    handle here is not sent), a ring running down to one that waits, or Away (they go at once). Click it to switch. */
 const PCR={page:Math.random().toString(36).slice(2,10),input:performance.now(),idle:0,locked:false,busy:false,again:false,pop:false,tick:0};
 async function pcReport(){
@@ -1725,7 +1725,7 @@ if(!PHONE){
 function pcTake(p){if(!p)return;A.pc=p;renderPc();if(PHONE&&isHome())renderHome()}
 const pcHeld=p=>!p.away&&p.held?.length?p.held.reduce((a,x)=>x.until<a.until?x:a):null;   // the one sent first
 const mmss=ms=>{const s=Math.max(0,Math.ceil(ms/1000));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
-const PC_HERE={wait:'Notifications wait a minute; what you handle here is not sent.',never:'Notifications are not sent while you are here.',now:'Notifications go to your phone at once.'};
+const PC_HERE={wait:'Notifications wait until you leave the PC alone for a minute; what you handle here is not sent.',never:'Notifications are not sent while you are here.',now:'Notifications go to your phone at once.'};
 const pcWhy=p=>p.why==='manual'?'Set by hand, until you are back.':p.why==='locked'?'This PC is locked.':p.why==='closed'?'Workwood is not open on this PC.':`No input since ${clock(p.since)}.`;
 function renderPc(){
   const b=$('pcb'),p=A.pc,on=!PHONE&&!!p?.push;if(!b)return;
@@ -1734,7 +1734,7 @@ function renderPc(){
   b.className='pcb '+k;
   if(k==='hold'){const left=h.until-Date.now(),c=2*Math.PI*5.8,n=p.held.length;
     b.innerHTML=`<svg viewBox="0 0 14 14"><circle class="rgb" cx="7" cy="7" r="5.8"/><circle class="rg" cx="7" cy="7" r="5.8" stroke-dasharray="${(c*Math.max(0,Math.min(1,left/(p.holdMs||60000)))).toFixed(1)} 99"/></svg><span>${n>1?n+' · ':''}${mmss(left)}</span>`;
-    b.dataset.tip='Sending to your phone in '+mmss(left);b.dataset.tipD=p.held.map(x=>x.title).join(' · ')+'. Handle it here and it is not sent.'}
+    b.dataset.tip='Sending to your phone in '+mmss(left)+' without input';b.dataset.tipD=p.held.map(x=>x.title).join(' · ')+'. Handle it here and it is not sent.'}
   else if(k==='away'){b.innerHTML=`<svg viewBox="0 0 14 14"><rect class="bd" x="3.5" y="1" width="7" height="12" rx="1.6"/><path class="wv" d="M12 4.5a4 4 0 0 1 0 5"/></svg><span>Away</span>`;
     b.dataset.tip='Away: your phone gets notifications';b.dataset.tipD=pcWhy(p)}
   else{b.innerHTML=`<svg viewBox="0 0 14 14"><rect class="bd" x="3.5" y="1" width="7" height="12" rx="1.6"/><line class="sl" x1="1.5" y1="12.5" x2="12.5" y2="1.5"/></svg><span>Here</span>`;
@@ -1759,7 +1759,7 @@ $('pcpop').onclick=async e=>{
 // on the phone's Home: whether the PC has you, so you know whether to expect notifications here
 function pcLine(){
   const p=A.pc;if(!p?.push)return null;
-  return ['pc',`<section class="hs hs-pc"><div class="pcline ${p.away?'a':''}"><i></i><span><b>${p.away?'You’re away from the PC':'You’re at the PC'}</b>${p.away?'Notifications come here.':p.hold==='wait'?'Notifications wait a minute there first.':p.hold==='never'?'Notifications stay there.':'Notifications come here too.'}</span></div></section>`];
+  return ['pc',`<section class="hs hs-pc"><div class="pcline ${p.away?'a':''}"><i></i><span><b>${p.away?'You’re away from the PC':'You’re at the PC'}</b>${p.away?'Notifications come here.':p.hold==='wait'?'Notifications wait while you use it.':p.hold==='never'?'Notifications stay there.':'Notifications come here too.'}</span></div></section>`];
 }
 function renderPhonePage(pg){
   phonePoll();
@@ -1776,7 +1776,7 @@ function renderPhonePage(pg){
       <code><i class="phl"></i>${esc(p.ips[0])} · ${esc(p.name)}</code>${Date.now()-p.setupSeen<120000?'<span class="ok">A phone opened the setup page</span>':''}</div></div>`;
     if(phRep&&(phRep.until<Date.now()||!(p.phones.find(x=>x.id===phRep.id)?.paired<phRep.at)))phRep=null;   // ran out, used, or the phone was revoked
     const sg=(items,cur,attr)=>`<div class="lseg">${items.map(([v,n])=>`<button data-${attr}="${v}" class="${String(v)===String(cur)?'on':''}">${n}</button>`).join('')}</div>`,pr=A.prefs||{};
-    body+=`<div class="lgrp">Notifications</div><div class="srow"><span>While you’re at this PC<small>${({wait:'A minute to handle it here first; then it goes to the phone.',never:'Nothing goes to the phone while you are here.',now:'Everything goes to the phone at once, as when away.'})[pr.pcHold||'wait']}</small></span>${sg([['wait','Wait a minute'],['never','Don’t send'],['now','Send at once']],pr.pcHold||'wait','pch')}</div>
+    body+=`<div class="lgrp">Notifications</div><div class="srow"><span>While you’re at this PC<small>${({wait:'It waits while you use the PC; after a minute with no input it goes to the phone.',never:'Nothing goes to the phone while you are here.',now:'Everything goes to the phone at once, as when away.'})[pr.pcHold||'wait']}</small></span>${sg([['wait','Wait a minute'],['never','Don’t send'],['now','Send at once']],pr.pcHold||'wait','pch')}</div>
       <div class="srow"><span>Away after<small>No keyboard or mouse anywhere on this PC. Locked or asleep is away at once.${A.pc?` <span class="pcnow ${A.pc.away?'a':''}"><i></i>${A.pc.away?'Away now':'At this PC now'}</span>`:''}</small></span>${sg([[2,'2 min'],[5,'5 min'],[15,'15 min']],pr.awayMin||5,'pcm')}</div>`;
     body+='<div class="lgrp">Paired phones</div>'+(p.phones.length?p.phones.map(x=>`<div class="srow"><span>${esc(x.name)}<small>${x.seen?(Date.now()-x.seen<90000?'Seen just now':'Seen '+ago(x.seen/1000)+' ago'):'Not opened yet'}${x.push?' · notifications on':''}</small>${x.lost?`<small class="bad">This PC's address changed since. Pair it again to reach it.</small>`:''}</span><span class="phb"><button class="sval" data-phrep="${esc(x.id)}">Pair again</button><button class="sval" data-phrev="${esc(x.id)}">Revoke</button></span></div>`
       +(phRep?.id===x.id&&phRep.url?`<div class="phq">${qrSvg(phRep.url)}<div><b>Scan with ${esc(x.name)}</b><span>Pairs it again as itself: its name and notifications stay. The code lasts 10 minutes.</span></div></div>`:'')).join('')

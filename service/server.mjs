@@ -1222,8 +1222,9 @@ function phoneNews(type, data) {
     }
   }, 50);
 }
-// At this PC a notification waits (prefs.pcHold), and is dropped if you handle it here meanwhile: you answer what it
-// asks, or open its session; one about a limit, if you used the PC while it waited. Going away sends what waits.
+// At this PC a notification waits (prefs.pcHold) until a minute has passed with no input here, so it is not sent while
+// you are busy at the PC (writing an answer, say); it is dropped if you handle it meanwhile: you answer what it asks,
+// or open its session; one about a limit, if you used the PC while it waited. Going away sends what waits.
 const holds = new Map();   // tag -> { kind, msg, looking, session, pending, at, until }
 let pcWas = null, pcSince = Date.now();
 function pcNotify(kind, msg, looking = () => false) {
@@ -1233,8 +1234,19 @@ function pcNotify(kind, msg, looking = () => false) {
   const old = holds.get(msg.tag); if (old) clearTimeout(old.timer);
   const r = msg.session && runs.get(msg.session);
   const h = { kind, msg, looking, session: msg.session || null, pending: kind === 'needs' ? r?.pending?.id ?? null : null, at: performance.now(), until: Date.now() + pc.HOLD_MS };
-  h.timer = setTimeout(() => release(msg.tag), pc.HOLD_MS); h.timer.unref?.();
-  holds.set(msg.tag, h); pushState();
+  holds.set(msg.tag, h); holdOn(msg.tag); pushState();
+}
+// How long it still waits: a minute from when it came or from the last input here, whichever is later.
+function holdLeft(h) {
+  const t = performance.now(), idle = pc.now(prefs.awayMin).idle;
+  return Math.max(h.at, idle == null ? h.at : t - idle * 1000) + pc.HOLD_MS - t;
+}
+function holdOn(tag) {
+  const h = holds.get(tag); if (!h) return;
+  clearTimeout(h.timer); const left = holdLeft(h);
+  if (left <= 0) return release(tag);
+  h.until = Date.now() + left;
+  h.timer = setTimeout(() => holdOn(tag), left); h.timer.unref?.();
 }
 function handled(h) {
   if (h.seen) return true;
@@ -1252,6 +1264,7 @@ function release(tag) {
 function pcTick() {
   const p = pc.now(prefs.awayMin), seen = pc.viewing();
   for (const h of holds.values()) if (h.session && seen.has(h.session)) h.seen = true;
+  if (!p.away && prefs.pcHold === 'wait') for (const tag of [...holds.keys()]) holdOn(tag);   // input meanwhile puts it off
   if (p.away || prefs.pcHold !== 'wait') for (const tag of [...holds.keys()]) { if (prefs.pcHold === 'never' && !p.away) { clearTimeout(holds.get(tag).timer); holds.delete(tag); } else release(tag); }
   const k = p.away + p.why; if (k !== pcWas) { pcWas = k; pcSince = Date.now(); }
   pushState();

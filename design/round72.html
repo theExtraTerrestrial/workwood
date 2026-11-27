@@ -1,0 +1,66 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Round 72 · Phone composer</title><style>
+:root{color-scheme:dark;--bg:#1e1f22;--surface:#2a2b2f;--surface2:#33343a;--line:#2d2e33;--line2:#44454c;--text:#ecebe8;--dim:#b9b7b2;--faint:#8b8984;--go:#3ecf8e;--warn:#e8b14a;--hot:#ef6f63}
+html.light{color-scheme:light;--bg:#f7f6f3;--surface:#ffffff;--surface2:#ecebe7;--line:#e2e0db;--line2:#d2d0ca;--text:#1d1d1f;--dim:#4a4a4d;--faint:#7a7975}
+*{box-sizing:border-box}
+body{margin:0;background:#111214;color:var(--text);font:15px/1.5 Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;padding:24px}
+html.light body{background:#e6e4df}
+h1{font-size:20px;margin:0 0 4px;font-weight:750}.sub{color:var(--faint);margin:0 0 22px;font-size:14px}
+.tg{position:fixed;top:16px;right:16px;font:inherit;font-size:13px;padding:6px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--surface);color:var(--dim)}
+.grid{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+.lbl{color:var(--faint);font-size:13px;margin:0 0 8px 4px}.lbl b{color:var(--dim);font-weight:650}
+.ph{width:360px;background:var(--bg);border-radius:24px;border:1px solid var(--line2);padding:8px 10px 10px;overflow:hidden}
+.was{opacity:.55}
+/* the box */
+.box{border-radius:22px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line2);padding:12px 8px 6px 14px}
+.box.rec{box-shadow:inset 0 0 0 1.5px var(--hot)}
+.ta{font-size:16px;line-height:1.4;min-height:22px;margin:0 6px 10px 2px;color:var(--text)}
+.ta.ph0{color:var(--faint)}
+.row{display:flex;align-items:center;gap:2px;height:36px}
+.ib{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:50%;color:var(--dim)}
+.ib svg{width:20px;height:20px}
+.gap{flex:1;min-width:0}
+.pill{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 9px 0 10px;border-radius:16px;background:var(--surface2);color:var(--dim);font-size:12px;font-weight:600;white-space:nowrap;flex:none}
+.pill .k{color:var(--faint)}.pill .br{width:22px;height:4px;border-radius:2px;background:var(--line2);overflow:hidden}.pill .br i{display:block;height:100%;background:var(--go)}
+.pill .d{color:var(--faint);font-style:normal}.pill svg{width:12px;height:12px;color:var(--faint)}
+.ctx{display:inline-flex;align-items:center;gap:4px;height:32px;padding:0 5px;border-radius:16px;color:var(--faint);font-size:12.5px;font-weight:650;flex:none}
+.ctx.mid{color:var(--warn)}
+.ring{width:16px;height:16px;border-radius:50%;background:conic-gradient(currentColor calc(var(--p)*1%),rgba(128,128,128,.3) 0);-webkit-mask:radial-gradient(circle,transparent 4.5px,#000 5px);mask:radial-gradient(circle,transparent 4.5px,#000 5px)}
+.send{width:36px;height:36px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--text);color:var(--bg)}
+.send svg{width:18px;height:18px}
+.stop{width:36px;height:36px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--hot);color:#fff}
+.stop i,.send i{width:11px;height:11px;border-radius:2.5px;background:currentColor}
+.wave{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:2.5px;height:22px;overflow:hidden;padding:0 4px}
+.wave i{width:2.5px;flex:none;height:100%;border-radius:2px;background:var(--hot);transform:scaleY(.25);animation:wv .9s ease-in-out infinite}
+.wave i:nth-child(3n){animation-delay:-.2s}.wave i:nth-child(3n+1){animation-delay:-.5s}.wave i:nth-child(4n){animation-delay:-.7s}.wave i:nth-child(5n){animation-duration:.6s}
+@keyframes wv{50%{transform:scaleY(1)}}
+.tm{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;padding:0 4px;flex:none}
+.cap{margin:10px 4px 0;font-size:13px;color:var(--faint);max-width:340px}
+.cap b{color:var(--dim);font-weight:650}
+details{margin-top:30px;color:var(--faint);font-size:13.5px;max-width:760px}summary{cursor:pointer;color:var(--dim)}
+.q{margin-top:28px;max-width:760px}.q h2{font-size:15px;margin:0 0 8px}.q ol{margin:0;padding-left:20px;color:var(--dim);font-size:14px}.q li{margin:4px 0}
+</style></head><body>
+<button class="tg" onclick="document.documentElement.classList.toggle('light')">Light / dark</button>
+<h1>Phone composer</h1><p class="sub">One line of hint, room under it, the context ring back, and a calm row while you dictate.</p>
+<div class="grid">
+
+<div><p class="lbl">Now · <b>while it works</b></p><div class="ph was"><div class="box" style="padding-top:10px"><div class="ta ph0" style="margin-bottom:2px">Message the agent… it reads this when the current step ends</div><div class="row"><span class="ib">+</span><span class="pill"><span class="k">5h</span><span class="br"><i style="width:59%"></i></span>59%<i class="d">·</i>Opus<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span><span class="gap"></span><span class="ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span><span class="send"><i></i></span></div></div></div></div>
+
+<div><p class="lbl">New · <b>while it works</b></p><div class="ph"><div class="box"><div class="ta ph0">Message the agent…</div><div class="row"><span class="ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span><span class="pill"><span class="k">5h</span><span class="br"><i style="width:59%"></i></span>59%<i class="d">·</i>Opus<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span><span class="ctx"><i class="ring" style="--p:34"></i></span><span class="gap"></span><span class="ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span><span class="send"><i></i></span></div></div></div>
+<p class="cap">The <b>Working</b> under the title already says it is busy. The ring opens <b>What fills the context</b> straight away.</p></div>
+
+<div><p class="lbl">New · <b>context near full</b></p><div class="ph"><div class="box"><div class="ta ph0">Message the agent…</div><div class="row"><span class="ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span><span class="pill"><span class="k">5h</span>59%<i class="d">·</i>Opus<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span><span class="ctx mid"><i class="ring" style="--p:86"></i>86%</span><span class="gap"></span><span class="ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span><span class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></div></div></div>
+<p class="cap">The number shows from 80%, in amber, as on the desktop. To make room the pill drops its little bar.</p></div>
+
+<div><p class="lbl">New · <b>dictating</b></p><div class="ph"><div class="box rec"><div class="ta">Here is an example of how the screen looks for the composer on the mobile app.</div><div class="row"><span class="ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></span><span class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="tm">0:37</span><span class="stop"><i></i></span><span class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></div></div></div>
+<p class="cap"><b>+</b>, the pill and the ring step aside; the wave takes their room. Both round buttons keep their size.</p></div>
+
+</div>
+
+<details><summary>Under the hood</summary><p>Phone only (<code>html.ph</code>); the desktop composer is unchanged. Placeholder: the phone drops the "it reads this when the current step ends" part. The box gets 12px above the text and 10px between it and the row. The ring is the same <code>V.context</code> the drawer already shows; it is hidden on a new session (no context yet). While <code>#voice</code> shows, <code>#bAttach</code>, <code>#phPill</code>, <code>#phUse</code> and the ring hide; the send and stop buttons get <code>flex:none</code> so nothing squeezes them into ovals. No service changes.</p></details>
+
+<div class="q"><h2>Open questions</h2><ol>
+<li>While it works, is plain <b>Message the agent…</b> enough, or keep a short hint such as <b>Message · read after this step…</b>?</li>
+<li>Ring as its own button beside the pill (shown), or inside the pill after the model?</li>
+<li>Stop while dictating: round red (shown) or the square it is now?</li>
+</ol></div>
+</body></html>

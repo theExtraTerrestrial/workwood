@@ -284,6 +284,41 @@ test('on the phone: tabs, a session full screen with the pill and its drawer, a 
     assert.match(await page.locator('#phCache').textContent(), /Warm|Cools in|Cache cold/);
     await page.waitForFunction(() => /7d/.test(document.querySelector('#phPill').textContent));
     assert.match(await page.locator('#phPill').textContent(), /7d.*41%/, '7d shows because it is closer to its limit (41% vs 34%)');
+    // the composer: a one-line hint, the context ring beside the pill, which opens what fills the context
+    assert.equal(await page.locator('#input').getAttribute('placeholder'), 'Message the agent…');
+    await page.waitForSelector('#phCtx:not([hidden]) .ring');
+    await page.click('#phCtx');
+    await page.waitForSelector('.phdr .pdh:has-text("What fills the context")');
+    await page.mouse.click(195, 30);
+    await page.waitForSelector('#phDim[hidden]', { state: 'attached' });
+    // dictating: +, the pill and the ring step aside; the round buttons keep their size
+    await page.evaluate(() => { document.querySelector('#box').classList.add('rec'); document.querySelector('#voice').hidden = false; document.querySelector('#mic').classList.add('live'); });
+    if (process.env.SHOT) { await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOT + '-rec.png' }); }
+    for (const id of ['#bAttach', '#phPill', '#phCtx']) assert.equal(await page.locator(id).isVisible(), false, id + ' hides while dictating');
+    for (const id of ['#send', '#mic', '#vCancel']) { const b = await page.locator(id).boundingBox(); assert.ok(b.width === b.height && b.width >= 36, id + ' stays round: ' + JSON.stringify(b)); }
+    await page.evaluate(() => { document.querySelector('#box').classList.remove('rec'); document.querySelector('#voice').hidden = true; document.querySelector('#mic').classList.remove('live'); });
+    if (process.env.SHOT) { await page.waitForTimeout(400); await page.screenshot({ path: process.env.SHOT + '-idle.png' }); }
+    // a queued message: one short line over it, no keyboard hint, and buttons a finger can hit
+    await page.evaluate(() => { V.run = { ...(V.run || {}), status: 'working', queued: [{ id: 'q1', text: 'while testing this i also noticed a bug with the preview panel' }] }; renderQueue(); });
+    assert.equal(await page.locator('#queue .qh>span:first-child').textContent(), 'Queued for the end of this step');
+    assert.equal(await page.locator('#queue .hint').isVisible(), false);
+    assert.equal((await page.locator('#queue .qh').boundingBox()).height < 24, true, 'the line over the queue is one line');
+    if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT + '-queue.png' });
+    await page.evaluate(() => { V.run.queued = []; V.run.status = 'idle'; renderQueue(); renderComposer(); });
+    // a preview: Fit lays the page out at a desktop width and scales it to the screen, inside the app
+    const wide = path.join(sb.projects.alpha, 'wide.html');
+    fs.writeFileSync(wide, '<body style="margin:0"><div id="w" style="width:900px;height:40px;background:#c33"></div></body>');
+    await page.evaluate(p => { addWork([{ path: p, name: 'wide.html', kind: 'page', v: 1 }]); showWork(p); }, wide);
+    await page.waitForSelector('#pvw:not([hidden]) iframe.pvf');
+    assert.equal(await page.locator('#bExt').getAttribute('data-tip'), 'Fit the whole page');
+    await page.click('#bExt');
+    const fit = await page.evaluate(() => { const f = document.querySelector('#stage .pvf').getBoundingClientRect(), st = document.querySelector('#stage').getBoundingClientRect(); return { fw: f.width, sw: st.width, fb: f.bottom, sb: st.bottom }; });
+    assert.ok(Math.abs(fit.fw - fit.sw) < 1 && Math.abs(fit.fb - fit.sb) < 2, 'the scaled page fills the stage: ' + JSON.stringify(fit));
+    assert.equal(await page.frameLocator('#stage iframe').locator('body').evaluate(b => innerWidth), 980);
+    if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT + '-fit.png' });
+    await page.click('#bExt');
+    assert.equal(await page.frameLocator('#stage iframe').locator('body').evaluate(b => innerWidth) < 500, true, 'and back to the phone\'s width');
+    await page.click('#bClose');
     // the drawer: a model picked shows in the pill; the context page
     await page.click('#phPill');
     await page.click('[data-dm="claude-opus-5-5"]');
@@ -293,13 +328,52 @@ test('on the phone: tabs, a session full screen with the pill and its drawer, a 
     await page.waitForSelector('.phdr .pdh:has-text("What fills the context")');
     await page.click('[data-dback]');
     await page.mouse.click(195, 30);
+    // swipe up on the box opens the drawer; pulled down by its handle it closes; a short pull springs back
+    const cdp = await ctx.newCDPSession(page);
+    const swipe = async (x, y1, y2, steps = 8, x2 = x) => {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: y1 }] });
+      for (let i = 1; i <= steps; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + (x2 - x) * i / steps, y: y1 + (y2 - y1) * i / steps }] }); await page.waitForTimeout(16); }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
+    const box = await page.locator('#box').boundingBox();
+    await swipe(195, box.y + 20, box.y - 80);
+    await page.waitForSelector('#phDim:not([hidden])');
+    let top = (await page.locator('#phDr').boundingBox()).y;
+    await swipe(195, top + 8, top + 40, 4);
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator('#phDim').isHidden(), false, 'a short pull springs back');
+    await swipe(195, top + 8, top + 500, 10);
+    await page.waitForSelector('#phDim[hidden]', { state: 'attached' });
     await page.click('#phBack');
     await page.waitForSelector('html[data-pt=sessions]');
+    // done: swiped left in Sessions, a row is marked done and leaves the list; a reload agrees
+    const row = `.sess[data-id="${sb.sessions.betaOther}"]`, rb = await page.locator(row).boundingBox();
+    await swipe(rb.x + rb.width - 20, rb.y + rb.height / 2, rb.y + rb.height / 2, 10, rb.x + 20);
+    await page.waitForSelector(row, { state: 'detached' });
+    assert.ok(await page.locator('html[data-pt=sessions]').count(), 'the swipe is not a tap that opens it');
+    await page.reload(); await page.waitForSelector('html.ph'); await page.click('[data-pt=sessions]');
+    await page.waitForSelector(`.sess[data-id="${sb.sessions.alphaLive}"]`);
+    assert.equal(await page.locator(row).count(), 0);
+    // and from inside a session, in its drawer; it goes back to the list
+    await page.click(`.sess[data-id="${sb.sessions.betaFable}"]`);
+    await page.waitForSelector('html[data-pt=session]');
+    await page.click('#phPill');
+    await page.click('[data-ddone]');
+    await page.waitForSelector('html[data-pt=sessions]');
+    assert.equal(await page.locator(`.sess[data-id="${sb.sessions.betaFable}"]`).count(), 0);
     // a new session: the sentence under the box
     await page.click('[data-pt=new]');
     await page.waitForSelector('html[data-pt=new]');
     assert.equal(await page.locator('#hello').textContent(), 'What are we working on?');
     assert.match(await page.locator('#phSum').textContent(), /alpha on live/);
+    // here too: swipe up on the box (its text in focus) opens the drawer, and it pulls down to close
+    await page.focus('#input');
+    const nbox = await page.locator('#box').boundingBox();
+    await swipe(195, nbox.y + 20, nbox.y - 80);
+    await page.waitForSelector('#phDim:not([hidden])');
+    top = (await page.locator('#phDr').boundingBox()).y;
+    await swipe(195, top + 8, top + 500, 10);
+    await page.waitForSelector('#phDim[hidden]', { state: 'attached' });
     // this phone's settings: a notification kind switched on reaches the PC
     await page.click('[data-pt=settings]');
     await page.click('[data-pkind=near]');

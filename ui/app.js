@@ -9,6 +9,7 @@ const P={
   clip:'<path transform="translate(12 12) scale(.8) translate(-12 -12)" stroke-width="2.19" d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',   // drawn edge to edge, so shrunk to sit at the size of the composer's other marks
   up:'<path d="M12 19V5M5 12l7-7 7 7"/>','arrow-down':'<path d="M12 5v14M6 13l6 6 6-6"/>',
   max:'<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
+  zoomout:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6"/>',
   min:'<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>',
   ext:'<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>',
   x:'<path d="M18 6 6 18M6 6l12 12"/>',
@@ -545,7 +546,7 @@ function renderPanel(){
   const key=f.path+'|'+f.v+'|'+(f.sid||'');
   if(key!==staged){staged=key;$('stage').innerHTML=stageOf(f);pvGone()}
   raHead();
-  fitThumbs();
+  fitThumbs();if(PHONE)phFit();
 }
 const stageOf=f=>{const u=esc(fileUrl(f));
   return f.kind==='page'?`<iframe class="pvf" src="${u}${A.tts?'&amp;ra':''}" sandbox="${SANDBOX}" title="${esc(f.name)}"></iframe>`
@@ -2182,7 +2183,7 @@ function renderComposer(){
   $('sProject').hidden=!nw;
   $('box').classList.toggle('off',!!locked);
   $('input').disabled=!!locked;
-  $('input').placeholder=nw?'Describe the task…':locked?'In use in a terminal. You can write here when it is idle.':working?'Message the agent… it reads this when the current step ends':'Message the agent…';
+  $('input').placeholder=nw?'Describe the task…':locked?'In use in a terminal. You can write here when it is idle.':working&&!PHONE?'Message the agent… it reads this when the current step ends':'Message the agent…';
   fitSend();
   const pr=A.projects.find(p=>p.cwd===V.project);
   $('pProject').innerHTML=pr?`${tile(pr.name,'s')}</span><span>${esc(pr.name)}</span>${svg('chev-d','cv')}`:`${svg('folder')}<span>Pick a project</span>${svg('chev-d','cv')}`;
@@ -2210,7 +2211,7 @@ function renderComposer(){
   const c=!nw&&V.context,pct=c?Math.min(100,Math.round(c.used/c.window*100)):0;
   $('pCtx').innerHTML=c?`<i class="ring" style="--p:${pct}"></i><span class="pct">${pct}%</span>`:'';$('pCtx').className='ctx '+(pct>=80?'mid':'')+($('mCtx').hidden?'':' open');$('sCtx').hidden=!c;
   $('pCtx').dataset.tip=c?`${pct}% of the agent's memory of this conversation is used: ${kTok(c.used)} of ${kTok(c.window)} tokens`:'';
-  renderStrip();renderBack();raTurnEnd(working);
+  renderStrip();renderBack();raTurnEnd(working);if(PHONE&&$('phPill'))phPill();
 }
 const short=p=>A.home&&p&&p.startsWith(A.home)?'~'+p.slice(A.home.length):p||'';
 // The profile menu: a small table, one row per account with its 5-hour and 7-day limits, the one with most room first.
@@ -2369,7 +2370,7 @@ function renderQueue(){renderTray();
   const q=queued(),el=$('queue'),busy=V.run?.status==='working';
   el.hidden=!q.length||!$('qcard').hidden;
   if(el.hidden){el.innerHTML='';return}
-  el.innerHTML=`<div class="qh"><span>${busy?'Queued: the agent reads '+(q.length>1?'these':'this')+' when its current step ends':'Waiting to be sent'}</span><span class="gap"></span><span class="hint"><kbd>↑</kbd> to edit</span></div>`
+  el.innerHTML=`<div class="qh"><span>${busy?(PHONE?'Queued for the end of this step':'Queued: the agent reads '+(q.length>1?'these':'this')+' when its current step ends'):'Waiting to be sent'}</span><span class="gap"></span><span class="hint"><kbd>↑</kbd> to edit</span></div>`
     +q.map(m=>`<div class="qm${m.tmp||V.qNow===m.id?' going':''}" data-q="${esc(m.id)}"><span class="qt">${esc(m.text.replace(/\s+/g,' ').trim()||'Attached files')}</span>${m.files?.length?`<span class="qf">${svg('file')}${m.files.length}</span>`:''}`
       +(m.tmp?'':`<button class="ib" data-qedit data-tip="Take it back to change it" data-i="pencil"></button><button class="qnow" data-qnow data-tip="${busy?'Send this now: a command it waits on goes on in the background, anything else is cut short':'Send this now'}">Send now</button>`)+'</div>').join('');
   hydrate(el);
@@ -2859,15 +2860,25 @@ function phInit(){
   const cache=document.createElement('div');cache.id='phCache';cache.className='phcache';document.querySelector('.hd').appendChild(cache);
   const pill=document.createElement('button');pill.className='phpill';pill.id='phPill';pill.onclick=e=>{e.stopPropagation();phOpen('main')};$('bAttach').after(pill);
   const use=document.createElement('button');use.className='phuse';use.id='phUse';use.hidden=true;pill.after(use);
+  const ring=document.createElement('button');ring.className='ctx phctx';ring.id='phCtx';ring.hidden=true;use.after(ring);ring.onclick=e=>{e.stopPropagation();phOpen('ctx')};
   use.onclick=e=>{e.stopPropagation();const n=use.dataset.to;if(!n)return;if(V.isNew){V.profile=n;loadDefaults()}else choose('profile',n);V.limBase=null;render()};
   const sum=document.createElement('button');sum.className='phsum';sum.id='phSum';sum.onclick=()=>phOpen('main');$('box').after(sum);
   const d=document.createElement('div');d.id='phDim';d.className='phdim';d.hidden=true;d.innerHTML='<div class="phdr" id="phDr"></div>';document.body.appendChild(d);
   d.addEventListener('pointerdown',e=>{if(e.target===d)phClose()});$('phDr').onclick=phDrawerClick;
   const s=document.createElement('div');s.id='phSet';s.className='phset';$('main').appendChild(s);s.onclick=phSetClick;s.addEventListener('change',phSetChange);
   $('hello').textContent='What are we working on?';
-  $('bAttach').dataset.i='plus';hydrate($('bAttach').parentNode);   // the phone's own picker offers the camera, photos and files
-  let y0=null;$('box').addEventListener('touchstart',e=>{y0=e.touches[0].clientY},{passive:true});
-  $('box').addEventListener('touchend',e=>{if(y0!=null&&y0-e.changedTouches[0].clientY>40)phOpen('main');y0=null},{passive:true});
+  $('bAttach').dataset.i='plus';hydrate($('bAttach').parentNode);
+  // The preview's Open in browser would leave the app in a window Back cannot get out of; the phone gets Fit instead:
+  // the page laid out at a desktop width and scaled down to the screen, as a browser shows a page made for a computer.
+  $('bExt').dataset.i='zoomout';$('bExt').dataset.tip='Fit the whole page';hydrate($('bExt').parentNode);
+  $('bExt').onclick=()=>{V.pvFit=!V.pvFit;phFit()};addEventListener('resize',phFit);   // the phone's own picker offers the camera, photos and files
+  // Swipe up on the box, or on the line under it, opens the drawer. It opens while the finger moves, so a gesture the
+  // browser takes over (a focused box, the keyboard moving the page) still counts. Text that scrolls keeps its swipe.
+  for(const el of [$('box'),sum]){let y0=null;
+    el.addEventListener('touchstart',e=>{const ta=e.target.closest('textarea');y0=ta&&ta.scrollHeight>ta.clientHeight+1?null:e.touches[0].clientY},{passive:true});
+    el.addEventListener('touchmove',e=>{if(y0!=null&&y0-e.touches[0].clientY>40){y0=null;phOpen('main')}},{passive:true});
+    el.addEventListener('touchend',()=>{y0=null},{passive:true});el.addEventListener('touchcancel',()=>{y0=null},{passive:true})}
+  phDrag();phSwipeDone();
   $('list').addEventListener('click',e=>{const b=e.target.closest('.sess[data-id]');if(b&&!e.target.closest('[data-dots]'))PT='session'},true);
   $('dash').addEventListener('click',e=>{if(e.target.closest('[data-sid],[data-made],[data-ch]'))PT='session'},true);
   addEventListener('popstate',()=>{if(!V.isNew&&PT==='session'){PT='sessions';render()}});
@@ -2877,6 +2888,9 @@ function phInit(){
   api('phone/me').then(m=>{phMe=m;phRender()}).catch(()=>{});
   setInterval(()=>{phViewing();phCache()},30000);document.addEventListener('visibilitychange',phViewing);
 }
+const PH_FIT=980;
+function phFit(){const st=$('stage'),on=!!V.pvFit;$('pvw').classList.toggle('fit',on);$('bExt').classList.toggle('on',on);
+  if(on&&st.clientWidth){const k=st.clientWidth/PH_FIT;st.style.setProperty('--fs',k);st.style.setProperty('--fh',st.clientHeight/k+'px')}}
 function phGo(k){phClose();if(k==='home'||k==='new'){PT=k;newSession();if(k==='home')$('input').blur()}else{PT=k;render()}if(k==='settings')phSettings();$('scroll').scrollTop=0}
 function phFromNote(sid,act){if(!sid)return;phAfter={s:sid,act};PT='session';openSession(sid)}
 function phRender(){
@@ -2894,11 +2908,15 @@ function phRender(){
 // The one window that matters in the pill: 5h, unless 7d is closer to its limit. Amber or red always shows; amber shows
 // when it resets instead of a bar; full shows when it clears, and the profile with the most room next to it.
 function phPill(){
+  // the context, as a ring beside the pill; from 80% with its number, and the pill gives up its bar to make room
+  const c=!V.isNew&&V.context,cp=c?Math.min(100,Math.round(c.used/c.window*100)):0,full=cp>=80,rg=$('phCtx');
+  rg.hidden=!c;rg.className='ctx phctx'+(full?' mid':'');rg.innerHTML=c?`<i class="ring" style="--p:${cp}"></i>${full?`<span class="pct">${cp}%</span>`:''}`:'';
+  rg.setAttribute('aria-label',c?`Context ${cp}% used`:'');
   const cur=profile(curProfile()),h5=cur?.h5,d7=cur?.d7;let k='5h',v=h5,r=cur?.r5;
   if(d7!=null&&(h5==null||d7>h5)){k='7d';v=d7;r=cur?.r7}
   const m=shownModel()?modelName(shownModel()).split(' ')[0]:'Default';
   const lim=v==null?'':v>=100?`<b>${k} full</b>${r?`<small> · clears ${clock(r*1000)}</small>`:''}`:v>=80?`<b>${k} ${Math.round(v)}%</b>${r?`<small> · ${clock(r*1000)}</small>`:''}`
-    :`<span class="pk">${k}</span><span class="pbr"><i style="width:${Math.max(4,v)}%"></i></span>${Math.round(v)}%`;
+    :`<span class="pk">${k}</span>${full?'':`<span class="pbr"><i style="width:${Math.max(4,v)}%"></i></span>`}${Math.round(v)}%`;
   $('phPill').innerHTML=(lim?`<span class="pl">${lim}</span><i class="pdot">·</i>`:'')+`<span>${esc(m)}</span>${svg('chev-d','cv')}`;
   $('phPill').className='phpill '+lvl(v??0);
   const alt=v>=100?roomOrder(A.profiles).find(p=>p.name!==cur?.name&&Math.max(p.h5||0,p.d7||0)<100):null,u=$('phUse');
@@ -2917,8 +2935,42 @@ function phCache(){
 function phViewing(){const id=!document.hidden&&!V.isNew&&V.sel?V.sel:null;if(id===phLastV.id&&performance.now()-phLastV.at<25000)return;phLastV={id,at:performance.now()};api('phone/viewing',{sessionId:id}).catch(()=>{})}
 
 /* the drawer: "Start in" for a new session, "This session" for one open; the context page behind it */
-function phOpen(k){if(phScreen()==='home')return;phDr=k;$('phDim').hidden=false;phDrawer();if(k==='main')loadDefaults()}
-function phClose(){phDr=null;$('phDim').hidden=true}
+function phOpen(k){if(phScreen()==='home')return;phDr=k;$('phDim').hidden=false;if(k==='ctx')phCtxLoad();phDrawer();if(k==='main')loadDefaults()}
+function phCtxLoad(){phDr='ctx';const id=V.sel;V.ctx={id,at:performance.now()};
+  api(`sessions/${id}/context`).then(r=>{V.ctx={id,at:performance.now(),rows:r.rows}},err=>{V.ctx={id,at:-Infinity,err:'The breakdown is not available ('+err.message+')'}}).then(()=>{if(phDr==='ctx'&&V.sel===id)phDrawer()})}
+function phClose(){phDr=null;$('phDim').hidden=true;const dr=$('phDr');dr.style.transform=dr.style.transition='';$('phDim').style.background=''}
+// Pulled down from its top (or from anywhere once its list is scrolled to the top), the drawer follows the finger and
+// closes past a third of its height or on a quick flick; short of that it springs back.
+// Swiped left in the Sessions list, a row is marked done (or, when done, goes back to the inbox), as in a mail app.
+function phSwipeDone(){
+  const L=$('list');let row=null,x0=0,y0=0,dx=0,dir=null,bg=null,swiped=-1e9;
+  L.addEventListener('click',e=>{if(performance.now()-swiped<400){e.stopPropagation();e.preventDefault()}},true);
+  const reset=()=>{if(bg)bg.remove();if(row){row.style.transform=row.style.transition='';row.classList.remove('swp')}row=bg=null;dir=null};
+  L.addEventListener('touchstart',e=>{reset();const r=e.target.closest('.sess[data-id]');if(!r||r.classList.contains('ren'))return;row=r;x0=e.touches[0].clientX;y0=e.touches[0].clientY;dx=0},{passive:true});
+  L.addEventListener('touchmove',e=>{if(!row)return;const t=e.touches[0],mx=t.clientX-x0,my=t.clientY-y0;
+    if(!dir){if(Math.abs(mx)<8&&Math.abs(my)<8)return;dir=Math.abs(mx)>Math.abs(my)&&mx<0?'x':'y';if(dir==='y'){row=null;return}
+      const s=A.sessions.find(x=>x.id===row.dataset.id);bg=document.createElement('div');bg.className='phswipe'+(s?.done?' back':'');
+      bg.innerHTML=`${svg(s?.done?'refresh':'check')}<span>${s?.done?'Inbox':'Done'}</span>`;
+      row.classList.add('swp');bg.style.top=row.offsetTop+'px';bg.style.left=row.offsetLeft+'px';bg.style.width=row.offsetWidth+'px';bg.style.height=row.offsetHeight+'px';row.before(bg)}
+    e.preventDefault();dx=Math.min(0,mx);row.style.transform=`translateX(${dx}px)`;bg.classList.toggle('arm',-dx>row.offsetWidth*.3)},{passive:false});
+  const end=()=>{if(!row||dir!=='x')return reset();const r=row,b=bg,go=-dx>r.offsetWidth*.3;
+    swiped=performance.now();   // the lift is not a tap
+    r.style.transition='transform .2s ease-out';r.style.transform=go?'translateX(-100%)':'';row=bg=null;dir=null;
+    setTimeout(()=>{b.remove();r.style.transform=r.style.transition='';r.classList.remove('swp');if(go){const s=A.sessions.find(x=>x.id===r.dataset.id);if(s){s.done=!s.done;s.unread=false;api(`sessions/${s.id}/done`,{on:s.done}).catch(err=>{s.done=!s.done;oops(err.message);render()});render()}}},200)};
+  L.addEventListener('touchend',end,{passive:true});L.addEventListener('touchcancel',()=>reset(),{passive:true});
+}
+function phDrag(){
+  const dr=$('phDr'),dim=$('phDim');let y0=null,dy=0,t0=0,on=false;
+  const set=y=>{dr.style.transform=y?`translateY(${y}px)`:'';dim.style.background=y?`rgba(0,0,0,${.45*Math.max(0,1-y/dr.offsetHeight)})`:''};
+  dr.addEventListener('touchstart',e=>{y0=dr.scrollTop<=0?e.touches[0].clientY:null;dy=0;on=false;t0=performance.now();dr.style.transition=''},{passive:true});
+  dr.addEventListener('touchmove',e=>{if(y0==null)return;dy=e.touches[0].clientY-y0;
+    if(!on&&dy<=6){if(dy<-6)y0=null;return}   // an upward move is the list scrolling
+    on=true;e.preventDefault();set(Math.max(0,dy))},{passive:false});
+  const end=()=>{if(!on){y0=null;return}on=false;y0=null;const fast=dy/(performance.now()-t0)>.6&&dy>30;
+    dr.style.transition='transform .2s ease-out';dim.style.transition='background .2s';
+    if(fast||dy>dr.offsetHeight/3){set(dr.offsetHeight);setTimeout(()=>{dim.style.transition='';phClose()},200)}else{set(0);setTimeout(()=>{dr.style.transition=dim.style.transition=''},200)}};
+  dr.addEventListener('touchend',end,{passive:true});dr.addEventListener('touchcancel',end,{passive:true});
+}
 const phBar=(v,r)=>`<span class="dbar ${lvl(v??0)}"><span class="db"><i style="width:${Math.min(100,v||0)}%"></i></span><span class="dv">${v==null?'–':Math.round(v)+'%'}</span><small>${r?until(r):''}</small></span>`;
 function phDrawer(){
   const nw=V.isNew,dr=$('phDr'),c=!nw&&V.context;
@@ -2939,7 +2991,8 @@ function phDrawer(){
     +`<div class="pdl">Profile</div>`+roomOrder(A.profiles).map(p=>`<button class="prw ${p.name===cur?'on':''}" data-dprof="${esc(p.name)}">${p.name===cur?svg('check','ck'):'<span class="ck"></span>'}<b>${esc(p.name)}</b><span class="pk">5h</span>${phBar(p.h5,p.r5)}<span class="pk">7d</span>${phBar(p.d7,p.r7)}</button>`).join('')
     +`<div class="pdl">Model</div>${seg('dm',models,shownModel())}<div class="pdl">Effort</div>${seg('de',effs,shownEffort())}<div class="pdl">Permissions</div>${seg('dmode',modeList().map(([v])=>[v,MODE_SHORT[v]||v]),shownMode())}`
     +(c?`<div class="pdl">Context</div><button class="pctx" data-dctx><i class="ring" style="--p:${Math.min(100,Math.round(c.used/c.window*100))}"></i><b>${kTok(c.used)}</b><span>${Math.min(100,Math.round(c.used/c.window*100))}%</span><span class="gap"></span><em>What fills it</em>${svg('chev-r')}</button>
-      <div class="pact"><button class="pri" data-dho ${off?'disabled':''}>${svg('arrow-r')}<span><b>Continue in a new session</b><small>A handoff carries the work over</small></span></button><button data-dcompact ${off?'disabled':''}>${svg('compress')}<span><b>Summarise to make room</b><small>Compact · earlier detail fades</small></span></button></div>`:'');
+      <div class="pact"><button class="pri" data-dho ${off?'disabled':''}>${svg('arrow-r')}<span><b>Continue in a new session</b><small>A handoff carries the work over</small></span></button><button data-dcompact ${off?'disabled':''}>${svg('compress')}<span><b>Summarise to make room</b><small>Compact · earlier detail fades</small></span></button></div>`:'')
+    +(!nw&&selSession()?`<div class="pact"><button data-ddone>${svg(selSession().done?'refresh':'check')}<span><b>${selSession().done?'Back to the inbox':'Mark done'}</b><small>${selSession().done?'It shows in Sessions again':'It leaves Sessions; search still finds it'}</small></span></button></div>`:'');
 }
 async function phDrawerClick(e){
   const t=e.target.closest('button');if(!t)return;const d=t.dataset;
@@ -2949,8 +3002,8 @@ async function phDrawerClick(e){
   else if('dm' in d){choose('model',d.dm);renderComposer()}
   else if('de' in d){choose('effort',d.de);renderComposer()}
   else if(d.dmode){await pickMode(d.dmode)}
-  else if('dctx' in d){phDr='ctx';const id=V.sel;V.ctx={id,at:performance.now()};
-    api(`sessions/${id}/context`).then(r=>{V.ctx={id,at:performance.now(),rows:r.rows}},err=>{V.ctx={id,at:-Infinity,err:'The breakdown is not available ('+err.message+')'}}).then(()=>{if(phDr==='ctx'&&V.sel===id)phDrawer()})}
+  else if('dctx' in d)phCtxLoad()
+  else if('ddone' in d){const s=selSession();phClose();if(!s)return;const on=!s.done;await setDone(s,on);if(on)phGo('sessions');return}
   else if('dho' in d){if(isWorking()||V.handing)return;phClose();handOff();return}
   else if('dcompact' in d){if(isWorking())return;phClose();sendText('/compact');return}
   phRender();phDrawer();

@@ -1678,6 +1678,12 @@ html.ph[data-pt=sessions] .main{display:none}
 html.ph .main{flex:1;margin:0;border-radius:0;box-shadow:none;width:100%}
 html.ph #bSide,html.ph #newBtn,html.ph #bGear,html.ph .hbg,html.ph #hset,html.ph #dseg,html.ph .where{display:none!important}
 html.ph .sess{min-height:52px}
+html.ph .list{position:relative}
+html.ph .sess{position:relative}html.ph .sess.swp{background:var(--bg)}
+html.ph .phswipe{display:flex;position:absolute;align-items:center;justify-content:flex-end;gap:6px;padding-right:18px;border-radius:11px;background:var(--surface2);color:var(--dim);font-size:13px;font-weight:650;transition:background .15s,color .15s}
+html.ph .phswipe svg{width:18px;height:18px}
+html.ph .phswipe.arm{background:var(--go);color:#062a1e}
+html.ph .phswipe.back.arm{background:var(--accent);color:#fff}
 html.ph .head{height:calc(54px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 8px 0 16px;gap:2px}
 html.ph[data-pt=session] .head{padding-left:4px}
 html.ph[data-pt=session] .phback{display:grid;width:36px;height:36px}
@@ -1690,10 +1696,21 @@ html.ph .composer{padding:6px 10px 8px}
 html.ph[data-pt=session] .composer{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
 html.ph[data-pt=home] .composer{display:none}
 html.ph .support,html.ph #bSkills,html.ph #cWarm,html.ph #sProject{display:none!important}
-html.ph .box{border-radius:22px;padding:10px 8px 6px 14px}
-html.ph .box textarea{font-size:16px}
+html.ph .box{border-radius:22px;padding:12px 8px 6px 14px}
+html.ph .box textarea{font-size:16px;min-height:30px;margin-bottom:8px}
 html.ph .box .row{gap:4px;align-items:center}
-html.ph .box .row .ib,html.ph .send{width:36px;height:36px}
+html.ph .box .row .ib,html.ph .send{width:36px;height:36px;flex:none}
+html.ph #mic.live{border-radius:50%}
+/* the context ring beside the pill; it opens what fills the context */
+html.ph .phctx:not([hidden]){display:inline-flex;height:32px;padding:0 6px;margin:0;gap:4px;border-radius:16px;font-size:12.5px;font-weight:650;color:var(--faint);flex:none}
+html.ph .phctx.mid{color:var(--warn)}
+html.ph .phctx .ring{width:16px;height:16px}
+/* dictating: +, the pill and the ring step aside, and the wave takes their room */
+html.ph .box.rec #bAttach,html.ph .box.rec .phpill,html.ph .box.rec .phuse,html.ph .box.rec .phctx,html.ph .box.rec .row>.gap{display:none!important}
+html.ph .box.rec .voice{flex:1;min-width:0;margin-right:2px}
+html.ph .box.rec .wave{flex:1;min-width:0;justify-content:center;overflow:hidden}
+html.ph .box.rec #vCancel{width:36px;height:36px;margin-right:0}html.ph .box.rec #vCancel svg{width:18px;height:18px}
+html.ph .box.rec #vtime{font-size:13px;flex:none}
 html.ph[data-pt=new] #dash{display:none!important}
 html.ph[data-pt=new] #hello{display:block!important;margin-top:18vh;text-align:center}
 html.ph[data-pt=settings] .main>:not(.head):not(#phSet){display:none!important}
@@ -1724,6 +1741,17 @@ html.ph .hero .hc{flex:none;width:150px;height:132px;scroll-snap-align:start}
 html.ph .hero .cap span{display:none}
 html.ph .panel{position:fixed;inset:0;width:auto!important;z-index:40;background:var(--bg);border:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
 html.ph #bFull,html.ph #bRefresh{display:none}
+/* Fit: the page at a desktop width, scaled to the screen */
+html.ph #pvw.fit .stage{padding:0;overflow:hidden;display:block}
+html.ph #pvw.fit .stage>.pvf{width:980px;height:var(--fh);transform:scale(var(--fs));transform-origin:0 0;border-radius:0;box-shadow:none}
+/* the queue: one short line over it, and buttons big enough for a finger */
+html.ph .queue{border-radius:18px 18px 0 0;padding:8px 6px 4px 14px;font-size:14px}
+html.ph .queue .hint{display:none}
+html.ph .queue .qh{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+html.ph .qm{min-height:40px}
+html.ph .qm .ib{width:36px;height:36px}html.ph .qm .ib svg{width:17px;height:17px}
+html.ph .qnow{font-size:13px;padding:6px 12px;border-radius:10px}
+html.ph .queue:not([hidden])+.box{border-top-left-radius:18px;border-top-right-radius:18px}
 /* Home: one column; the profiles are a carousel */
 html.ph .hcards{display:flex;flex-direction:column;gap:8px}
 html.ph .hcard{width:auto}
@@ -1732,7 +1760,7 @@ html.ph .pcards::-webkit-scrollbar{display:none}
 html.ph .pcard{flex:none;width:calc(100% - 28px);scroll-snap-align:center}
 /* the drawer */
 html.ph .phdim:not([hidden]){display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50}
-.phdr{position:absolute;left:0;right:0;bottom:0;max-height:90%;overflow:auto;background:var(--bg);border-radius:20px 20px 0 0;padding:4px 14px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -1px 0 var(--line2);animation:phup .22s ease-out}
+.phdr{position:absolute;left:0;right:0;bottom:0;max-height:90%;overflow:auto;overscroll-behavior:contain;background:var(--bg);border-radius:20px 20px 0 0;padding:4px 14px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -1px 0 var(--line2);animation:phup .22s ease-out}
 @keyframes phup{from{transform:translateY(30px);opacity:.5}}
 .pdg{width:36px;height:4px;border-radius:2px;background:var(--line2);margin:6px auto 8px}
 .pdh{display:flex;align-items:center;gap:6px;min-height:32px;margin-bottom:2px}.pdh b{font-size:15px;font-weight:700}

@@ -335,8 +335,16 @@ test('on the phone: tabs, a session full screen with the pill and its drawer, a 
     await swipe(st.x + 6, mid, mid, 8, st.x + 120);
     await page.waitForFunction(f => document.querySelector('#pName').textContent !== f, second);
     assert.equal(await page.locator('#pName').textContent(), first, 'and back from the left edge');
+    // Fit is remembered: the next visit opens the preview fitted
+    await page.reload(); await page.waitForSelector('html.ph'); await page.click('[data-pt=sessions]'); await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`); await page.waitForSelector('html[data-pt=session]'); await page.waitForFunction(() => !V.loading && V.items.length);
+    await page.evaluate(p => { addWork([{ path: p, name: 'wide.html', kind: 'page', v: 1 }]); showWork(p); }, wide);
+    await page.waitForSelector('#pvw.fit iframe.pvf');
+    assert.equal(await page.frameLocator('#stage iframe').locator('body').evaluate(b => innerWidth), 980);
     await page.click('#bExt');
     assert.equal(await page.frameLocator('#stage iframe').locator('body').evaluate(b => innerWidth) < 500, true, 'and back to the phone\'s width');
+    await page.reload(); await page.waitForSelector('html.ph'); await page.click('[data-pt=sessions]'); await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`); await page.waitForSelector('html[data-pt=session]'); await page.waitForFunction(() => !V.loading && V.items.length);
+    await page.evaluate(p => { addWork([{ path: p, name: 'wide.html', kind: 'page', v: 1 }]); showWork(p); }, wide);
+    await page.waitForSelector('#pvw:not(.fit) iframe.pvf');
     await page.click('#bClose');
     // the drawer: a model picked shows in the pill; the context page
     await page.click('#phPill');

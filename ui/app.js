@@ -2871,7 +2871,8 @@ function phInit(){
   // The preview's Open in browser would leave the app in a window Back cannot get out of; the phone gets Fit instead:
   // the page laid out at a desktop width and scaled down to the screen, as a browser shows a page made for a computer.
   $('bExt').dataset.i='zoomout';$('bExt').dataset.tip='Fit the whole page';hydrate($('bExt').parentNode);
-  $('bExt').onclick=()=>{V.pvFit=!V.pvFit;phFit()};addEventListener('resize',phFit);
+  V.pvFit=localStorage.getItem('ww.pvFit')==='1';   // Fit stays as you left it, across previews and visits
+  $('bExt').onclick=()=>{V.pvFit=!V.pvFit;localStorage.setItem('ww.pvFit',V.pvFit?'1':'0');phFit()};addEventListener('resize',phFit);
   // Zoomed out, a swipe in from the left or right edge goes to the previous or next preview. The page takes its own
   // touches, so two thin strips over its edges catch these.
   for(const d of [-1,1]){const e=document.createElement('div');e.className='phedge '+(d<0?'l':'r');e.innerHTML=`<i>${svg(d<0?'chev-l':'chev-r')}</i>`;$('pvw').appendChild(e);

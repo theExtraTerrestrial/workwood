@@ -303,6 +303,7 @@ async function readSession(id){
 function letGo(id,seq){const h=held.get(id);held.delete(id);for(const [f,d] of h?.ev||[])if(d.seq>seq)f(d)}
 const take=f=>e=>{const d=JSON.parse(e.data),h=held.get(d.sessionId);if(h)h.ev.push([f,d]);else f(d)};
 async function openSession(id,sending){
+  setTimeout(pcReport,60);   // what this PC shows: what waits for it is not sent
   const from=sending&&V.isNew?id:draftKey(),move=id!==V.sel||V.isNew;   // a new session's first message just went: what you wrote since goes with it
   if(from!==draftKey()&&R?.key===draftKey())R.key=from;   // the new session's box moves to it, and so does dictation into it
   if(move&&R&&!R.done)stopVoice();   // dictation stays with the session it was started in
@@ -1686,6 +1687,65 @@ function phonePoll(){if(phBusy)return;phBusy=true;
   const go=()=>{if($('sdim').hidden||stab!==7){phBusy=false;return}
     api('phone').then(p=>{PH=p;if(!$('sdim').hidden&&stab===7&&!$('spage').querySelector('.phq:hover'))renderSettings()}).catch(()=>{}).finally(()=>setTimeout(go,2500))};
   go()}
+/* ---------- at this PC or away: what the phone's notifications do (see service/presence.mjs) ----------
+   Each page on the PC says how long since the last input (to the whole computer, in the window) and which session it
+   shows. While a phone has notifications on, the sidebar's footer has a mark: Here (they wait a minute, and what you
+   handle here is not sent), a ring running down to one that waits, or Away (they go at once). Click it to switch. */
+const PCR={page:Math.random().toString(36).slice(2,10),input:performance.now(),idle:0,locked:false,busy:false,again:false,pop:false,tick:0};
+async function pcReport(){
+  if(PHONE)return;if(PCR.busy){PCR.again=true;return}PCR.busy=true;
+  try{let idle=(performance.now()-PCR.input)/1000,locked=PCR.locked;
+    const w=await window.workwood?.pcIdle?.().catch(()=>null);if(w){idle=w.idle;locked=locked||!!w.locked}
+    const viewing=document.visibilityState==='visible'&&document.hasFocus()&&!V.isNew&&V.sel||null;
+    PCR.idle=idle;pcTake(await api('presence',{page:PCR.page,idle,locked,viewing}))}
+  catch{}finally{PCR.busy=false;if(PCR.again){PCR.again=false;pcReport()}}
+}
+const pcInput=()=>{PCR.input=performance.now();PCR.locked=false;if(PCR.idle>=20){PCR.idle=0;pcReport()}};
+if(!PHONE){
+  for(const t of ['pointerdown','pointermove','keydown','wheel','touchstart'])addEventListener(t,pcInput,{passive:true,capture:true});
+  addEventListener('focus',()=>pcReport());document.addEventListener('visibilitychange',()=>pcReport());
+  window.workwood?.onPcLock?.(l=>{PCR.locked=l;if(!l)PCR.input=performance.now();pcReport()});
+  setInterval(pcReport,15000);setTimeout(pcReport,500);
+}
+function pcTake(p){if(!p)return;A.pc=p;renderPc();if(PHONE&&isHome())renderHome()}
+const pcHeld=p=>!p.away&&p.held?.length?p.held.reduce((a,x)=>x.until<a.until?x:a):null;   // the one sent first
+const mmss=ms=>{const s=Math.max(0,Math.ceil(ms/1000));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+const PC_HERE={wait:'Notifications wait a minute; what you handle here is not sent.',never:'Notifications are not sent while you are here.',now:'Notifications go to your phone at once.'};
+const pcWhy=p=>p.why==='manual'?'Set by hand, until you are back.':p.why==='locked'?'This PC is locked.':p.why==='closed'?'Workwood is not open on this PC.':`No input since ${clock(p.since)}.`;
+function renderPc(){
+  const b=$('pcb'),p=A.pc,on=!PHONE&&!!p?.push;if(!b)return;
+  b.hidden=!on;if(!on){$('pcpop').hidden=true;clearInterval(PCR.tick);PCR.tick=0;return}
+  const h=pcHeld(p),k=p.away?'away':h?'hold':'here';
+  b.className='pcb '+k;
+  if(k==='hold'){const left=h.until-Date.now(),c=2*Math.PI*5.8,n=p.held.length;
+    b.innerHTML=`<svg viewBox="0 0 14 14"><circle class="rgb" cx="7" cy="7" r="5.8"/><circle class="rg" cx="7" cy="7" r="5.8" stroke-dasharray="${(c*Math.max(0,Math.min(1,left/(p.holdMs||60000)))).toFixed(1)} 99"/></svg><span>${n>1?n+' · ':''}${mmss(left)}</span>`;
+    b.dataset.tip='Sending to your phone in '+mmss(left);b.dataset.tipD=p.held.map(x=>x.title).join(' · ')+'. Handle it here and it is not sent.'}
+  else if(k==='away'){b.innerHTML=`<svg viewBox="0 0 14 14"><rect class="bd" x="3.5" y="1" width="7" height="12" rx="1.6"/><path class="wv" d="M12 4.5a4 4 0 0 1 0 5"/></svg><span>Away</span>`;
+    b.dataset.tip='Away: your phone gets notifications';b.dataset.tipD=pcWhy(p)}
+  else{b.innerHTML=`<svg viewBox="0 0 14 14"><rect class="bd" x="3.5" y="1" width="7" height="12" rx="1.6"/><line class="sl" x1="1.5" y1="12.5" x2="12.5" y2="1.5"/></svg><span>Here</span>`;
+    b.dataset.tip='At this PC';b.dataset.tipD=PC_HERE[p.hold]}
+  if(h&&!PCR.tick)PCR.tick=setInterval(()=>{renderPc();if(!$('pcpop').hidden)pcPopPaint()},1000);
+  if(!h&&PCR.tick){clearInterval(PCR.tick);PCR.tick=0}
+  if(!$('pcpop').hidden)pcPopPaint();
+}
+function pcPopPaint(){
+  const p=A.pc;if(!p)return;
+  const held=p.away?[]:p.held||[];
+  $('pcpop').innerHTML=`<div class="pch ${p.away?'a':''}"><i></i>${p.away?'Away':'At this PC'}</div><div class="pcs">${p.away?pcWhy(p)+' Your phone gets notifications now.':PC_HERE[p.hold]}</div>`
+    +held.map(x=>`<div class="pcheld"><b>${esc(x.title)}</b><span>${mmss(x.until-Date.now())}</span></div>`).join('')
+    +`<div class="pcbtns">${p.away?'<button class="pri" data-pcset="here">I’m here</button>':'<button class="pri" data-pcset="away">Away now</button>'}<button data-pcset="settings">Settings</button></div>`;
+}
+$('pcb').onclick=e=>{e.stopPropagation();const o=$('pcpop');if(!o.hidden){o.hidden=true;return}closePops();hideTip();o.hidden=false;pcPopPaint()};
+$('pcpop').onclick=async e=>{
+  const b=e.target.closest('[data-pcset]');if(!b)return;const k=b.dataset.pcset;
+  if(k==='settings'){$('pcpop').hidden=true;openSettings(STABS.indexOf('Phone'));return}
+  try{pcTake(await api('presence',{away:k==='away'}));if(k==='here'){PCR.input=performance.now();pcReport()}}catch(err){oops(err.message)}
+};
+// on the phone's Home: whether the PC has you, so you know whether to expect notifications here
+function pcLine(){
+  const p=A.pc;if(!p?.push)return null;
+  return ['pc',`<section class="hs hs-pc"><div class="pcline ${p.away?'a':''}"><i></i><span><b>${p.away?'You’re away from the PC':'You’re at the PC'}</b>${p.away?'Notifications come here.':p.hold==='wait'?'Notifications wait a minute there first.':p.hold==='never'?'Notifications stay there.':'Notifications come here too.'}</span></div></section>`];
+}
 function renderPhonePage(pg){
   phonePoll();
   const p=PH,head='<div class="pgh">Phone</div>';
@@ -1700,6 +1760,9 @@ function renderPhonePage(pg){
     else body+=`<div class="phq">${qrSvg(p.url)}<div><b>Scan with your phone's camera</b><span>Your phone must be on the same Wi-Fi. It walks you through the rest.</span>
       <code><i class="phl"></i>${esc(p.ips[0])} · ${esc(p.name)}</code>${Date.now()-p.setupSeen<120000?'<span class="ok">A phone opened the setup page</span>':''}</div></div>`;
     if(phRep&&(phRep.until<Date.now()||!(p.phones.find(x=>x.id===phRep.id)?.paired<phRep.at)))phRep=null;   // ran out, used, or the phone was revoked
+    const sg=(items,cur,attr)=>`<div class="lseg">${items.map(([v,n])=>`<button data-${attr}="${v}" class="${String(v)===String(cur)?'on':''}">${n}</button>`).join('')}</div>`,pr=A.prefs||{};
+    body+=`<div class="lgrp">Notifications</div><div class="srow"><span>While you’re at this PC<small>${({wait:'A minute to handle it here first; then it goes to the phone.',never:'Nothing goes to the phone while you are here.',now:'Everything goes to the phone at once, as when away.'})[pr.pcHold||'wait']}</small></span>${sg([['wait','Wait a minute'],['never','Don’t send'],['now','Send at once']],pr.pcHold||'wait','pch')}</div>
+      <div class="srow"><span>Away after<small>No keyboard or mouse anywhere on this PC. Locked or asleep is away at once.${A.pc?` <span class="pcnow ${A.pc.away?'a':''}"><i></i>${A.pc.away?'Away now':'At this PC now'}</span>`:''}</small></span>${sg([[2,'2 min'],[5,'5 min'],[15,'15 min']],pr.awayMin||5,'pcm')}</div>`;
     body+='<div class="lgrp">Paired phones</div>'+(p.phones.length?p.phones.map(x=>`<div class="srow"><span>${esc(x.name)}<small>${x.seen?(Date.now()-x.seen<90000?'Seen just now':'Seen '+ago(x.seen/1000)+' ago'):'Not opened yet'}${x.push?' · notifications on':''}</small>${x.lost?`<small class="bad">This PC's address changed since. Pair it again to reach it.</small>`:''}</span><span class="phb"><button class="sval" data-phrep="${esc(x.id)}">Pair again</button><button class="sval" data-phrev="${esc(x.id)}">Revoke</button></span></div>`
       +(phRep?.id===x.id&&phRep.url?`<div class="phq">${qrSvg(phRep.url)}<div><b>Scan with ${esc(x.name)}</b><span>Pairs it again as itself: its name and notifications stay. The code lasts 10 minutes.</span></div></div>`:'')).join('')
       :'<div class="cap2" style="padding:8px">No phones yet.</div>')+'<div class="cap2" style="padding:10px 8px">Works while this PC is on and Workwood is open.</div>';
@@ -1875,6 +1938,7 @@ $('spage').onclick=async e=>{
   if(lk){const ed=V.lookEdit||'home',d=lk.dataset;
     if(d.th)setTheme(d.th);else if(d.bgp)V.lookEdit=d.bgp;else if(d.bgk)setBg(ed,'bg',d.bgk);else if(d.bgm)setBg(ed,'motion',d.bgm);
     renderSettings();return}
+  const pcs=e.target.closest('[data-pch],[data-pcm]');if(pcs){try{A.prefs=await api('settings',pcs.dataset.pch?{pcHold:pcs.dataset.pch}:{awayMin:+pcs.dataset.pcm});renderSettings()}catch(err){oops(err.message)}return}
   const wc=e.target.closest('[data-wclk]');if(wc){localStorage.setItem('ww.wallclock',wc.dataset.wclk);renderHome();renderSettings();return}
   if(s?.dataset.set==='wall'){localStorage.setItem('ww.wall',wallOn()?'off':'on');renderHome();renderSettings();return}
   if(s?.dataset.set==='skylab'){localStorage.setItem('ww.skylabels',skyLabels()?'off':'on');renderBgs();renderSettings();return}
@@ -2286,7 +2350,7 @@ $('mMode').onclick=async e=>{e.stopPropagation();const t=e.target.closest('[data
     try{await api('default-mode',{profile:who,mode:m});if(curProfile()===who)V.def.mode=m;renderComposer()}catch(err){oops(err.message)}}};
 // Menus close when you press anywhere outside them. (Listening for a click instead let a second click event, which some
 // windows deliver for one press, close a menu the moment it opened.)
-document.addEventListener('pointerdown',e=>{if(!e.target.closest('.pop,.fmenu,.menu,.pick,#bGear,#moreBtn,[data-dots]'))closePops()});
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('.pop,.fmenu,.menu,.pick,#bGear,#moreBtn,#pcb,[data-dots]'))closePops()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePops();$('dim').hidden=true;if(!$('sdim').hidden&&!L)closeSettings()}});
 $('mProject').addEventListener('input',e=>{if(e.target.id==='pFind'){V.find=e.target.value;const at=e.target.selectionStart;renderMenus();const i=$('pFind');i.focus();i.setSelectionRange(at,at)}});
 $('mProject').addEventListener('keydown',e=>{if(e.target.id==='mkName'&&e.key==='Enter')$('mProject').querySelector('[data-create]').click()});
@@ -2618,7 +2682,7 @@ function renderHome(){
   if(!on)return;
   if(H.view==='wall'&&!wallOn())H.view='pick';
   $('dseg').innerHTML=homeViews().map(([k,n,t])=>`<button class="${H.view===k?'on':''}" data-hv="${k}" data-tip="${t}">${n}</button>`).join('');
-  const parts=PHONE?[leftOff(),limits()].filter(Boolean):H.view==='wall'?[]:H.view==='projects'?projectsView():H.view==='time'?timeView():[leftOff(),limits(),notCommitted(),madeLately()].filter(Boolean);
+  const parts=PHONE?[pcLine(),leftOff(),limits()].filter(Boolean):H.view==='wall'?[]:H.view==='projects'?projectsView():H.view==='time'?timeView():[leftOff(),limits(),notCommitted(),madeLately()].filter(Boolean);
   patch(d,parts.map(([k,h])=>[H.view+':'+k,h]));fitThumbs();
   // A section fades in when it first appears, not each time a reading redraws it.
   for(const el of d.children){if(H.seen.has(el.dataset.k))el.style.animation='none';H.seen.add(el.dataset.k)}
@@ -3046,7 +3110,7 @@ let first=true;
 function connect(){
   const es=new EventSource('/api/events?token='+TOKEN);
   es.addEventListener('state',e=>{
-    Object.assign(A,JSON.parse(e.data));
+    Object.assign(A,JSON.parse(e.data));renderPc();
     if(PHONE&&A.preview)A.preview=location.origin+'/preview'+new URL(A.preview).pathname;   // the phone reaches previews through the app's own address
     if(first&&A.ready){first=false;const s=A.sessions.find(x=>x.id===location.hash.slice(1));if(s)openSession(s.id);else newSession();return}   // home, unless the address names a session
     if(!V.isNew&&V.sel&&A.fresh&&!V.loading&&!A.sessions.some(x=>x.id===V.sel)){leave(V.sel);return} // deleted somewhere else

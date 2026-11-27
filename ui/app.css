@@ -1926,3 +1926,33 @@ html.ph .phdim:not([hidden]){display:block;position:fixed;inset:0;background:rgb
 .pn2.ok{background:var(--go);color:#062a1e;box-shadow:none}.pn2 svg{width:12px;height:12px;stroke-width:3}
 .phgone{padding:60px 24px;font:16px/1.5 system-ui,sans-serif}.phgone h1{font-size:21px;margin:0 0 8px}.phgone p{color:var(--faint);margin:0}
 html.ph .side-foot kbd,html.ph kbd{display:none}
+/* at this PC or away: the mark in the sidebar's footer, its popover, and the line on the phone's Home */
+.side-foot{position:relative}
+.pcb{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 8px 0 7px;border-radius:8px;font-size:11.5px;color:var(--faint);white-space:nowrap;flex:none}
+.pcb:hover{background:rgba(128,128,128,.14)}
+.pcb svg{width:14px;height:14px;flex:none;overflow:visible}
+.pcb .bd{fill:none;stroke:currentColor;stroke-width:1.4}.pcb .sl{stroke:currentColor;stroke-width:1.4;stroke-linecap:round}
+.pcb.away{color:var(--go)}
+.pcb .wv{fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;animation:pcwv 2.6s ease-out infinite}
+@keyframes pcwv{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+.pcb.hold{color:var(--warn);background:color-mix(in srgb,var(--warn) 13%,transparent)}
+.pcb .rgb{fill:none;stroke:currentColor;stroke-opacity:.22;stroke-width:1.6}
+.pcb .rg{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;transform:rotate(-90deg);transform-origin:7px 7px;transition:stroke-dasharray 1s linear}
+.pcb span{font-variant-numeric:tabular-nums}
+.app.compact .pcb span{display:none}
+.pcpop{left:8px;width:260px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.pcpop .pch{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px}
+.pcpop .pch i{width:8px;height:8px;border-radius:50%;background:var(--faint)}.pcpop .pch.a i{background:var(--go)}
+.pcpop .pcs{color:var(--dim);font-size:11.5px;margin-top:-6px;white-space:normal;overflow:visible;text-overflow:clip}
+.pcpop .pcheld{display:flex;align-items:center;gap:8px;font-size:11.5px;padding:6px 9px;border-radius:8px;background:color-mix(in srgb,var(--warn) 13%,transparent)}
+.pcpop .pcheld b{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcpop .pcheld span{color:var(--warn);font-variant-numeric:tabular-nums}
+.pcpop .pcbtns{display:flex;gap:6px}
+.pcpop .pcbtns button{flex:1;height:28px;border-radius:8px;background:rgba(128,128,128,.18);font-size:11.5px;font-weight:600}
+.pcpop .pcbtns button.pri{background:var(--text);color:var(--bg,#111)}
+.pcnow{display:inline-flex;align-items:center;gap:5px;color:var(--dim);white-space:nowrap}.pcnow i{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.pcnow.a{color:var(--go)}.pcnow.a i{background:var(--go)}
+.pcline{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--glass,rgba(128,128,128,.1));box-shadow:0 0 0 1px var(--line);font-size:12.5px}
+.pcline i{width:8px;height:8px;border-radius:50%;flex:none;background:var(--faint)}.pcline.a i{background:var(--go)}
+.pcline span{display:flex;flex-direction:column;color:var(--dim)}.pcline b{color:var(--text);font-weight:600}
+@media (prefers-reduced-motion:reduce){.pcb .wv{animation:none}}

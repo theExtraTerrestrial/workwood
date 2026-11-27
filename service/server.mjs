@@ -24,6 +24,7 @@ import * as update from './update.mjs';
 import * as ho from './handoff.mjs';
 import * as rw from './rewind.mjs';
 import * as phone from './phone.mjs';
+import * as pc from './presence.mjs';
 import { createRequire } from 'node:module';
 
 const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui');
@@ -61,6 +62,9 @@ const prefs = { defaultProfile: kept.defaultProfile || null, language: kept.lang
   readAuto: kept.readAuto === true,
   // how long a session's prompt cache is taken to last after its last reply (0: no warning); a reply that wrote a shorter one counts that
   cacheMinutes: CACHE_MINUTES.includes(kept.cacheMinutes) ? kept.cacheMinutes : 60,
+  // the phone's notifications while you are at this PC (wait a minute, don't send, send at once), and after how many
+  // minutes without input you are away
+  pcHold: pc.HOLDS.includes(kept.pcHold) ? kept.pcHold : 'wait', awayMin: pc.AWAY_MINS.includes(kept.awayMin) ? kept.awayMin : 5,
   // handing off: who writes the handoff (Auto picks by how much went on), and from how many tokens of context it is offered
   handoff: { model: ho.MODELS.includes(kept.handoff?.model) ? kept.handoff.model : 'auto', effort: ho.EFFORTS.includes(kept.handoff?.effort) ? kept.handoff.effort : 'medium',
     offer: ho.OFFERS.includes(kept.handoff?.offer) ? kept.handoff.offer : 400000 } };   // your choices in the settings dialog
@@ -254,7 +258,7 @@ const fileOf = cwd => id => state.sessions.find(x => x.id === id)?.file || trans
 
 const snapshot = () => ({
   profiles: state.profiles.filter(p => !adding.has(p.name)).map(({ account, ...p }) => ({ ...p, reading: reading.has(p.name), failed: failed.get(p.name) || null, stop: stops.get(p.name) || null })), next: state.next, projects: state.projects,
-  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, prefs, tts: speech.available(), plain: src.PLAIN, folders: folders(), home: src.HOME, preview: previewBase, update: update.status(),
+  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, prefs, tts: speech.available(), plain: src.PLAIN, folders: folders(), home: src.HOME, preview: previewBase, update: update.status(), pc: pcState(),
 });
 let lastSent = '';
 function pushState() { const s = JSON.stringify(snapshot()); if (s !== lastSent) { lastSent = s; emit('state', JSON.parse(s)); } }
@@ -418,6 +422,11 @@ async function api(req, res, url, who = null) {
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // after "api"
   if (who && phoneMayNot(req.method, parts)) return send(res, 403, { error: 'Not from the phone. Use Workwood on the PC for this.' });
   if (parts[0] === 'phone') return phoneApi(req, res, parts, who);
+  if (parts[0] === 'presence' && req.method === 'POST') {   // a page on this PC: how long since the last input, or Away now / I'm here
+    const b = await body(req);
+    if ('away' in b) pc.setAway(b.away === true); else pc.report(b.page || 'page', b);
+    pcTick(); return send(res, 200, pcState());
+  }
   if (req.method === 'GET' && parts[0] === 'events') {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
     res.write(`event: state\ndata: ${JSON.stringify(snapshot())}\n\n`);
@@ -599,6 +608,9 @@ async function api(req, res, url, who = null) {
       if ('effort' in h) prefs.handoff.effort = ho.EFFORTS.includes(h.effort) ? h.effort : 'medium';
       if ('offer' in h) prefs.handoff.offer = ho.OFFERS.includes(+h.offer) ? +h.offer : 400000;
     }
+    if ('pcHold' in b) prefs.pcHold = pc.HOLDS.includes(b.pcHold) ? b.pcHold : 'wait';
+    if ('awayMin' in b) prefs.awayMin = pc.AWAY_MINS.includes(+b.awayMin) ? +b.awayMin : 5;
+    if ('pcHold' in b || 'awayMin' in b) setTimeout(pcTick, 0);
     if ('cacheMinutes' in b) prefs.cacheMinutes = CACHE_MINUTES.includes(+b.cacheMinutes) ? +b.cacheMinutes : 60;
     if ('speech' in b) { prefs.speech = b.speech === 'turbo' ? 'turbo' : 'small'; voice.choose(prefs.speech); }
     if ('readVoice' in b) prefs.readVoice = speech.VOICES.includes(b.readVoice) ? b.readVoice : speech.VOICES[0];
@@ -1025,7 +1037,7 @@ function phoneMayNot(method, parts) {
   if (parts[0] === 'sessions' && ['term', 'terminal', 'delete', 'rewind', 'unrewind'].includes(parts[2])) return true;
   if (parts[0] === 'profiles') return parts[2] === 'login' || (method !== 'GET' && parts[2] !== 'dismiss');
   if (parts[0] === 'voice' && parts[1] === 'better') return true;
-  return ['settings', 'open-editor', 'update', 'default-mode', 'projects'].includes(parts[0]) && method !== 'GET';
+  return ['settings', 'open-editor', 'update', 'default-mode', 'projects', 'presence'].includes(parts[0]) && method !== 'GET';
 }
 function endPhone(id) { for (const [res, pid] of phoneClients) if (pid === id) try { res.end(); } catch {} viewing.delete(id); }
 async function phoneApi(req, res, parts, who) {
@@ -1144,22 +1156,60 @@ function phoneNews(type, data) {
   const looking = pid => { const v = viewing.get(pid); return !!v && v.sessionId === id && Date.now() - v.at < 90_000; };
   if (type === 'run' && data.run?.status === 'waiting' && data.run.pending && pushed.get(id) !== data.run.pending.id) {
     pushed.set(id, data.run.pending.id);
-    phone.notify('needs', { title: titleOf(id), body: waitingLine(data.run.pending), session: id, tag: tag('n') }, looking);
+    pcNotify('needs', { title: titleOf(id), body: waitingLine(data.run.pending), session: id, tag: tag('n') }, looking);
   }
   if (type !== 'turn-end') return;
   setTimeout(() => {   // after planAuto, so a move to another profile is known
     const run = runs.get(id); if (!run || run.interrupted) return;
     if (run.stopped) {
       const a = autos.get(id), why = { limit: `Limit reached on ${run.profile}.`, auth: `Signed out of ${run.profile}.` }[run.stopped.reason] || 'Stopped: something went wrong.';
-      phone.notify('stopped', { title: titleOf(id), body: a ? `${why} Moves to ${a.to} in ${Math.round(AUTO_WAIT / 60000)} min.` : why, session: id, tag: tag('s'), auto: a ? a.to : null }, looking);
-    } else phone.notify('turn', { title: titleOf(id), body: lastAnswer(run) || 'Turn ended.', session: id, tag: tag('t') }, looking);
+      pcNotify('stopped', { title: titleOf(id), body: a ? `${why} Moves to ${a.to} in ${Math.round(AUTO_WAIT / 60000)} min.` : why, session: id, tag: tag('s'), auto: a ? a.to : null }, looking);
+    } else pcNotify('turn', { title: titleOf(id), body: lastAnswer(run) || 'Turn ended.', session: id, tag: tag('t') }, looking);
     const c = run.context, used = c?.used ?? c?.tokens;
     if (used && used >= prefs.handoff.offer && pushed.get('ctx:' + id) !== true) {
       pushed.set('ctx:' + id, true);
-      phone.notify('context', { title: titleOf(id), body: `Context is at ${Math.round(used / 1000)}k. Continue in a new session to keep it quick.`, session: id, tag: tag('c') }, looking);
+      pcNotify('context', { title: titleOf(id), body: `Context is at ${Math.round(used / 1000)}k. Continue in a new session to keep it quick.`, session: id, tag: tag('c') }, looking);
     }
   }, 50);
 }
+// At this PC a notification waits (prefs.pcHold), and is dropped if you handle it here meanwhile: you answer what it
+// asks, or open its session; one about a limit, if you used the PC while it waited. Going away sends what waits.
+const holds = new Map();   // tag -> { kind, msg, looking, session, pending, at, until }
+let pcWas = null, pcSince = Date.now();
+function pcNotify(kind, msg, looking = () => false) {
+  if (!phone.wants(kind)) return;
+  if (pc.now(prefs.awayMin).away || prefs.pcHold === 'now') return phone.notify(kind, msg, looking);
+  if (prefs.pcHold === 'never') return;
+  const old = holds.get(msg.tag); if (old) clearTimeout(old.timer);
+  const r = msg.session && runs.get(msg.session);
+  const h = { kind, msg, looking, session: msg.session || null, pending: kind === 'needs' ? r?.pending?.id ?? null : null, at: performance.now(), until: Date.now() + pc.HOLD_MS };
+  h.timer = setTimeout(() => release(msg.tag), pc.HOLD_MS); h.timer.unref?.();
+  holds.set(msg.tag, h); pushState();
+}
+function handled(h) {
+  if (h.seen) return true;
+  if (h.kind === 'needs') { const r = runs.get(h.session); return !(r?.status === 'waiting' && r.pending?.id === h.pending); }
+  if (!h.session) { const p = pc.now(prefs.awayMin); return p.idle != null && p.idle * 1000 < performance.now() - h.at; }
+  return false;
+}
+function release(tag) {
+  const h = holds.get(tag); if (!h) return;
+  holds.delete(tag); clearTimeout(h.timer);
+  if (!handled(h)) phone.notify(h.kind, h.msg, h.looking);
+  pushState();
+}
+// What a page shows marks what waits for that session as seen; away (or a hold no longer asked for) sends what waits.
+function pcTick() {
+  const p = pc.now(prefs.awayMin), seen = pc.viewing();
+  for (const h of holds.values()) if (h.session && seen.has(h.session)) h.seen = true;
+  if (p.away || prefs.pcHold !== 'wait') for (const tag of [...holds.keys()]) { if (prefs.pcHold === 'never' && !p.away) { clearTimeout(holds.get(tag).timer); holds.delete(tag); } else release(tag); }
+  const k = p.away + p.why; if (k !== pcWas) { pcWas = k; pcSince = Date.now(); }
+  pushState();
+}
+const pcState = () => { const p = pc.now(prefs.awayMin); return { away: p.away, why: p.why, since: pcSince, push: phone.wants(), hold: prefs.pcHold, awayMin: prefs.awayMin, holdMs: pc.HOLD_MS,
+  held: [...holds.values()].map(h => ({ kind: h.kind, session: h.session, title: h.msg.title, until: h.until })) }; };
+setInterval(pcTick, 3000).unref();
+
 // A session's prompt cache about to go cold (its last ten minutes), once per reply: only sessions in the inbox, at rest.
 function watchCaches() {
   if (!phone.isOn() || !prefs.cacheMinutes) return;
@@ -1169,7 +1219,7 @@ function watchCaches() {
     const left = r.at + Math.min(prefs.cacheMinutes * 60, r.ttl || Infinity) * 1000 - Date.now();
     if (left > 0 && left <= 10 * 60_000 && pushed.get('cool:' + s.id) !== r.at) {
       pushed.set('cool:' + s.id, r.at);
-      phone.notify('cool', { title: s.title, body: `Its cache cools in ${Math.max(1, Math.round(left / 60000))} min. A reply before then is cheaper.`, session: s.id, tag: 'c' + s.id.slice(0, 12) });
+      pcNotify('cool', { title: s.title, body: `Its cache cools in ${Math.max(1, Math.round(left / 60000))} min. A reply before then is cheaper.`, session: s.id, tag: 'c' + s.id.slice(0, 12) });
     }
   }
 }
@@ -1183,8 +1233,8 @@ function watchLimits() {
     const full = (h5 ?? 0) >= 100 || (d7 ?? 0) >= 100, near = !full && Math.max(h5 ?? 0, d7 ?? 0) >= 80, was = limitSeen.get(p.name);
     limitSeen.set(p.name, { full, near });
     if (!was) continue;
-    if (was.full && !full) phone.notify('cleared', { title: `${p.name} has room again`, body: `5h at ${Math.round(h5 ?? 0)}%. Sessions stopped by its limit can go on.`, tag: 'l' + p.name });
-    else if (near && !was.near && !was.full) phone.notify('near', { title: `${p.name} is near its limit`, body: (h5 ?? 0) >= 80 ? `5h at ${Math.round(h5)}%.` : `7d at ${Math.round(d7)}%.`, tag: 'l' + p.name });
+    if (was.full && !full) pcNotify('cleared', { title: `${p.name} has room again`, body: `5h at ${Math.round(h5 ?? 0)}%. Sessions stopped by its limit can go on.`, tag: 'l' + p.name });
+    else if (near && !was.near && !was.full) pcNotify('near', { title: `${p.name} is near its limit`, body: (h5 ?? 0) >= 80 ? `5h at ${Math.round(h5)}%.` : `7d at ${Math.round(d7)}%.`, tag: 'l' + p.name });
   }
 }
 

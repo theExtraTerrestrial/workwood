@@ -40,7 +40,7 @@ export function copyStamp(dir = DIR) {
     if (st.isDirectory()) { for (const n of fs.readdirSync(abs).sort()) if (!n.startsWith('.') && n !== '__pycache__') walk(rel + '/' + n); }
     else files.push(rel);
   };
-  for (const r of ['shell/windows/main.cjs', 'shell/preload.cjs', 'shell/window-state.cjs', 'shell/page-store.cjs', 'shell/icon.ico', 'package.json', 'package-lock.json', 'service', 'ui']) walk(r);
+  for (const r of ['shell/windows/main.cjs', 'shell/preload.cjs', 'shell/window-state.cjs', 'shell/page-store.cjs', 'shell/zoom.cjs', 'shell/pc-idle.cjs', 'shell/icon.ico', 'package.json', 'package-lock.json', 'service', 'ui']) walk(r);
   for (const f of files) h.update(f + '\0').update(fs.readFileSync(path.join(dir, f))).update('\0');
   return h.digest('hex').slice(0, 32);
 }

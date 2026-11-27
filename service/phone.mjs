@@ -35,6 +35,8 @@ const kept = readJson('phones.json') || {};
 const store = { on: kept.on === true, phones: Array.isArray(kept.phones) ? kept.phones : [] };
 const save = () => writeJson('phones.json', store);
 export const isOn = () => store.on;
+/** Whether any phone would be told of this kind (any kind, without one). */
+export const wants = kind => store.on && store.phones.some(p => p.push && (!kind || kindsOf(p)[kind]));
 export function setOn(on) { store.on = !!on; if (!on) codes.clear(); save(); }
 
 /** The phones paired with this PC, as Settings shows them. */

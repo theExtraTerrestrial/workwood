@@ -39,6 +39,7 @@ async function open() {
   require('electron').ipcMain.on('env:get', e => { e.returnValue = null; });   // one place only here; the Windows window has two
   require('electron').ipcMain.on('login:get', e => { e.returnValue = null; });   // not offered in the Linux window
   require('./page-store.cjs')();
+  require('./pc-idle.cjs')(() => win);
   // After an update: start again from the updated folder. The page has already warned about agents that are working.
   require('electron').ipcMain.handle('app:restart', () => { sure = true; app.relaunch(); app.quit(); });
   require('electron').ipcMain.handle('folder:pick', async () => { const r = await require('electron').dialog.showOpenDialog(win, { title: 'Choose a project folder', properties: ['openDirectory'] }); return r.canceled ? null : r.filePaths[0] || null; });

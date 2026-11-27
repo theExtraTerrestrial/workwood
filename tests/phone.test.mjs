@@ -47,7 +47,7 @@ before(async () => {
   pushSrv = http.createServer((q, s) => { const c = []; q.on('data', d => c.push(d)); q.on('end', () => { got.push({ path: q.url, headers: q.headers, body: Buffer.concat(c) }); s.writeHead(q.url.includes('gone') ? 410 : 201); s.end(); }); });
   await new Promise(r => pushSrv.listen(0, '127.0.0.1', r));
   svc = await startService(sb, { WORKWOOD_PHONE_DIR: path.join(sb.root, 'phone'), WORKWOOD_PHONE_PORT: String(PORT), WORKWOOD_PHONE_INNER: String(INNER), WORKWOOD_PHONE_HOST: '127.0.0.1',
-    WORKWOOD_PHONE_WSL: '1', WORKWOOD_PUSH_HTTP: '1', WORKWOOD_PREVIEW_KEY: 'pvkey' });
+    WORKWOOD_PHONE_WSL: '1', WORKWOOD_PUSH_HTTP: '1', WORKWOOD_PREVIEW_KEY: 'pvkey', WORKWOOD_PC_HOLD: '4000' });
 });
 after(() => { svc?.stop(); pushSrv?.close(); if (sb && !process.env.KEEP_SANDBOX) removeSandbox(sb); });
 
@@ -219,6 +219,50 @@ test('a turn that ends is told to the phone, encrypted and signed; not while the
   await api(key, 'phone/viewing', {});
   await api(key, 'phone/me', { kinds: { turn: false } });
   assert.equal((await api(key, 'phone/me')).body.kinds.turn, false);
+});
+
+test('at this PC a notification waits, and one seen here is not sent; away, it goes at once', async () => {
+  const { key } = await pair(), k = phoneKeys(), me = (await api(key, 'phone/me')).body;
+  await api(key, 'phone/me', { push: { endpoint: `http://127.0.0.1:${pushSrv.address().port}/push/pc-${me.id}`, keys: { p256dh: k.e.getPublicKey().toString('base64url'), auth: k.auth.toString('base64url') } } });
+  const mine = () => got.filter(g => g.path === '/push/pc-' + me.id).map(g => decrypt(k, g.body));
+  const here = (b = {}) => svc.call('presence', { page: 'pc', idle: 0, ...b });
+  const turn = async (id, text) => { const n = (await svc.call('sessions/' + id)).body.items.filter(i => i.kind === 'user').length;
+    assert.equal((await svc.call('sessions/' + id + '/send', { text })).status, 200);
+    await until(async () => { const s = (await svc.call('sessions/' + id)).body; return s.run?.status === 'idle' && s.items.filter(i => i.kind === 'user').length > n; }, 'the turn to end'); };
+  try {
+    assert.equal((await api(key, 'presence', { away: true })).status, 403);   // the phone cannot say where you are
+    let st = (await here()).body;
+    assert.equal(st.away, false); assert.equal(st.why, 'here'); assert.equal(st.push, true); assert.equal(st.hold, 'wait');
+    // at the PC: the turn's end waits, then goes
+    const t0 = performance.now(), id = (await svc.call('sessions', { cwd: sb.projects.alpha, profile: 'live', text: 'Say hello' })).body.sessionId;
+    await until(async () => (await here()).body.held.some(h => h.session === id && h.kind === 'turn'), 'the push to wait');
+    assert.equal(mine().length, 0);
+    await until(() => mine()[0], 'the push after the wait', 15000);
+    assert.ok(performance.now() - t0 > 3500, 'it waited');
+    assert.equal(mine()[0].session, id); assert.equal((await here()).body.held.length, 0);
+    // seen here while it waits: never sent
+    await turn(id, 'Again'); await here({ viewing: id });
+    await sleep(5000); assert.equal(mine().length, 1);
+    // Don't send: nothing while here
+    await svc.call('settings', { pcHold: 'never' }); await here();
+    await turn(id, 'Once more'); assert.equal((await here()).body.held.length, 0);
+    await sleep(5000); assert.equal(mine().length, 1);
+    await svc.call('settings', { pcHold: 'wait' });
+    // Away now, by hand: at once
+    st = (await svc.call('presence', { away: true })).body; assert.equal(st.away, true); assert.equal(st.why, 'manual');
+    const t1 = performance.now(); await turn(id, 'And again');
+    await until(() => mine().length === 2, 'the push at once', 15000); assert.ok(performance.now() - t1 < 3500, 'not held');
+    // I'm here: back at once
+    assert.equal((await svc.call('presence', { away: false })).body.away, false);
+    // no input for longer than Away after, or the screen locked: away
+    assert.equal((await here({ idle: 301 })).body.why, 'idle');
+    assert.equal((await here({ locked: true })).body.why, 'locked');
+    assert.equal((await svc.call('settings', { awayMin: 15 })).body.awayMin, 15);
+    assert.equal((await here({ idle: 301 })).body.away, false);
+  } finally {
+    await svc.call('settings', { pcHold: 'wait', awayMin: 5 });
+    await svc.call('presence', { page: 'pc', idle: 99999 });   // away again, for the tests after: they expect pushes at once
+  }
 });
 
 test('a push service that says the subscription is gone makes Workwood forget it', async () => {
@@ -424,7 +468,7 @@ test('after a restart the phone reconnects with its key, the same certificates, 
   svc.stop();
   await until(async () => { try { await req('/phone/ping'); return false; } catch { return true; } }, 'the old service to go');
   svc = await startService(sb, { WORKWOOD_PHONE_DIR: path.join(sb.root, 'phone'), WORKWOOD_PHONE_PORT: String(PORT), WORKWOOD_PHONE_INNER: String(INNER), WORKWOOD_PHONE_HOST: '127.0.0.1',
-    WORKWOOD_PHONE_WSL: '1', WORKWOOD_PUSH_HTTP: '1', WORKWOOD_PREVIEW_KEY: 'pvkey' });
+    WORKWOOD_PHONE_WSL: '1', WORKWOOD_PUSH_HTTP: '1', WORKWOOD_PREVIEW_KEY: 'pvkey', WORKWOOD_PC_HOLD: '4000' });
   assert.equal((await svc.call('phone')).body.on, true, 'Phone stays on');
   await relay();   // the Windows window, opened again
   await until(async () => (await svc.call('phone')).body.listening, 'the phone port');

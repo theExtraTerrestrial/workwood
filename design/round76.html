@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Workwood — round 76: at the PC or away</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700&display=swap">
+<style>
+  :root{color-scheme:dark}[data-theme=light]{color-scheme:light}
+  :root{--page:#0e0f11;--win:#17181b;--side:#121315;--blk:#26282c;--blk2:#33363b;--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.18);
+    --text:#e9eaec;--dim:#9a9ea6;--faint:#61656d;--note:#5fd4b4;--note-soft:rgba(95,212,180,.12);--warn:#e8b45a;--warn-soft:rgba(232,180,90,.13);--pop:#1f2124}
+  [data-theme=light]{--page:#e6e7ea;--win:#fbfbfc;--side:#f1f2f4;--blk:#e2e4e8;--blk2:#cfd2d8;--line:rgba(0,0,0,.09);--line2:rgba(0,0,0,.2);
+    --text:#1a1c20;--dim:#5d616a;--faint:#9ea2aa;--note:#13916f;--note-soft:rgba(19,145,111,.1);--warn:#b07a12;--warn-soft:rgba(176,122,18,.1);--pop:#fff}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--text);font:13px/1.5 "Manrope","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:80px}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .top{display:flex;align-items:center;gap:10px;padding:24px 0 4px}
+  .top h1{font-size:17px;margin:0;flex:1}
+  .tbtn{padding:4px 10px;border-radius:8px;background:var(--blk);color:var(--dim);font-size:12px}
+  .intro{color:var(--dim);max-width:720px;margin:4px 0 0}.intro b{color:var(--text)}
+  h2{font-size:15px;margin:44px 0 2px}
+  .why{color:var(--dim);margin:0 0 14px;max-width:720px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+  .cap{font-size:12px;color:var(--dim);margin:8px 2px 0}.cap b{color:var(--text);font-weight:600}
+  .rec{display:inline-block;margin-left:6px;padding:0 7px;border-radius:6px;background:var(--note-soft);color:var(--note);font-size:10.5px;font-weight:600;vertical-align:1px}
+
+  /* low-fi placements */
+  .lo{height:200px;border:1px solid var(--line2);border-radius:10px;background:var(--win);display:flex;overflow:hidden;position:relative}
+  .lo .sb{width:118px;background:var(--side);border-right:1px solid var(--line);padding:10px 8px;display:flex;flex-direction:column;gap:7px}
+  .lo .sb i{height:6px;border-radius:3px;background:var(--blk)}
+  .lo .sb .ft{margin-top:auto;display:flex;align-items:center;gap:5px;height:18px}
+  .lo .sb .ft i{flex:1}
+  .lo .mn{flex:1;position:relative}
+  .lo .bar{height:26px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:flex-end;gap:6px;padding:0 8px}
+  .lo .bar i{width:34px;height:12px;border-radius:5px;background:var(--blk)}
+  .lo .box{position:absolute;left:18%;right:18%;bottom:12px;height:34px;border-radius:9px;background:var(--blk)}
+  .lo .ttl{position:absolute;left:0;right:0;top:-1px;height:0}
+  .spot{outline:2px solid var(--note);outline-offset:2px;border-radius:7px;background:var(--note-soft)!important;animation:spot 2.4s ease-in-out infinite}
+  @keyframes spot{50%{outline-color:transparent}}
+
+  /* the indicator itself */
+  .side{width:268px;background:var(--side);border:1px solid var(--line2);border-radius:10px;overflow:visible;position:relative}
+  .side .rows{padding:10px 8px;display:flex;flex-direction:column;gap:2px}
+  .side .r{height:30px;border-radius:7px;display:flex;align-items:center;padding:0 10px;gap:9px;color:var(--dim)}
+  .side .r b{color:var(--text);font-weight:600;font-size:12.5px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .side .r .d{width:6px;height:6px;border-radius:50%;background:var(--faint)}.side .r .d.w{background:var(--warn)}
+  .side .r small{font-size:11px;color:var(--faint)}
+  .foot{display:flex;align-items:center;gap:8px;height:44px;padding:0 10px 0 14px;border-top:1px solid var(--line);font-size:12px;color:var(--dim)}
+  .foot .done{display:flex;align-items:center;gap:6px}
+  .foot .k{margin-left:auto;font-size:11px;color:var(--faint)}
+  .foot .g{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--dim)}
+  .ph{position:relative;display:flex;align-items:center;gap:6px;height:24px;padding:0 8px 0 6px;border-radius:8px;font-size:11.5px;color:var(--dim);white-space:nowrap}
+  .ph:hover{background:rgba(128,128,128,.12)}
+  .ph svg{width:14px;height:14px;flex:none;overflow:visible}
+  .ph .bd{fill:none;stroke:currentColor;stroke-width:1.4}
+  .ph .sl{stroke:currentColor;stroke-width:1.4;stroke-linecap:round}
+  .ph.here{color:var(--faint)}
+  .ph.away{color:var(--note)}
+  .ph.away .wv{fill:none;stroke:var(--note);stroke-width:1.3;stroke-linecap:round;animation:wv 2.6s ease-out infinite}
+  @keyframes wv{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+  .ph.hold{color:var(--warn);background:var(--warn-soft)}
+  .ph.hold .rg{fill:none;stroke:var(--warn);stroke-width:1.6;stroke-linecap:round;transform:rotate(-90deg);transform-origin:7px 7px;transition:stroke-dasharray 1s linear}
+  .ph.hold .rgb{fill:none;stroke:var(--warn);stroke-opacity:.22;stroke-width:1.6}
+  .ph .n{font-variant-numeric:tabular-nums}
+
+  /* its popover */
+  .pop{position:absolute;left:10px;bottom:52px;width:250px;background:var(--pop);border-radius:11px;box-shadow:0 0 0 1px var(--line2),0 12px 30px rgba(0,0,0,.35);padding:12px;display:flex;flex-direction:column;gap:10px;z-index:4}
+  .pop .h{display:flex;align-items:center;gap:8px;font-weight:600}
+  .pop .h .dot{width:8px;height:8px;border-radius:50%;background:var(--faint)}.pop.a .h .dot{background:var(--note)}
+  .pop .s{color:var(--dim);font-size:11.5px;margin-top:-6px}
+  .pop .held{display:flex;align-items:center;gap:8px;font-size:11.5px;padding:7px 9px;border-radius:8px;background:var(--warn-soft)}
+  .pop .held b{flex:1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pop .held span{color:var(--warn);font-variant-numeric:tabular-nums}
+  .pop .btns{display:flex;gap:6px}
+  .pop .btns button{flex:1;height:28px;border-radius:8px;background:var(--blk);font-size:11.5px;font-weight:600}
+  .pop .btns button.pri{background:var(--text);color:var(--win)}
+  .stage{height:190px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px}
+
+  /* settings */
+  .set{max-width:560px;background:var(--win);border:1px solid var(--line2);border-radius:10px;padding:14px 16px}
+  .set .pgh{font-weight:600;font-size:14px;margin-bottom:6px}
+  .set .lgrp{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:14px 0 4px}
+  .srow{display:flex;align-items:center;gap:14px;padding:9px 0;border-top:1px solid var(--line)}
+  .srow>span{flex:1;display:flex;flex-direction:column}.srow small{color:var(--dim);font-size:11.5px}
+  .lseg{display:flex;gap:2px;padding:2px;border-radius:8px;background:var(--blk);font-size:11.5px}
+  .lseg button{padding:3px 9px;border-radius:6px;color:var(--dim)}.lseg .on{background:var(--blk2);color:var(--text)}
+  .now{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--note)}.now i{width:6px;height:6px;border-radius:50%;background:var(--note)}
+
+  /* timeline */
+  .tl{position:relative;height:96px;max-width:900px;margin-top:8px}
+  .tl .ax{position:absolute;left:0;right:0;top:44px;height:2px;background:var(--line2);border-radius:1px}
+  .tl .band{position:absolute;top:38px;height:14px;border-radius:7px}
+  .tl .band.here{background:var(--blk2)}.tl .band.away{background:var(--note-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--note) 40%,transparent)}
+  .tl .ev{position:absolute;top:0;transform:translateX(-50%);font-size:11px;color:var(--dim);text-align:center;white-space:nowrap}
+  .tl .ev i{display:block;width:9px;height:9px;border-radius:50%;margin:6px auto 0;background:var(--warn)}
+  .tl .ev.sent i{background:var(--note)}.tl .ev.drop i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--faint)}
+  .tl .lb{position:absolute;top:60px;font-size:11px;color:var(--faint);transform:translateX(-50%);white-space:nowrap}
+  .tl .lb b{color:var(--text);font-weight:600}
+
+  h2+.why+.qs{margin-top:0}
+  ol.qs{max-width:760px;padding-left:20px;color:var(--dim)}ol.qs li{margin:8px 0}ol.qs b{color:var(--text)}
+  details{margin-top:36px;color:var(--dim);max-width:760px}summary{cursor:pointer;color:var(--text);font-weight:600}
+  details li{margin:5px 0}
+</style></head><body><div class="wrap">
+
+<div class="top"><h1>Round 76 · at the PC, or away</h1><button class="tbtn" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<p class="intro">While you're at the PC, the phone stays quiet. A notification <b>waits a minute</b>, and if you handle it here it never goes out. When the PC has had no input for a while, or is locked or asleep, you're <b>away</b>, and the phone gets everything as it does now. One small mark says which it is.</p>
+
+<h2>Where the mark sits</h2>
+<p class="why">It should be in sight but take no room from the sessions.</p>
+<div class="grid">
+  <div><div class="lo"><div class="sb"><i></i><i></i><i></i><i></i><i></i><div class="ft"><i></i><i class="spot" style="flex:none;width:30px;height:14px"></i><i style="flex:none;width:12px"></i></div></div><div class="mn"><div class="bar"><i></i><i></i></div><div class="box"></div></div></div>
+    <p class="cap"><b>A · Sidebar footer</b><span class="rec">Recommended</span> next to Done and Settings. Always in sight, even in a session.</p></div>
+  <div><div class="lo"><div class="sb"><i></i><i></i><i></i><i></i><i></i><div class="ft"><i></i></div></div><div class="mn"><div class="bar"><i class="spot" style="width:22px"></i><i></i><i></i></div><div class="box"></div></div></div>
+    <p class="cap"><b>B · Top bar</b> beside the view switch or the session's buttons. It moves between Home and a session.</p></div>
+  <div><div class="lo"><div class="sb"><i></i><i></i><i></i><i></i><i></i><div class="ft"><i></i></div></div><div class="mn"><div class="bar"><i></i><i></i></div><div class="box"></div><i class="spot" style="position:absolute;right:20%;bottom:54px;width:40px;height:12px"></i></div></div>
+    <p class="cap"><b>C · Under the message box</b> with the limits meter. It's hidden on Home's Wall and when the compose box is closed.</p></div>
+</div>
+
+<h2>The mark, in its three states</h2>
+<p class="why">It appears only when a phone has notifications on. Click it to switch by hand. The countdown is the only thing that moves.</p>
+<div class="grid">
+  <div><div class="stage"><div class="side"><div class="rows"><div class="r"><i class="d"></i><b>Refactor the parser</b><small>2m</small></div><div class="r"><i class="d"></i><b>Plan the beta launch</b><small>9m</small></div></div>
+    <div class="foot"><span class="done">✓ Done 26</span><span class="ph here" title="At the PC · the phone waits a minute"><svg viewBox="0 0 14 14"><rect class="bd" x="3.5" y="1" width="7" height="12" rx="1.6"/><line class="sl" x1="1.5" y1="12.5" x2="12.5" y2="1.5"/></svg>Here</span><span class="k">Ctrl K</span><i class="g"></i></div></div></div>
+    <p class="cap"><b>At the PC.</b> A phone with a slash, quiet. Hover: "At the PC: the phone waits a minute."</p></div>
+  <div><div class="stage"><div class="side"><div class="rows"><div class="r"><i class="d w"></i><b>Refactor the parser</b><small>now</small></div><div class="r"><i class="d"></i><b>Plan the beta launch</b><small>9m</small></div></div>
+    <div class="foot"><span class="done">✓ Done 26</span><span class="ph hold" id="holdChip"><svg viewBox="0 0 14 14"><circle class="rgb" cx="7" cy="7" r="5.8"/><circle class="rg" id="holdRing" cx="7" cy="7" r="5.8" stroke-dasharray="36.4 99"/></svg><span class="n" id="holdN">0:42</span></span><span class="k">Ctrl K</span><i class="g"></i></div></div></div>
+    <p class="cap"><b>Holding.</b> A session needs you; the ring runs down to the push. Answer it here and the ring goes, and nothing is sent.</p></div>
+  <div><div class="stage"><div class="side">
+    <div class="pop a"><div class="h"><i class="dot"></i>Away</div><div class="s">No input for 6 min. Your phone gets notifications now.</div><div class="btns"><button class="pri">I'm here</button></div></div>
+    <div class="rows"><div class="r"><i class="d"></i><b>Refactor the parser</b><small>2m</small></div><div class="r"><i class="d"></i><b>Plan the beta launch</b><small>9m</small></div></div>
+    <div class="foot"><span class="done">✓ Done 26</span><span class="ph away"><svg viewBox="0 0 14 14"><rect class="bd" x="3.5" y="1" width="7" height="12" rx="1.6"/><path class="wv" d="M12 4.5a4 4 0 0 1 0 5"/></svg>Away</span><span class="k">Ctrl K</span><i class="g"></i></div></div></div>
+    <p class="cap"><b>Away</b>, with its popover. Green, with a faint signal pulse: the phone has it. At the PC, the popover offers <b>Away now</b>, for when you leave but the PC isn't idle yet.</p></div>
+</div>
+
+<h2>A morning, as it would go</h2>
+<div class="tl">
+  <div class="ax"></div>
+  <div class="band here" style="left:0;width:44%"></div><div class="band away" style="left:44%;width:34%"></div><div class="band here" style="left:78%;width:22%"></div>
+  <div class="ev drop" style="left:12%">Needs you<i></i></div>
+  <div class="ev sent" style="left:30%">Needs you<i></i></div>
+  <div class="ev sent" style="left:58%">Turn ended<i></i></div>
+  <div class="ev drop" style="left:88%">Turn ended<i></i></div>
+  <div class="lb" style="left:12%"><b>answered here</b> · not sent</div>
+  <div class="lb" style="left:30%">left 1 min · <b>sent</b></div>
+  <div class="lb" style="left:58%">away · <b>sent at once</b></div>
+  <div class="lb" style="left:88%"><b>seen here</b> · not sent</div>
+</div>
+
+<h2>Settings, Phone</h2>
+<p class="why">Two rows above Paired phones. Which kinds each phone gets stays on the phone, as now.</p>
+<div class="set">
+  <div class="pgh">Phone</div>
+  <div class="srow"><span>Open Workwood on your phone<small>On your home Wi-Fi · only phones you pair</small></span><i style="width:30px;height:17px;border-radius:9px;background:var(--note)"></i></div>
+  <div class="lgrp">Notifications</div>
+  <div class="srow"><span>While you're at this PC<small>A minute to handle it here first; then it goes to the phone.</small></span><div class="lseg"><button class="on">Wait a minute</button><button>Don't send</button><button>Send at once</button></div></div>
+  <div class="srow"><span>Away after<small>No keyboard or mouse anywhere on this PC. Locked or asleep is away at once. <span class="now"><i></i>Away now</span></small></span><div class="lseg"><button>2 min</button><button class="on">5 min</button><button>15 min</button></div></div>
+</div>
+
+<h2>Open questions</h2>
+<ol class="qs">
+  <li><b>Placement:</b> A (sidebar footer), B or C?</li>
+  <li><b>While at the PC:</b> is "Wait a minute" the right default, or "Don't send"?</li>
+  <li><b>Away after 5 min</b> without input: is that right for you?</li>
+  <li><b>On the phone:</b> should its Home also say "PC: you're away" or "at the PC", so you know whether to expect notifications there?</li>
+</ol>
+
+<details><summary>Under the hood</summary><ul>
+  <li>Idle comes from Electron's <code>powerMonitor.getSystemIdleTime()</code>, which counts input to the whole computer, not just Workwood, plus its lock, suspend and resume events. In WSL the Windows window reads it and passes it to the service; on Linux and macOS the window reads it directly.</li>
+  <li>With only the browser page (no window), activity on the page counts instead.</li>
+  <li>The service holds each push for the chosen time and drops it when the session is answered, opened or the turn is read on the PC (the <code>looking</code> check already used for phones, extended to the PC).</li>
+  <li>"Away now" by hand lasts until the next input after a minute has passed. "I'm here" lasts until you go idle again.</li>
+  <li>Limit pushes (near, cleared) follow the same rule; held ones are sent when the hold ends unless something on the PC showed them.</li>
+</ul></details>
+
+</div>
+<script>
+// the hold ring counts down and starts over
+let left = 42;
+setInterval(() => { left = left <= 0 ? 60 : left - 1; const c = 2 * Math.PI * 5.8;
+  document.getElementById('holdRing').setAttribute('stroke-dasharray', (c * left / 60).toFixed(1) + ' 99');
+  document.getElementById('holdN').textContent = '0:' + String(left).padStart(2, '0'); }, 1000);
+</script>
+</body></html>

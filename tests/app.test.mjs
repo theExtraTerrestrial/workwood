@@ -1403,11 +1403,11 @@ test('read aloud: on a computer without Kokoro it is got from Settings, then rea
 
 test('settings: default profile and dictation language are kept; sign-in again runs Claudius in a terminal', async () => {
   const handoff = { model: 'auto', effort: 'medium', offer: 400000 };
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, handoff });
-  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, handoff });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, pcHold: 'wait', awayMin: 5, handoff });
+  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, pcHold: 'wait', awayMin: 5, handoff });
   const kept = JSON.parse(fs.readFileSync(path.join(sb.home, '.config', 'workwood', 'state.json'), 'utf8'));
   assert.deepEqual([kept.defaultProfile, kept.language, typeof kept.done], ['other', 'latvian', 'object']);
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, handoff });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, pcHold: 'wait', awayMin: 5, handoff });
   const a = (await svc.call('about')).body;
   assert.deepEqual([a.version, a.claude, typeof a.speech.model], [JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version, '2.1.322', 'string']);
   assert.equal((await svc.call('profiles/nobody/login', {})).status, 404);
@@ -3489,4 +3489,31 @@ ui('window: a warm cache shows as a small clock by the session and in the compos
   await page.waitForFunction(r => !document.querySelector(r + ' .wdial') && !document.querySelector('#cWarm .wdial'), row);
   await svc.call('settings', { cacheMinutes: 60 });
   await page.waitForFunction(() => A.prefs.cacheMinutes === 60);
+});
+
+ui('window: the page says you are at this PC, and while a phone has notifications on the sidebar\'s footer says whether they wait, wait now, or go at once', async () => {
+  await page.mouse.move(300, 300); await page.mouse.move(320, 310);
+  await until(async () => (await state()).pc?.why === 'here', 'the page to say you are here');
+  assert.equal(await page.locator('#pcb').isVisible(), false);                              // no phone with notifications: no mark
+  const fake = (p) => page.evaluate(p => { window.wwPc = { away: false, why: 'here', since: Date.now(), push: true, hold: 'wait', awayMin: 5, holdMs: 60000, held: [], ...p };
+    Object.defineProperty(A, 'pc', { configurable: true, get: () => window.wwPc, set() {} }); renderPc(); }, p);
+  try {
+    await fake({});
+    await page.waitForSelector('#pcb.here:has-text("Here")');
+    await page.click('#pcb'); await page.waitForSelector('#pcpop:has-text("At this PC") [data-pcset="away"]');
+    await page.click('#pcpop [data-pcset="away"]');
+    await until(async () => (await state()).pc?.why === 'manual', 'Away now to reach the service');
+    await page.keyboard.press('Escape'); await page.mouse.click(700, 400);
+    await fake({ held: [{ kind: 'needs', session: 'x', title: 'Fix the parser', until: Date.now() + 30000 }] });
+    await page.waitForSelector('#pcb.hold:has-text("0:")');
+    assert.match(await page.locator('#pcb').getAttribute('data-tip'), /Sending to your phone in 0:[23]\d/);
+    await fake({ away: true, why: 'idle' });
+    await page.waitForSelector('#pcb.away:has-text("Away")');
+    await page.click('#pcb'); await page.waitForSelector('#pcpop [data-pcset="here"]');
+    await page.click('#pcpop [data-pcset="here"]');
+    await until(async () => (await state()).pc?.why === 'here', 'I\'m here to reach the service');
+  } finally {
+    await svc.call('presence', { away: false });
+    await page.evaluate(() => { delete A.pc; delete window.wwPc; $('pcpop').hidden = true; });
+  }
 });

@@ -26,4 +26,7 @@ contextBridge.exposeInMainWorld('workwood', {
   login: typeof login === 'boolean' ? { on: login, set: on => ipcRenderer.invoke('login:set', !!on) } : null,
   setEnv: id => ipcRenderer.invoke('env:set', id),
   onEnvStatus: fn => ipcRenderer.on('env:status', (e, s) => fn(s)),
+  // at this PC or away: input to the whole computer, and the screen locking or the computer sleeping
+  pcIdle: () => ipcRenderer.invoke('pc:idle'),
+  onPcLock: fn => ipcRenderer.on('pc:lock', (e, locked) => fn(locked)),
 });

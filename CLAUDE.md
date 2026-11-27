@@ -22,3 +22,10 @@ own git worktree, never in the main checkout:
   commit in the worktree, rebase it on `main` (other sessions may have merged meanwhile; rerun the tests after),
   merge with a fast-forward, then remove the worktree (`git worktree remove`) and delete its branch.
   Never merge or remove a worktree without asking.
+
+## A test that fails now and then
+
+- A failing window test leaves its evidence in `<tmp>/workwood-test-failures/<run>/<test>/` (a Playwright trace, a
+  screenshot, the fake agent's log, the service's events and stderr, and any step of the clock). Read that first.
+- Use `npm run test:stress -- "<part of a test's name>" [runs] [--before N]` only when the evidence is missing or does
+  not explain the failure, and to confirm a fix. It is never part of `npm test`.

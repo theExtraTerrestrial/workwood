@@ -1,20 +1,23 @@
 {
   "name": "workwood",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Run and oversee several Claude Code sessions at once, grouped by Claudius profile.",
   "type": "module",
   "main": "shell/main.cjs",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "postinstall": "install-electron && node -e \"for (const a of ['arm64','x64']) { try { require('fs').chmodSync('node_modules/node-pty/prebuilds/darwin-'+a+'/spawn-helper', 0o755) } catch {} }\"",
+    "postinstall": "node shell/need-node.cjs && install-electron && node -e \"for (const a of ['arm64','x64']) { try { require('fs').chmodSync('node_modules/node-pty/prebuilds/darwin-'+a+'/spawn-helper', 0o755) } catch {} }\"",
     "start": "electron .",
-    "edge": "node shell/edge.mjs",
-    "install-app": "node shell/install-app.mjs",
-    "shortcut": "node shell/windows-shortcut.mjs",
-    "service": "node service/server.mjs",
-    "test": "node --test tests/app.test.mjs tests/phone.test.mjs tests/copy.test.mjs",
+    "edge": "node shell/need-node.cjs && node shell/edge.mjs",
+    "install-app": "node shell/need-node.cjs && node shell/install-app.mjs",
+    "shortcut": "node shell/need-node.cjs && node shell/windows-shortcut.mjs",
+    "service": "node shell/need-node.cjs && node service/server.mjs",
+    "test": "node shell/need-node.cjs && node --test tests/app.test.mjs tests/phone.test.mjs tests/copy.test.mjs",
     "test:stress": "node tests/stress.mjs",
-    "package": "node shell/windows-package.mjs",
+    "package": "node shell/need-node.cjs && node shell/windows-package.mjs",
     "site": "node site/build.mjs",
     "shots": "node site/shots.mjs"
   },

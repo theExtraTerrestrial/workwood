@@ -100,7 +100,7 @@ async function open() {
   ipcMain.handle('app:restart', () => {
     sure = true;
     if (cfg.distro) {
-      const inside = `cd '${cfg.dir.replace(/'/g, `'\\''`)}' && node shell/windows-shortcut.mjs --after-update >> ~/.cache/workwood/workwood.log 2>&1`;
+      const inside = `cd '${cfg.dir.replace(/'/g, `'\\''`)}' && { node shell/need-node.cjs && node shell/windows-shortcut.mjs --after-update; } >> ~/.cache/workwood/workwood.log 2>&1`;
       spawn('wsl.exe', ['-d', cfg.distro, '--', 'bash', '-lic', inside], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     } else app.relaunch();
     app.quit();

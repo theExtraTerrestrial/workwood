@@ -278,7 +278,7 @@ $('dim').onclick=async e=>{
   try{await api(`sessions/${id}/delete`,{});A.sessions=A.sessions.filter(s=>s.id!==id);$('dim').hidden=true;leave(id)}
   catch(err){$('dim').hidden=true;oops(err.message)}
 };
-$('newBtn').onclick=()=>newSession();
+$('newBtn').onclick=()=>inWall()?wallLeave():newSession();   // on the Wall, New is a new session, not the Wall again
 
 // The profile last used in a project: the one that ran its most recent session, if that profile is still here.
 const lastProfileIn=cwd=>{const p=A.sessions.filter(s=>(s.root||s.cwd)===cwd&&s.profile).sort((a,b)=>b.mts-a.mts)[0]?.profile;return A.profiles.some(x=>x.name===p)?p:null};
@@ -1593,7 +1593,7 @@ function speechRow(){
 // Look: the theme, and a background for Home, a session and the sidebar, each with its own Motion and Warn at limits.
 function renderLook(pg){
   const ed=V.lookEdit||'home',b=bgOf(ed),k=b.kind,still=BGSTILL.includes(k),th=themePref(),who=ed==='session'?'this session':'an agent';
-  const key=[ed,k,b.motion,b.limits,th,root.dataset.theme,bgHues(ed,selSession()),skyList().map(s=>s.id),wallOn(),skyLabels()].join('|');
+  const key=[ed,k,b.motion,b.limits,th,root.dataset.theme,bgHues(ed,selSession()),skyList().map(s=>s.id),wallOn(),wallClk(),skyLabels()].join('|');
   if(pg.dataset.look===key&&pg.querySelector('.hbgs')){for(const t of pg.querySelectorAll('[data-tk="constel"]'))skyMark(t);return}
   pg.dataset.look=key;
   const seg=(items,cur,attr)=>`<div class="lseg">${items.map(([v,n])=>`<button data-${attr}="${v}" class="${v===cur?'on':''}">${n}</button>`).join('')}</div>`;
@@ -1606,7 +1606,8 @@ function renderLook(pg){
     <div class="srow lstack ${still?'off':''}"><span>Motion<small>${still?(k==='none'?'Nothing to move.':'This one is always still.'):b.motion==='working'?`Only while ${who} works, then it comes to rest.`:b.motion==='always'?`Livelier while ${who} works.`:'Holds still, in the same colours.'}</small></span>${seg([['always','Always'],['working','While working'],['never','Never']],b.motion,'bgm')}</div>
     <div class="srow"><span>Warn at limits<small>Warm near ${ed==='session'?'this session’s':'a'} limit, red at it. Even when still or None.</small></span><i class="stog ${b.limits?'on':''}" data-set="bglim"></i></div>`
     +(ed==='home'&&k==='constel'?`<div class="srow"><span>Project names<small>Each figure’s project, written under it.</small></span><i class="stog ${skyLabels()?'on':''}" data-set="skylab"></i></div>`:'')
-    +(ed==='home'?`<div class="srow"><span>Wall<small>A Home view of only this background and what’s running, to watch from. A soft chime plays when a session needs you while it shows.</small></span><i class="stog ${wallOn()?'on':''}" data-set="wall"></i></div>`:'');
+    +(ed==='home'?`<div class="srow"><span>Wall<small>A Home view of only this background and what’s running, to watch from. A soft chime plays when a session needs you while it shows.</small></span><i class="stog ${wallOn()?'on':''}" data-set="wall"></i></div>`:'')
+    +(ed==='home'&&wallOn()?`<div class="srow"><span>Clock on the Wall<small>${({quiet:'Shown while all is quiet, hidden while something works.',always:'Shown always, above what runs.',never:'Not shown.'})[wallClk()]}</small></span>${seg([['quiet','When quiet'],['always','Always'],['never','Never']],wallClk(),'wclk')}</div>`:'');
   const [h1,h2,h3]=bgHues(ed,selSession());
   for(const t of pg.querySelectorAll('[data-tk]')){const v=t.dataset.tk;t.style.cssText=`--h1:${h1};--h2:${h2};--h3:${h3}`;
     t.innerHTML=v==='none'?'':v==='constel'?skySVG(skyList(),skyDims(t,true),null):hbgHTML(v)+'<span class="fld grain"></span>';if(v==='constel')skyMark(t)}
@@ -1874,6 +1875,7 @@ $('spage').onclick=async e=>{
   if(lk){const ed=V.lookEdit||'home',d=lk.dataset;
     if(d.th)setTheme(d.th);else if(d.bgp)V.lookEdit=d.bgp;else if(d.bgk)setBg(ed,'bg',d.bgk);else if(d.bgm)setBg(ed,'motion',d.bgm);
     renderSettings();return}
+  const wc=e.target.closest('[data-wclk]');if(wc){localStorage.setItem('ww.wallclock',wc.dataset.wclk);renderHome();renderSettings();return}
   if(s?.dataset.set==='wall'){localStorage.setItem('ww.wall',wallOn()?'off':'on');renderHome();renderSettings();return}
   if(s?.dataset.set==='skylab'){localStorage.setItem('ww.skylabels',skyLabels()?'off':'on');renderBgs();renderSettings();return}
   if(s?.dataset.set==='bglim'){const ed=V.lookEdit||'home';setBg(ed,'limits',bgOf(ed).limits?'off':'on');renderSettings();return}
@@ -2467,6 +2469,10 @@ const HVIEWS=[['pick','Pick up','Where each piece of work was left'],['projects'
 const wallOn=()=>localStorage.getItem('ww.wall')!=='off'&&!PHONE;
 const homeViews=()=>HVIEWS.filter(v=>v[0]!=='wall'||wallOn());
 const inWall=()=>isHome()&&H.view==='wall'&&wallOn();
+// leaving the Wall to start something: Pick up, with the composer ready
+function wallLeave(){H.view='pick';localStorage.setItem('ww.home','pick');renderHome();$('input').focus()}
+// the Wall's clock: while all is quiet (the default), always, or never
+const wallClk=()=>({always:'always',never:'never'})[localStorage.getItem('ww.wallclock')]||'quiet';
 // What Home showed last time, so it opens with that instead of empty boxes; fresh readings replace it in place.
 // Only the very first opening, with nothing remembered, draws skeletons.
 const HCACHE='ww.homeCache';
@@ -2826,12 +2832,12 @@ function renderNow(){
   if(!list.some(nowLive)){el.hidden=!on;el.innerHTML=on?wallGhost():'';if(NOW.ended.size)setTimeout(()=>{if(isHome())renderNow()},NOW_KEEP+50);return}   // nothing live: what finished last stands for the rest
   el.hidden=false;
   const shown=NOW.all?list:list.slice(0,NOW_MAX),more=list.length-shown.length;
-  el.innerHTML=shown.map(nowCard).join('')+(more?`<button class="nmore" data-nmore>+${more}</button>`:NOW.all&&list.length>NOW_MAX?'<button class="nmore" data-nmore>Fewer</button>':'');
+  el.innerHTML=shown.map(nowCard).join('')+(more?`<button class="nmore" data-nmore>+${more}</button>`:NOW.all&&list.length>NOW_MAX?'<button class="nmore" data-nmore>Fewer</button>':'')+'<button class="nmore nnew" data-nnew>+ New</button>';
   if(NOW.ended.size)setTimeout(()=>{if(isHome())renderNow()},NOW_KEEP+50);
 }
 async function nowClick(e){
   if(e.target.closest('[data-nmore]')){NOW.all=!NOW.all;renderNow();return}
-  if(e.target.closest('[data-nnew]')){H.view='pick';localStorage.setItem('ww.home','pick');renderHome();$('input').focus();return}
+  if(e.target.closest('[data-nnew]')){wallLeave();return}
   const c=e.target.closest('[data-nid]');if(!c)return;
   const s=A.sessions.find(x=>x.id===c.dataset.nid);if(!s)return;
   const b=e.target.closest('[data-nact],[data-nopt]');
@@ -2866,9 +2872,10 @@ function skyShow(g,pinned){
   const when=s.status==='work'?'working':s.status==='wait'?'waiting':NOW.glow.has(s.id)?'done '+ago(s.mts):ago(s.mts);
   p.className='nc '+(s.status==='wait'?'ask':s.status==='work'?'work':'gone')+(pinned?' pin':'');p.dataset.nid=s.id;p.style.setProperty('--h',hueOf(s.project));
   p.innerHTML=`<span class="tt"><i class="nd"></i><b>${esc(s.title)}</b><span class="t">${esc(when)}</span></span><span class="spj">${esc(s.project)}</span>${nowBody(s)}${say?`<span class="say">${esc(say)}</span>`:''}`;
-  const r=g.querySelector('.st').getBoundingClientRect(),pw=p.offsetWidth,ph=p.offsetHeight;
-  let x=r.right+14,y=r.top+r.height/2+10;if(x+pw>innerWidth-12)x=r.left-14-pw;if(y+ph>innerHeight-12)y=innerHeight-12-ph;
-  p.style.left=Math.max(12,x)+'px';p.style.top=Math.max(12,y)+'px';p.hidden=false;
+  p.style.visibility='hidden';p.hidden=false;   // measured while shown: a hidden card is 0 wide and would never move off the edge
+  const r=g.querySelector('.st').getBoundingClientRect(),pw=p.offsetWidth,ph=p.offsetHeight,W=document.documentElement.clientWidth,Hh=document.documentElement.clientHeight;
+  let x=r.right+14,y=r.top+r.height/2+10;if(x+pw>W-12)x=r.left-14-pw;if(y+ph>Hh-12)y=Hh-12-ph;
+  p.style.left=Math.max(12,Math.min(x,W-12-pw))+'px';p.style.top=Math.max(12,y)+'px';p.style.visibility='';
   for(const o of $('hbg').querySelectorAll('.star.hov'))o.classList.remove('hov');g.classList.add('hov');
   SKY.hov=g.dataset.id;if(pinned)SKY.pin=g.dataset.id;
 }
@@ -2934,7 +2941,8 @@ function wallPaint(list){
   const f=$('wface'),on=inWall()&&!PHONE;
   f.hidden=!on;if(!on){clearInterval(WALL.tick);WALL.tick=0;wallPop();return}
   const quiet=!list.some(nowLive),kind=wallKind(),ps=A.profiles.slice(0,WALL_CAP);
-  f.className='wface '+kind+(quiet?' q':'')+(bgOf('home').motion==='never'?' still':'');
+  const ck=wallClk();
+  f.className='wface '+kind+(quiet?' q':'')+(ck==='always'?' clk':ck==='never'?' noclk':'')+(bgOf('home').motion==='never'?' still':'');
   const lim=kind==='moons'?`<div class="wmoons">${wallMoons(ps)}</div>`:kind==='curtains'?wallCurtains(ps):kind==='orbits'?wallOrbits(ps):wallLine(ps);
   const key=kind+'|'+lim;if(key!==WALL.key){WALL.key=key;$('wlim').innerHTML=ps.length?lim:''}
   wallClock();if(!WALL.tick)WALL.tick=setInterval(()=>{if(inWall())wallClock();else{clearInterval(WALL.tick);WALL.tick=0}},10000);
@@ -2942,7 +2950,9 @@ function wallPaint(list){
 function wallClock(){
   const d=new Date(),t=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),m=t.match(/^(\d+)\D(\d+)\s*(.*)$/)||[t,t,'',''];
   const done=A.sessions.filter(s=>!s.outside&&!s.term&&s.status==='idle'&&s.mts>=dayStart()).length;
-  const h=`<div class="tm">${esc(m[1])}${m[2]?`<span class="c">:</span>${esc(m[2])}`:''}${m[3]?`<small>${esc(m[3])}</small>`:''}</div><div class="dt">${esc(d.toLocaleDateString([],{weekday:'long'}))} · ${esc(d.toLocaleDateString([],{day:'numeric',month:'long'}))}</div><div class="ln1"><i class="ok"></i>All quiet · ${done?`${done} done today`:'nothing yet today'}</div>`;
+  const ck=wallClk(),quiet=!A.sessions.some(nowLive);
+  const h=(ck==='never'?'':`<div class="tm">${esc(m[1])}${m[2]?`<span class="c">:</span>${esc(m[2])}`:''}${m[3]?`<small>${esc(m[3])}</small>`:''}</div><div class="dt">${esc(d.toLocaleDateString([],{weekday:'long'}))} · ${esc(d.toLocaleDateString([],{day:'numeric',month:'long'}))}</div>`)
+    +(quiet?`<div class="ln1"><i class="ok"></i>All quiet · ${done?`${done} done today`:'nothing yet today'}</div>`:'');
   if($('wq').innerHTML!==h)$('wq').innerHTML=h;
 }
 // hover a moon, a curtain, a planet or a name for its numbers

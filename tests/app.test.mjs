@@ -3350,6 +3350,7 @@ ui('window: Home\'s Wall is its background and a dock of what is live, answered 
   await page.evaluate(id => { const r = document.querySelector(`#hbg .star[data-id="${id}"] .st`).getBoundingClientRect();
     document.getElementById('scroll').dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); }, deny);
   await page.waitForSelector(`#skypop.pin[data-nid="${deny}"] [data-nact="deny"]`);
+  assert.ok(await page.evaluate(() => { const r = document.getElementById('skypop').getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; }), 'the card stays inside the window');
   await page.click('#skypop [data-nact="deny"]');
   await until(async () => /^DENIED/.test(lastText(await idle(deny)) || ''), 'the command to be denied');
   await page.waitForSelector('#skypop', { state: 'hidden' });
@@ -3384,6 +3385,17 @@ ui('window: a quiet Wall shows the time and what finished last, the profiles\' l
     await page.waitForSelector(`${term} .stp:has-text("In a terminal")`, { timeout: 15000 });
     assert.equal(await page.locator(`${term} button`).count(), 0);
     await page.waitForSelector('#wface:not(.q)');                                            // something runs: no clock
+    assert.equal(await page.locator('#wface.clk').count(), 0); await page.waitForSelector('#now .nnew[data-nnew]');   // and New still on the dock
+    // the clock can be there always (without "All quiet" while something runs), or never
+    await page.evaluate(() => localStorage.setItem('ww.wallclock', 'always')); await show('constel');
+    await page.waitForSelector('#wface.clk:not(.q) #wq .tm'); assert.equal(await page.locator('#wq .ln1').count(), 0);
+    await page.evaluate(() => localStorage.setItem('ww.wallclock', 'never')); await show('constel');
+    await page.waitForSelector('#wface.noclk'); assert.equal(await page.locator('#wq .tm').count(), 0);
+    await page.evaluate(() => localStorage.removeItem('ww.wallclock')); await show('constel');
+    // the sidebar's New, pressed on the Wall, starts a session rather than showing the Wall again
+    await page.click('#newBtn'); await page.waitForSelector('#dseg [data-hv="pick"].on'); await page.waitForSelector('#main:not(.wall)');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'input');
+    await show('constel');
     // all quiet: the time, the day, and at the dock's place what finished last and New
     setLive(sb, []); await nudge(); await idle(sb.sessions.alphaLive);
     await page.waitForSelector('#wface.q #wq .ln1:has-text("All quiet")', { timeout: 15000 });
@@ -3410,7 +3422,7 @@ ui('window: a quiet Wall shows the time and what finished last, the profiles\' l
     assert.equal(await page.evaluate(() => document.activeElement.id), 'input');
   } finally {
     fs.writeFileSync(sb.agents, was);
-    await page.evaluate(() => { for (const k of ['ww.bg.home', 'ww.home']) localStorage.removeItem(k); });
+    await page.evaluate(() => { for (const k of ['ww.bg.home', 'ww.home', 'ww.wallclock']) localStorage.removeItem(k); });
   }
 });
 

@@ -36,7 +36,9 @@ npm run install-app
 
 - **macOS**: makes `~/Applications/Workwood.app`. Not yet tried on a Mac.
 - **Linux**: adds Workwood to the app launcher. `npm ci` builds one part
-  here, so it also needs `build-essential` and `python3`.
+  here, so it also needs `build-essential` and `python3`. Ubuntu's own `nodejs`
+  package is too old; take Node 22 from nodejs.org or nvm. (`npm run shortcut`
+  is for Windows with WSL only.)
 - **Windows**: run it inside WSL. Workwood goes into the Start menu and
   sessions run in WSL (the same as `npm run shortcut`, described below).
 

@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { electronVersion as version, electronZip, stageNative, writeApp, wslDistro } from './windows-parts.mjs';
 
 const distro = wslDistro();
-if (!distro) { console.error('This is for Windows with WSL. Run it inside your WSL distribution.'); process.exit(1); }
+if (!distro) { console.error('This is for Windows with WSL, run inside your WSL distribution. On Linux or macOS, "npm run install-app" adds Workwood to your apps.'); process.exit(1); }
 const win = (file, args) => execFileSync(file, args, { cwd: '/mnt/c', encoding: 'utf8' }).replace(/\r/g, '').trim();
 const ps = script => win('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script]);
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

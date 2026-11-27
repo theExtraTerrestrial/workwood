@@ -1688,6 +1688,7 @@
   .nc .say{color:var(--dim);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;margin-top:2px}
   .nmore{align-self:center;height:26px;padding:0 10px;border-radius:9px;color:var(--dim);font-size:11.5px}
   .nmore:hover{background:rgba(128,128,128,.14);color:var(--text)}
+  .nmore.nnew{color:var(--text);font-weight:600}
   #skypop{position:fixed;z-index:60;width:250px;cursor:default}
   #skypop .tt b{font-size:12.5px}
   #skypop.pin{box-shadow:0 0 0 1.5px var(--warn),0 10px 30px rgba(0,0,0,.4)}
@@ -1698,7 +1699,8 @@
   .wface{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden;container-type:size}
   .wq{position:absolute;left:0;right:0;top:42%;transform:translateY(-50%);text-align:center;opacity:0;transition:opacity .9s,transform .9s;transform-origin:center}
   .wface:not(.q) .wq{transform:translateY(-50%) scale(.94)}
-  .wface.q .wq{opacity:1}
+  .wface.q .wq,.wface.clk .wq{opacity:1}
+  .wface.noclk .wq .ln1{margin-top:0}
   .wq .tm{font-weight:200;font-size:min(13cqw,112px);line-height:1;letter-spacing:-.02em;color:var(--text);opacity:.92;font-variant-numeric:tabular-nums}
   .wq .tm small{font-size:.28em;font-weight:400;letter-spacing:.06em;margin-left:.25em;color:var(--dim);vertical-align:.25em}
   .wq .tm .c{animation:wqc 2s steps(1) infinite}@keyframes wqc{50%{opacity:.25}}
@@ -1746,7 +1748,7 @@
   .wor .out .pl{opacity:.4}
   /* the calm backgrounds: one line */
   .wll{position:absolute;left:0;right:0;top:18px;display:flex;justify-content:center;gap:8px;font-size:11.5px;color:var(--faint);transition:top .9s}
-  .wface.q .wll{top:calc(42% + min(6.5cqw,56px) + 76px)}
+  .wface.q .wll{top:calc(42% + min(6.5cqw,56px) + 76px)}.wface.q.noclk .wll{top:calc(42% + 24px)}
   .wll b{color:var(--dim);font-weight:500}.wll em{font-style:normal;color:var(--warn)}.wll i{font-style:normal;opacity:.6}
   .wlpop{position:fixed;z-index:60;background:var(--pop,#1f2124);border-radius:10px;box-shadow:0 0 0 1px var(--line2),0 8px 24px rgba(0,0,0,.3);padding:8px 11px;font-size:11.5px;display:flex;flex-direction:column;gap:4px;min-width:190px;pointer-events:none}
   .wlpop .r{display:flex;justify-content:space-between;gap:12px;color:var(--dim)}.wlpop .r span:last-child{color:var(--text)}

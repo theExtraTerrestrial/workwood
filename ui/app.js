@@ -2775,7 +2775,7 @@ $('hset').onclick=()=>{V.lookEdit='home';openSettings(STABS.indexOf('Look'))};
 const NOW={was:new Map(),ended:new Map(),glow:new Map(),busy:new Set(),all:false,ac:null};
 const NOW_KEEP=60000,GLOW_KEEP=180000,NOW_MAX=5;
 const skyLabels=()=>localStorage.getItem('ww.skylabels')!=='off';
-const nowLive=s=>!s.done&&!s.outside&&!s.term&&(s.status==='work'||s.status==='wait');
+const nowLive=s=>!s.done&&(s.status==='work'||s.status==='wait');   // a session in a terminal too, watch-only
 // What changed since the last reading: a turn that ended keeps its card a minute and its star an afterglow.
 function nowTrack(){
   const t=performance.now();
@@ -2791,25 +2791,29 @@ const nowList=()=>A.sessions.filter(s=>nowLive(s)||NOW.ended.has(s.id)&&!s.done)
   .sort((a,b)=>(b.status==='wait')-(a.status==='wait')||(b.status==='work')-(a.status==='work')||b.mts-a.mts);
 // A card's body: what it waits on and how to answer, or what it is doing.
 function nowBody(s){
+  if(s.outside||s.term)return `<span class="stp">${esc(s.line||'In a terminal')}</span>`;   // watched here, answered where it runs
   const a=s.ask,w=s.status==='wait',busy=NOW.busy.has(s.id)?' disabled':'';
   if(w&&a?.kind==='permission')return `<span class="stp">${esc(s.line)}</span>${a.what?`<code>${esc(a.what)}</code>`:''}<span class="acts"><button class="nb go" data-nact="allow"${busy}>Allow</button><button class="nb" data-nact="deny"${busy}>Deny</button></span>`;
   if(w&&a?.opts)return `<span class="qq">${esc(a.q)}</span><span class="acts">${a.opts.map((o,i)=>`<button class="nb" data-nopt="${i}"${busy}>${esc(o)}</button>`).join('')}</span>`;
   if(w)return `<span class="stp">${esc(s.line)}</span><span class="acts"><button class="nb" data-nopen>Open</button></span>`;
   return `<span class="stp">${esc(s.status==='work'?s.line:'Done')}</span>`;
 }
-const nowCard=s=>`<div class="nc ${s.status==='wait'?'ask':s.status==='work'?'work':'gone'}" data-nid="${esc(s.id)}" style="--h:${hueOf(s.project)}"><span class="tt"><i class="nd"></i><b>${esc(s.title)}</b></span>${nowBody(s)}</div>`;
+const nowCard=s=>`<div class="nc ${s.status==='wait'?'ask':s.status==='work'?'work':'gone'}${s.outside||s.term?' wo':''}" data-nid="${esc(s.id)}" style="--h:${hueOf(s.project)}"><span class="tt"><i class="nd"></i><b>${esc(s.title)}</b>${s.outside||s.term?'<span class="tg">&gt;_</span>':''}</span>${nowBody(s)}</div>`;
 function renderNow(){
   nowTrack();
   const el=$('now'),on=inWall(),list=on?nowList():[];   // the dock is the Wall's: the other views have their own lists
   const wait=A.sessions.filter(s=>s.status==='wait'&&!s.done).length;
   const tt=document.querySelector('title'),want=wait?`(${wait}) Workwood`:'Workwood';if(tt.textContent!==want)tt.textContent=want;   // the window's title counts what waits
-  el.hidden=!list.length;if(!list.length){el.innerHTML='';return}
+  wallPaint(list);
+  if(!list.some(nowLive)){el.hidden=!on;el.innerHTML=on?wallGhost():'';if(NOW.ended.size)setTimeout(()=>{if(isHome())renderNow()},NOW_KEEP+50);return}   // nothing live: what finished last stands for the rest
+  el.hidden=false;
   const shown=NOW.all?list:list.slice(0,NOW_MAX),more=list.length-shown.length;
   el.innerHTML=shown.map(nowCard).join('')+(more?`<button class="nmore" data-nmore>+${more}</button>`:NOW.all&&list.length>NOW_MAX?'<button class="nmore" data-nmore>Fewer</button>':'');
   if(NOW.ended.size)setTimeout(()=>{if(isHome())renderNow()},NOW_KEEP+50);
 }
 async function nowClick(e){
   if(e.target.closest('[data-nmore]')){NOW.all=!NOW.all;renderNow();return}
+  if(e.target.closest('[data-nnew]')){H.view='pick';localStorage.setItem('ww.home','pick');renderHome();$('input').focus();return}
   const c=e.target.closest('[data-nid]');if(!c)return;
   const s=A.sessions.find(x=>x.id===c.dataset.nid);if(!s)return;
   const b=e.target.closest('[data-nact],[data-nopt]');
@@ -2869,6 +2873,79 @@ addEventListener('click',e=>{
   skyHide();openSession(s.id);
 });
 addEventListener('keydown',e=>{if(e.key==='Escape'&&SKY.pin)skyHide()});
+
+/* ---- the Wall when all is quiet, and the profiles' limits in its scene ----
+   Nothing live: the time, the day and one line, and at the dock's place what finished last and New. The clock goes while
+   anything runs. The limits are drawn into the background, on the Wall alone: a moon per profile on the constellation
+   (its phase what is left of the 5 hours, a faint arc the week), a curtain of light on Aurora and Caustics (as tall as
+   what is left), a planet circling the clock on Orbits (where the window's time is, its lit arc what is used); the calm
+   backgrounds have one quiet line. Hover any of them for the numbers. */
+const WALL_CAP=6;
+const lpOut=p=>Math.max(p.h5||0,p.d7||0)>=100;
+const lpBack=p=>{const r=p[WIN[(p.d7||0)>=100?'d7':'h5'][1]];return r?clock(r*1000):''};
+const lpLeft=p=>p.h5==null?1:Math.max(0,1-Math.max(p.h5,lpOut(p)?100:0)/100);
+const lpWarm=p=>!lpOut(p)&&Math.max(p.h5||0,p.d7||0)>=80;
+const lpCls=p=>(lpOut(p)?' out':lpWarm(p)?' warm':'')+(p.h5==null?' unk':'');
+const lpBk=p=>lpOut(p)&&lpBack(p)?`<em>back ${esc(lpBack(p))}</em>`:'';
+const wallKind=()=>{const k=bgOf('home').kind;return k==='constel'?'moons':k==='aurora'||k==='caustics'?'curtains':k==='orbits'?'orbits':'line'};
+function wallGhost(){
+  const last=A.sessions.filter(s=>!s.done&&s.status==='idle'&&!s.outside&&!s.term).sort((a,b)=>b.mts-a.mts)[0];
+  return `<div class="wgh">${last?`<button class="gp" data-nid="${esc(last.id)}" style="--h:${hueOf(last.project)}"><i class="d"></i>Last done <b>${esc(last.title)}</b> ${esc(ago(last.mts))}</button>`:''}<button class="gp new" data-nnew>+ New</button></div>`;
+}
+function wallMoons(ps){
+  return ps.map((p,i)=>{const R=15,left=lpLeft(p),wk=p.d7==null?0:(1-p.d7/100)*2*Math.PI*(R+6),id='wlm'+i;
+    return `<div class="wmo${lpCls(p)}" data-lp="${esc(p.name)}" style="--dy:${(Math.pow(i-(ps.length-1)/2,2)*7).toFixed(0)}px"><svg viewBox="-26 -26 52 52"><mask id="${id}"><circle r="${R}" fill="#fff"/><circle cx="${(2*R*left+.5).toFixed(1)}" r="${R+.5}" fill="#000"/></mask>
+      <circle class="gl" r="${(R*(.6+left)).toFixed(1)}"/><circle class="dk" r="${R}"/>${lpOut(p)?`<circle class="rim" r="${R}"/>`:`<circle class="lit" mask="url(#${id})" r="${R}"/>`}<circle class="wk" r="${R+6}" stroke-dasharray="${wk.toFixed(1)} 999" transform="rotate(-90)"/></svg><b>${esc(p.name)}</b>${lpBk(p)}</div>`}).join('');
+}
+function wallCurtains(ps){
+  const n=ps.length,w=Math.min(16,72/n),gap=(100-w*n)/(n+1);
+  return ps.map((p,i)=>{const x=gap+i*(w+gap),h=lpOut(p)?7:8+lpLeft(p)*72,op=p.d7==null?.8:.45+(1-p.d7/100)*.55;
+    return `<div class="wcu${lpCls(p)}" data-lp="${esc(p.name)}" style="left:${x.toFixed(1)}%;width:${w.toFixed(1)}%;height:${h.toFixed(0)}%;--c:${lpOut(p)?20:lpWarm(p)?38:160-i*16};opacity:${op.toFixed(2)}"></div><div class="wcl" style="left:${x.toFixed(1)}%;width:${w.toFixed(1)}%;bottom:calc(${(lpOut(p)?h:h*.6).toFixed(0)}% + 4px)">${esc(p.name)}${lpBk(p)}</div>`}).join('');
+}
+function wallOrbits(ps){
+  const cx=500,cy=300,now=Date.now()/1000;
+  return `<svg class="wor" viewBox="0 0 1000 600">${ps.map((p,i)=>{const rx=170+i*46,ry=rx*.42,ang=a=>-Math.PI/2+a*2*Math.PI,pt=a=>[cx+rx*Math.cos(ang(a)),cy+ry*Math.sin(ang(a))];
+    const t=p.r5?Math.min(1,Math.max(0,1-(p.r5-now)/18000)):0,used=Math.min((lpOut(p)?100:p.h5||0)/100,.999),[ex,ey]=pt(used),[px,py]=pt(t);
+    const ahead=used>t+.05,c=lpOut(p)||ahead&&lpWarm(p)?38:ahead?45:160,f=n=>n.toFixed(1);
+    return `<g class="${lpCls(p).trim()}" style="--c:${c}" data-lp="${esc(p.name)}"><ellipse class="rg" cx="${cx}" cy="${cy}" rx="${rx}" ry="${f(ry)}"/>${used>0?`<path class="us" d="M ${cx} ${f(cy-ry)} A ${rx} ${f(ry)} 0 ${used>.5?1:0} 1 ${f(ex)} ${f(ey)}"/>`:''}
+      <circle class="plh" cx="${f(px)}" cy="${f(py)}" r="9"/><circle class="pl" cx="${f(px)}" cy="${f(py)}" r="${lpOut(p)?2.5:4}"/>${(([lx,ly])=>`<text x="${f(lx+8)}" y="${f(ly+12)}">${esc(p.name)}</text>${lpOut(p)&&lpBack(p)?`<text class="bk" x="${f(lx+8)}" y="${f(ly+25)}">back ${esc(lpBack(p))}</text>`:''}`)(pt(.3+i*.045))}</g>`}).join('')}</svg>`;
+}
+const wallLine=ps=>`<div class="wll">${ps.map(p=>`<span data-lp="${esc(p.name)}">${esc(p.name)} ${lpOut(p)?lpBk(p):p.h5==null?'<b>–</b>':`<b>${100-p.h5}%</b> left`}</span>`).join('<i>·</i>')}</div>`;
+const WALL={key:'',tick:0};
+function wallPaint(list){
+  const f=$('wface'),on=inWall()&&!PHONE;
+  f.hidden=!on;if(!on){clearInterval(WALL.tick);WALL.tick=0;wallPop();return}
+  const quiet=!list.some(nowLive),kind=wallKind(),ps=A.profiles.slice(0,WALL_CAP);
+  f.className='wface '+kind+(quiet?' q':'')+(bgOf('home').motion==='never'?' still':'');
+  const lim=kind==='moons'?`<div class="wmoons">${wallMoons(ps)}</div>`:kind==='curtains'?wallCurtains(ps):kind==='orbits'?wallOrbits(ps):wallLine(ps);
+  const key=kind+'|'+lim;if(key!==WALL.key){WALL.key=key;$('wlim').innerHTML=ps.length?lim:''}
+  wallClock();if(!WALL.tick)WALL.tick=setInterval(()=>{if(inWall())wallClock();else{clearInterval(WALL.tick);WALL.tick=0}},10000);
+}
+function wallClock(){
+  const d=new Date(),t=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),m=t.match(/^(\d+)\D(\d+)\s*(.*)$/)||[t,t,'',''];
+  const done=A.sessions.filter(s=>!s.outside&&!s.term&&s.status==='idle'&&s.mts>=dayStart()).length;
+  const h=`<div class="tm">${esc(m[1])}${m[2]?`<span class="c">:</span>${esc(m[2])}`:''}${m[3]?`<small>${esc(m[3])}</small>`:''}</div><div class="dt">${esc(d.toLocaleDateString([],{weekday:'long'}))} · ${esc(d.toLocaleDateString([],{day:'numeric',month:'long'}))}</div><div class="ln1"><i class="ok"></i>All quiet · ${done?`${done} done today`:'nothing yet today'}</div>`;
+  if($('wq').innerHTML!==h)$('wq').innerHTML=h;
+}
+// hover a moon, a curtain, a planet or a name for its numbers
+function wallPop(el,ev){
+  let p=$('wlpop');if(!el){if(p)p.hidden=true;return}
+  const pr=profile(el.dataset.lp);if(!pr)return wallPop();
+  if(!p){p=Object.assign(document.createElement('div'),{id:'wlpop',className:'wlpop'});document.body.append(p)}
+  const r5=pr.r5?clock(pr.r5*1000):'',used=pr.h5,tw=pr.r5?Math.min(100,Math.max(0,100-(pr.r5-Date.now()/1000)/180)):null;
+  p.innerHTML=`<b>${esc(pr.name)}</b>${lpOut(pr)?`<div class="r"><span>${(pr.d7||0)>=100?'Week':'5-hour'} limit reached</span><span>back ${esc(lpBack(pr))}</span></div>`:used==null?'<div class="r"><span>Not read yet</span></div>'
+    :`<div class="r"><span>5-hour</span><span>${used}%${r5?' · resets '+esc(r5):''}</span></div><div class="bar2"><i style="width:${used}%"></i>${tw!=null?`<u style="left:${tw.toFixed(0)}%"></u>`:''}</div>`}${pr.d7!=null?`<div class="r"><span>Week</span><span>${pr.d7}%</span></div>`:''}`;
+  p.hidden=false;const pw=p.offsetWidth,ph=p.offsetHeight;
+  let x=ev.clientX+14,y=ev.clientY+18;if(x+pw>innerWidth-12)x=ev.clientX-14-pw;if(y+ph>innerHeight-12)y=ev.clientY-18-ph;
+  p.style.left=Math.max(12,x)+'px';p.style.top=Math.max(12,y)+'px';
+}
+addEventListener('pointermove',e=>{
+  if(!inWall()||e.pointerType==='touch'||$('wface').hidden)return;
+  if(e.target.closest?.('#now,.pop,.modal,#skypop'))return wallPop();
+  let hit=null;for(const el of $('wlim').querySelectorAll('[data-lp]')){const r=(el.querySelector('.pl')||el).getBoundingClientRect(),m=el.querySelector('.pl')?12:2;
+    if(e.clientX>=r.left-m&&e.clientX<=r.right+m&&e.clientY>=r.top-m&&e.clientY<=r.bottom+m){hit=el;break}}
+  wallPop(hit,e);
+},{passive:true});
 
 /* ---------- everything together ---------- */
 // Under the title, always starting at the same place: where the work is happening. The worktree when there is one,

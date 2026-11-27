@@ -3341,6 +3341,50 @@ ui('window: Home\'s Wall is its background and a dock of what is live, answered 
   for (const id of [perm, q, two, deny]) await svc.call(`sessions/${id}/done`, {});
 });
 
+ui('window: a quiet Wall shows the time and what finished last, the profiles\' limits live in its scene, and a session in a terminal is watched from the dock', async () => {
+  const was = fs.readFileSync(sb.agents, 'utf8'), nudge = () => svc.call(`sessions/${sb.sessions.alphaLive}/send`, { text: 'nudge a refresh' });   // a finished turn re-reads the pool
+  const show = async bg => { await page.evaluate(bg => { localStorage.setItem('ww.bg.home', bg); localStorage.setItem('ww.home', 'wall'); }, bg);
+    await page.click('#dseg [data-hv="pick"]'); await page.click('#dseg [data-hv="wall"]'); await page.waitForSelector('#main.wall'); };
+  try {
+    await page.click('#newBtn'); await page.waitForSelector('#dseg');
+    await show('constel');
+    for (const s of (await state()).sessions) if (s.status === 'wait' || s.status === 'work') await svc.call(`sessions/${s.id}/done`, {});   // what earlier tests left waiting would fill the dock
+    // a session busy in a terminal gets a card to watch, with nothing to press
+    setLive(sb, [{ pid: 1, cwd: sb.projects.alpha, kind: 'interactive', sessionId: sb.sessions.alphaOutside, name: 'outside', status: 'busy' }]); await nudge(); await idle(sb.sessions.alphaLive);
+    const term = `#now .nc.wo[data-nid="${sb.sessions.alphaOutside}"]`;
+    await page.waitForSelector(`${term} .stp:has-text("In a terminal")`, { timeout: 15000 });
+    assert.equal(await page.locator(`${term} button`).count(), 0);
+    await page.waitForSelector('#wface:not(.q)');                                            // something runs: no clock
+    // all quiet: the time, the day, and at the dock's place what finished last and New
+    setLive(sb, []); await nudge(); await idle(sb.sessions.alphaLive);
+    await page.waitForSelector('#wface.q #wq .ln1:has-text("All quiet")', { timeout: 15000 });
+    assert.match(await page.locator('#wq .tm').innerText(), /\d/);
+    await until(async () => { const last = (await state()).sessions.filter(s => !s.done && s.status === 'idle' && !s.outside && !s.term).sort((a, b) => b.mts - a.mts)[0];
+      return await page.locator(`#now .wgh .gp[data-nid="${last.id}"]:has-text("Last done")`).count(); }, 'what finished last, at the dock\'s place');
+    await page.waitForSelector('#now .wgh [data-nnew]');
+    // a moon per profile: the one at its limit is dark and says when it is back; hover reads it
+    assert.equal(await page.locator('#wlim .wmo').count(), (await state()).profiles.length);
+    await page.waitForSelector('#wlim .wmo.out[data-lp="full"] em:has-text("back")');
+    const m = await page.locator('#wlim .wmo[data-lp="live"] svg').boundingBox();
+    await page.mouse.move(m.x + m.width / 2, m.y + m.height / 2);
+    await page.waitForSelector('#wlpop:has-text("live"):has-text("5-hour"):has-text("34%")');
+    await page.mouse.move(700, 450); await page.waitForSelector('#wlpop', { state: 'hidden' });
+    // a curtain of light on Aurora, a planet around the clock on Orbits, one line on the calm ones
+    await show('aurora'); await page.waitForSelector('#wlim .wcu.out[data-lp="full"]'); assert.equal(await page.locator('#wlim .wcu').count(), 3);
+    await show('orbits'); await page.waitForSelector('#wlim .wor g.out[data-lp="full"] text.bk'); assert.equal(await page.locator('#wlim .wor g[data-lp]').count(), 3);
+    await show('paper'); await page.waitForSelector('#wlim .wll:has-text("live 66% left")');
+    // the limits are the Wall's alone
+    await page.click('#dseg [data-hv="pick"]'); await page.waitForSelector('#wface', { state: 'hidden' });
+    // New leaves the Wall for a new session
+    await show('constel'); await page.click('#now [data-nnew]');
+    await page.waitForSelector('#dseg [data-hv="pick"].on'); await page.waitForSelector('#main:not(.wall)');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'input');
+  } finally {
+    fs.writeFileSync(sb.agents, was);
+    await page.evaluate(() => { for (const k of ['ww.bg.home', 'ww.home']) localStorage.removeItem(k); });
+  }
+});
+
 test('sandbox containment', () => {
   assert.deepEqual(assertContained(sb), []);
   assert.ok(sb.home.startsWith(fs.realpathSync(os.tmpdir())));

@@ -1693,7 +1693,12 @@
   #skypop .tt b{font-size:12.5px}
   #skypop.pin{box-shadow:0 0 0 1.5px var(--warn),0 10px 30px rgba(0,0,0,.4)}
   /* the Wall: Home's background and the dock, nothing else; the dock sits low, over the sky */
-  #main.wall .dash,#main.wall .box,#main.wall .support{display:none}
+  #main.wall .dash,#main.wall:not(.wc) .box,#main.wall:not(.wc) .support{display:none}
+  /* New on the Wall: the message box slides up from the bottom, over the sky */
+  #main.wall.wc .box,#main.wall.wc .support{animation:wcin .34s cubic-bezier(.2,.8,.2,1) both}
+  #main.wall.wc .support{animation-delay:.04s}
+  @keyframes wcin{from{opacity:0;transform:translateY(48px)}}
+  @media (prefers-reduced-motion:reduce){#main.wall.wc .box,#main.wall.wc .support{animation:none}}
   #main.wall .composer{padding-bottom:22px}
   /* the Wall when all is quiet, and the limits in its scene */
   .wface{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden;container-type:size}

@@ -222,7 +222,7 @@ function drawList(){
 }
 $('list').onclick=e=>{
   const g=e.target.closest('[data-grp]'),m=e.target.closest('[data-more]'),b=e.target.closest('[data-id]');
-  if(g&&e.target.closest('[data-gnew]')){e.stopPropagation();hideTip();newSession(g.dataset.grp)}
+  if(g&&e.target.closest('[data-gnew]')){e.stopPropagation();hideTip();startNew(g.dataset.grp)}
   else if(g){V.shut[g.dataset.grp]=!V.shut[g.dataset.grp];localStorage.setItem('ww.shut',JSON.stringify(V.shut));renderList()}
   else if(m){V.more[m.dataset.more]=true;renderList()}
   else if(b&&!b.classList.contains('ren')){
@@ -278,7 +278,7 @@ $('dim').onclick=async e=>{
   try{await api(`sessions/${id}/delete`,{});A.sessions=A.sessions.filter(s=>s.id!==id);$('dim').hidden=true;leave(id)}
   catch(err){$('dim').hidden=true;oops(err.message)}
 };
-$('newBtn').onclick=()=>inWall()?wallLeave():newSession();   // on the Wall, New is a new session, not the Wall again
+$('newBtn').onclick=()=>startNew();   // on the Wall, the message box slides up over it
 
 // The profile last used in a project: the one that ran its most recent session, if that profile is still here.
 const lastProfileIn=cwd=>{const p=A.sessions.filter(s=>(s.root||s.cwd)===cwd&&s.profile).sort((a,b)=>b.mts-a.mts)[0]?.profile;return A.profiles.some(x=>x.name===p)?p:null};
@@ -2533,8 +2533,13 @@ const HVIEWS=[['pick','Pick up','Where each piece of work was left'],['projects'
 const wallOn=()=>localStorage.getItem('ww.wall')!=='off'&&!PHONE;
 const homeViews=()=>HVIEWS.filter(v=>v[0]!=='wall'||wallOn());
 const inWall=()=>isHome()&&H.view==='wall'&&wallOn();
-// leaving the Wall to start something: Pick up, with the composer ready
-function wallLeave(){H.view='pick';localStorage.setItem('ww.home','pick');renderHome();$('input').focus()}
+// Starting something from the Wall stays on the Wall: the message box slides up from the bottom, over the sky.
+// Esc, or a click on the open sky, puts it away again (what you wrote is kept as the new session's draft).
+function startNew(project){newSession(project);if(inWall()){H.wc=true;renderHome();$('input').focus()}}
+function wallComposeOff(){if(!H.wc)return;H.wc=false;keepDraft();$('input').blur();renderHome()}
+document.addEventListener('keydown',e=>{if(e.key!=='Escape'||!H.wc||!inWall()||document.querySelector('.pop:not([hidden])')||!$('slash').hidden||!$('sdim').hidden||!$('dim').hidden||(R&&!R.done))return;
+  e.stopPropagation();wallComposeOff()},true);
+$('main').addEventListener('pointerdown',e=>{if(H.wc&&inWall()&&!e.target.closest('.composer,button,a,input,#skypop,.pop,.star,[data-nid],[data-tip]'))wallComposeOff()});
 // the Wall's clock: while all is quiet (the default), always, or never
 const wallClk=()=>({always:'always',never:'never'})[localStorage.getItem('ww.wallclock')]||'quiet';
 // What Home showed last time, so it opens with that instead of empty boxes; fresh readings replace it in place.
@@ -2677,7 +2682,7 @@ function timeView(){
 }
 function renderHome(){
   const on=isHome(),d=$('dash');
-  d.hidden=!on;$('dseg').hidden=$('hset').hidden=!on;$('main').classList.toggle('home',on);$('main').classList.toggle('wall',on&&H.view==='wall'&&wallOn());renderHomeBg();
+  d.hidden=!on;$('dseg').hidden=$('hset').hidden=!on;$('main').classList.toggle('home',on);$('main').classList.toggle('wall',on&&H.view==='wall'&&wallOn());if(!inWall())H.wc=false;$('main').classList.toggle('wc',!!H.wc);renderHomeBg();
   renderNow();skyPaint();
   if(!on)return;
   if(H.view==='wall'&&!wallOn())H.view='pick';
@@ -2901,7 +2906,7 @@ function renderNow(){
 }
 async function nowClick(e){
   if(e.target.closest('[data-nmore]')){NOW.all=!NOW.all;renderNow();return}
-  if(e.target.closest('[data-nnew]')){wallLeave();return}
+  if(e.target.closest('[data-nnew]')){startNew();return}
   const c=e.target.closest('[data-nid]');if(!c)return;
   const s=A.sessions.find(x=>x.id===c.dataset.nid);if(!s)return;
   const b=e.target.closest('[data-nact],[data-nopt]');

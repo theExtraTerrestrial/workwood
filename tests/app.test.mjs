@@ -3392,10 +3392,16 @@ ui('window: a quiet Wall shows the time and what finished last, the profiles\' l
     await page.evaluate(() => localStorage.setItem('ww.wallclock', 'never')); await show('constel');
     await page.waitForSelector('#wface.noclk'); assert.equal(await page.locator('#wq .tm').count(), 0);
     await page.evaluate(() => localStorage.removeItem('ww.wallclock')); await show('constel');
-    // the sidebar's New, pressed on the Wall, starts a session rather than showing the Wall again
-    await page.click('#newBtn'); await page.waitForSelector('#dseg [data-hv="pick"].on'); await page.waitForSelector('#main:not(.wall)');
+    // the sidebar's New, pressed on the Wall, stays on the Wall: the message box slides up over it; Esc puts it away
+    assert.equal(await page.locator('#box').isVisible(), false);
+    await page.click('#newBtn'); await page.waitForSelector('#main.wall.wc #box:visible');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'input');
-    await show('constel');
+    await page.keyboard.press('Escape'); await page.waitForSelector('#main.wall:not(.wc)'); await page.waitForSelector('#box', { state: 'hidden' });
+    // so does a project's + in the sidebar, with that project chosen
+    const grp = page.locator('#list [data-grp]').first(), gp = await grp.getAttribute('data-grp');
+    await grp.hover(); await grp.locator('[data-gnew]').click(); await page.waitForSelector('#main.wall.wc #box:visible');
+    assert.equal(await page.evaluate(() => V.project), gp);
+    await page.mouse.click(700, 200); await page.waitForSelector('#main.wall:not(.wc)');
     // all quiet: the time, the day, and at the dock's place what finished last and New
     setLive(sb, []); await nudge(); await idle(sb.sessions.alphaLive);
     await page.waitForSelector('#wface.q #wq .ln1:has-text("All quiet")', { timeout: 15000 });
@@ -3416,9 +3422,9 @@ ui('window: a quiet Wall shows the time and what finished last, the profiles\' l
     await show('paper'); await page.waitForSelector('#wlim .wll:has-text("live 66% left")');
     // the limits are the Wall's alone
     await page.click('#dseg [data-hv="pick"]'); await page.waitForSelector('#wface', { state: 'hidden' });
-    // New leaves the Wall for a new session
+    // the dock's New, too, brings the message box up over the Wall
     await show('constel'); await page.click('#now [data-nnew]');
-    await page.waitForSelector('#dseg [data-hv="pick"].on'); await page.waitForSelector('#main:not(.wall)');
+    await page.waitForSelector('#main.wall.wc #box:visible');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'input');
   } finally {
     fs.writeFileSync(sb.agents, was);

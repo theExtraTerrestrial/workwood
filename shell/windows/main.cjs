@@ -135,15 +135,33 @@ async function open() {
     r.on('error', e => { relayErr = e.code === 'EADDRINUSE' ? `Port ${port} is taken by another program on Windows.` : e.message; if (relay === r) { relay = null; relayAt = 'failed'; } });
     r.listen(port, '0.0.0.0');
   }
+  // A server in WSL opened from the phone gets a port of its own (a lane, see service/links.mjs), passed through the same way.
+  const lanes = new Map();   // outer port -> { server, inner, ok }
+  function syncLanes(want) {
+    const keep = new Map((want || []).filter(x => Array.isArray(x) && x.every(Number.isInteger)).map(([o, i]) => [o, i]));
+    for (const [o, l] of lanes) if (keep.get(o) !== l.inner) { try { l.server.close(); } catch {} lanes.delete(o); }
+    for (const [o, i] of keep) if (!lanes.has(o)) {
+      const l = { inner: i, ok: false };
+      l.server = net.createServer(c => {
+        const s = net.connect(i, '127.0.0.1'), end = () => { c.destroy(); s.destroy(); };
+        c.pipe(s).pipe(c); for (const x of [c, s]) { x.on('error', end); x.on('close', end); }
+      });
+      l.server.on('listening', () => { l.ok = true; });
+      l.server.on('error', () => { l.failed = true; });
+      l.server.listen(o, '0.0.0.0');
+      lanes.set(o, l);
+    }
+  }
   setInterval(async () => {
     if (quitting || !started.wsl) return;
     try {
       const u = new URL(await started.wsl);
       const r = await fetch(`${u.origin}/api/phone/relay`, { method: 'POST', signal: AbortSignal.timeout(3000), headers: { 'x-workwood-token': u.searchParams.get('token'), 'content-type': 'application/json' },
-        body: JSON.stringify({ ips: lanIps(), name: os.hostname(), listening: !!relay?.ok, error: relayErr }) });
+        body: JSON.stringify({ ips: lanIps(), name: os.hostname(), listening: !!relay?.ok, error: relayErr, lanes: [...lanes].filter(([, l]) => l.ok).map(([o]) => o) }) });
       const want = await r.json();
       if (want.on && relayAt !== want.port + '>' + want.inner && relayAt !== 'failed') openRelay(want.port, want.inner);
       if (!want.on && relayAt) { closeRelay(); relayErr = null; }
+      syncLanes(want.on ? want.lanes : []);
     } catch {}
   }, 3000);
   // Set up from WSL, sessions run there unless you chose Windows before.

@@ -273,7 +273,7 @@ const placeCache = new Map();
 export async function placeOf(cwd) {
   const had = placeCache.get(cwd);
   if (had && Date.now() - had.at < 4000) return had.v;
-  const v = { root: cwd, worktree: null, branch: null, top: cwd };
+  const v = { root: cwd, worktree: null, branch: null, top: cwd, repo: null };
   try {
     let dir = cwd, dot = null;
     for (let i = 0; i < 8 && !dot; i++) {
@@ -292,6 +292,13 @@ export async function placeOf(cwd) {
       }
       const head = (await fs.readFile(path.join(gitdir, 'HEAD'), 'utf8')).trim(), b = /^ref:\s*refs\/heads\/(.+)$/.exec(head);
       v.branch = b ? b[1] : head.slice(0, 7);
+      // The GitHub repository it pushes to (origin), as owner/name: a reply's link into it needs no repository named.
+      try {
+        const conf = await fs.readFile(path.join(v.worktree ? path.join(v.root, '.git') : gitdir, 'config'), 'utf8');
+        const o = /\[remote "origin"\][^[]*?\burl\s*=\s*(\S+)/.exec(conf)?.[1] || '';
+        const r = /github\.com[:/]([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(o);
+        if (r) v.repo = r[1] + '/' + r[2];
+      } catch {}
     }
   } catch {}
   placeCache.set(cwd, { at: Date.now(), v });

@@ -55,7 +55,7 @@ test('the phone is off until turned on, and nothing listens', async () => {
   const st = (await svc.call('phone')).body;
   assert.equal(st.on, false); assert.equal(st.url, null); assert.deepEqual(st.phones, []);
   await assert.rejects(req('/', { secure: false }));
-  assert.deepEqual((await svc.call('phone/relay', { ips: [IP] })).body, { on: false, port: PORT, inner: INNER });
+  assert.deepEqual((await svc.call('phone/relay', { ips: [IP] })).body, { on: false, port: PORT, inner: INNER, lanes: [] });
 });
 
 test('turned on: a pairing code for the address the Windows window reports, and a certificate only for home addresses', async () => {
@@ -292,6 +292,47 @@ test('revoking a phone ends its key at once; unpairing from the phone does the s
   assert.equal((await api(other.key, 'phone/unpair', {})).status, 200);
   assert.equal((await api(other.key, 'phone/me')).status, 401);
   assert.equal((await svc.call('phone/revoke', { id: 'nope' })).status, 404);
+});
+
+test('a server on the PC opens from the phone through a lane of its own: only for a paired phone, as if from localhost, websockets too', async () => {
+  const seen = [];
+  const dev = http.createServer((q, s) => { seen.push({ url: q.url, host: q.headers.host, cookie: q.headers.cookie || '' });
+    if (q.url === '/go') { s.writeHead(302, { location: `http://localhost:${dev.address().port}/there` }); return s.end(); }
+    s.end('dev page ' + q.url); });
+  dev.on('upgrade', (q, sock) => { sock.write('HTTP/1.1 101 Switching Protocols\r\nupgrade: websocket\r\nconnection: Upgrade\r\n\r\n'); sock.on('data', d => sock.write('echo ' + d)); });
+  await new Promise(r => dev.listen(0, '127.0.0.1', r));
+  const devPort = dev.address().port, LANE = PORT + 10, LANE_IN = PORT + 40;
+  try {
+    const { key } = await pair(), cookie = `ww=${key}; theirs=1`;
+    assert.equal((await req(`/port/${devPort}/`)).status, 401);   // no key, no lane
+    assert.equal((await req(`/port/${INNER}/`, { headers: { cookie } })).status, 403);   // nor Workwood's own ports
+    // Inside WSL the Windows window opens the lane on Windows; the link waits for it.
+    const opened = req(`/port/${devPort}/app?x=1`, { headers: { cookie } });
+    await until(async () => (await svc.call('phone/relay', { ips: [IP, '172.20.0.9', '8.8.8.8'], name: 'TESTPC', listening: true })).body.lanes?.length, 'the lane to be asked for');
+    assert.deepEqual((await svc.call('phone/relay', { ips: [IP, '172.20.0.9', '8.8.8.8'], name: 'TESTPC', listening: true, lanes: [LANE] })).body.lanes, [[LANE, LANE_IN]]);
+    const r = await opened;
+    assert.equal(r.status, 302); assert.equal(r.headers.location, `https://${IP}:${LANE}/app?x=1`);
+    const lane = (p, headers = {}) => new Promise((ok, no) => {
+      const q = https.request({ host: '127.0.0.1', port: LANE_IN, path: p, headers: { host: `${IP}:${LANE}`, ...headers }, ca: fs.readFileSync(path.join(KEYDIR(), 'ca.crt')), checkServerIdentity: (h, c) => tls.checkServerIdentity(IP, c), agent: false },
+        res => { const c = []; res.on('data', d => c.push(d)); res.on('end', () => ok({ status: res.statusCode, headers: res.headers, body: Buffer.concat(c).toString() })); });
+      q.on('error', no); q.end();
+    });
+    assert.equal((await lane('/app?x=1')).status, 401);
+    const page = await lane('/app?x=1', { cookie });
+    assert.equal(page.body, 'dev page /app?x=1');
+    assert.deepEqual(seen.at(-1), { url: '/app?x=1', host: `localhost:${devPort}`, cookie: 'theirs=1' });   // the phone's key stays with Workwood
+    assert.equal((await lane('/go', { cookie })).headers.location, `https://${IP}:${LANE}/there`);
+    const ws = await new Promise((ok, no) => {
+      const sock = tls.connect({ host: '127.0.0.1', port: LANE_IN, ca: fs.readFileSync(path.join(KEYDIR(), 'ca.crt')), checkServerIdentity: (h, c) => tls.checkServerIdentity(IP, c) }, () => {
+        sock.write(`GET /hmr HTTP/1.1\r\nhost: ${IP}:${LANE}\r\nupgrade: websocket\r\nconnection: Upgrade\r\ncookie: ${cookie}\r\n\r\n`);
+        let buf = ''; sock.on('data', d => { buf += d; if (/\r\n\r\n/.test(buf) && !buf.includes('echo')) sock.write('hi'); if (buf.includes('echo hi')) { sock.destroy(); ok(buf); } });
+      });
+      sock.on('error', no);
+    });
+    assert.match(ws, /^HTTP\/1\.1 101/);
+    const again = await req(`/port/${devPort}/`, { headers: { cookie } });   // the same server keeps its lane
+    assert.equal(again.headers.location, `https://${IP}:${LANE}/`);
+  } finally { dev.close(); }
 });
 
 test('turned off: the port closes and keys stop working', async () => {

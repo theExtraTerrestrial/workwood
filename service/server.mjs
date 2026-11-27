@@ -26,6 +26,7 @@ import * as rw from './rewind.mjs';
 import * as phone from './phone.mjs';
 import * as pc from './presence.mjs';
 import * as sv from './servers.mjs';
+import * as links from './links.mjs';
 import { createRequire } from 'node:module';
 
 const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui');
@@ -464,6 +465,12 @@ async function api(req, res, url, who = null) {
     if (who) phoneClients.set(res, who.id);
     return;
   }
+  if (req.method === 'GET' && parts[0] === 'gh') {   // what pull requests and issues a reply links to are now
+    return send(res, 200, await links.ghStates(url.searchParams.getAll('u'), url.searchParams.get('fresh') === '1'));
+  }
+  if (req.method === 'GET' && parts[0] === 'ports') {   // whether the ports a reply names answer on this PC
+    return send(res, 200, await links.portsLive(String(url.searchParams.get('p') || '').split(',').map(Number)));
+  }
   if (req.method === 'GET' && parts[0] === 'status') {    // for the Windows window: is anything here working or waiting, while you look at the other side?
     const all = state.sessions.map(decorate).filter(s => !s.outside && !s.term);
     return send(res, 200, { wait: all.filter(s => s.status === 'wait').length, work: all.filter(s => s.status === 'work').length, bg: all.reduce((n, s) => n + (s.bg || 0), 0) });
@@ -577,7 +584,7 @@ async function api(req, res, url, who = null) {
     if (!s) return send(res, 404, { error: 'No such session.' });
     // Where it is working, read first: nothing may wait between taking the turn's items and reporting its state.
     const cwd = s.file ? await src.lastCwd(s.file, s.cwd) : s.cwd, pl = await src.placeOf(cwd), home = await src.placeOf(s.cwd);
-    const place = { cwd, top: pl.top, project: path.basename(home.root), worktree: pl.worktree || (pl.root !== home.root ? path.basename(pl.root) : null), branch: pl.branch };
+    const place = { cwd, top: pl.top, project: path.basename(home.root), worktree: pl.worktree || (pl.root !== home.root ? path.basename(pl.root) : null), branch: pl.branch, repo: pl.repo || home.repo || null };
     sv.watch(pl.top);
     const t = s.file ? await readTranscript(s.file, 400, s.cwd) : { items: [], context: null, total: 0, work: [], model: null, effort: null };
     const run = runs.get(s.id), seq = evSeq;   // what has been sent so far; the items and state below are as of then
@@ -1042,6 +1049,12 @@ const viewing = new Map();        // phone id -> { sessionId, at }: what it show
 const phoneClients = new Map();   // event stream -> phone id
 const phoneState = { error: null, setupSeen: 0, cert: null };
 let phoneNet = null, phoneTls = null, phoneSetup = null;
+// Servers on this PC, opened from a paired phone (see links.mjs). Their ports follow the phone's; inside WSL the Windows
+// window opens them on the home network as it does the phone's own.
+const laneBase = phone.PORT + 10, laneIn = phone.IN_WSL ? phone.PORT + 40 : laneBase;
+const lanes = links.makeLanes({ base: laneBase, innerBase: laneIn, host: phone.HOST,
+  allowed: req => okPhoneHost(hostOf(req)) && !!phone.phoneOf(cookieOf(req, 'ww'), hostOf(req)) });
+relay.lanes = [];
 const phoneSockets = new Set();
 const phoneIps = () => {
   const rank = ip => /^192\.168\./.test(ip) ? 0 : /^10\./.test(ip) ? 1 : /^172\./.test(ip) ? 2 : 3;
@@ -1056,6 +1069,7 @@ async function phoneUp() {
   if (phone.IN_WSL && !relay.at) return;
   try {
     const c = phoneState.cert = await phone.certFor(phoneIps(), phoneName());
+    lanes.setCert(c);
     if (phoneTls) return phoneTls.setSecureContext({ cert: c.cert, key: c.key });
     phoneTls = https.createServer({ cert: c.cert, key: c.key }, phoneHandler);
     phoneSetup = http.createServer(setupHandler);
@@ -1072,8 +1086,17 @@ async function phoneUp() {
     console.error('[workwood] phone:', phoneState.error);
   }
 }
+// A lane is ready once it listens here and, inside WSL, once the Windows window says it opened it there.
+const laneWaits = new Set();
+async function laneUp(lane) {
+  const ready = () => lane.ok && (!phone.IN_WSL || relay.lanes.includes(lane.outer));
+  const until = performance.now() + 8000;
+  while (!ready() && !lane.error && performance.now() < until) await new Promise(r => { const w = () => { laneWaits.delete(w); r(); }; laneWaits.add(w); setTimeout(w, 200); });
+  return ready();
+}
 function phoneDown() {
   try { phoneNet?.close(); } catch {}
+  lanes.closeAll();
   for (const sock of phoneSockets) sock.destroy();   // open connections too, kept alive by the phone's browser
   for (const res of phoneClients.keys()) try { res.end(); } catch {}
   phoneNet = phoneTls = phoneSetup = null;
@@ -1100,10 +1123,12 @@ async function phoneApi(req, res, parts, who) {
     if (req.method === 'POST') {
       const ips = Array.isArray(b.ips) ? b.ips.filter(x => typeof x === 'string' && phone.privateIp(x)).slice(0, 8) : [];
       const changed = ips.join() !== relay.ips.join() || (b.name && b.name !== relay.name);
-      Object.assign(relay, { ips, name: typeof b.name === 'string' ? b.name.slice(0, 63) : relay.name, listening: b.listening === true, error: b.error ? String(b.error).slice(0, 200) : null, at: Date.now() });
+      Object.assign(relay, { ips, name: typeof b.name === 'string' ? b.name.slice(0, 63) : relay.name, listening: b.listening === true, error: b.error ? String(b.error).slice(0, 200) : null, at: Date.now(),
+        lanes: Array.isArray(b.lanes) ? b.lanes.filter(Number.isInteger) : [] });
+      for (const w of laneWaits) w();
       if (changed && phone.isOn()) phoneUp();
     }
-    return send(res, 200, { on: phone.isOn(), port: phone.PORT, inner: phone.INNER_PORT });
+    return send(res, 200, { on: phone.isOn(), port: phone.PORT, inner: phone.INNER_PORT, lanes: phone.isOn() ? lanes.list() : [] });
   }
   if (parts[1] === 'on' && req.method === 'POST') { phone.setOn(b.on === true); await phoneUp(); }
   if (parts[1] === 'revoke' && req.method === 'POST') { if (!phone.revoke(String(b.id || ''))) return send(res, 404, { error: 'No such phone.' }); endPhone(String(b.id)); }
@@ -1167,6 +1192,18 @@ async function phoneHandler(req, res) {
       return await api(req, res, url, who);
     }
     if (p.startsWith('/preview/')) return servePreview(req, res, p.slice('/preview'.length), true);
+    const pm = /^\/port\/(\d{1,5})(\/.*)?$/.exec(p);
+    if (pm) {   // a server on this PC that a reply linked to: through a lane of its own (see links.mjs)
+      if (!phone.phoneOf(cookieOf(req, 'ww'), hostOf(req))) return page(res, 401, 'This browser is not paired', 'Open Workwood in this browser once, then open the link again.');
+      const dev = Number(pm[1]);
+      // Not Workwood's own ports: the app on the PC would give the phone more than the phone may do.
+      const own = [server.address()?.port, previews.address()?.port, phone.PORT, phone.INNER_PORT];
+      if (!(dev > 0 && dev < 65536) || own.includes(dev) || (dev >= laneBase && dev < laneBase + links.LANES) || (dev >= laneIn && dev < laneIn + links.LANES)) return page(res, 403, `:${dev} is Workwood's own`, 'Only servers you run can be opened from the phone.');
+      const lane = lanes.open(dev);
+      if (!await laneUp(lane)) return page(res, 503, `Could not open :${dev}`, lane.error || (phone.IN_WSL ? 'Restart Workwood on the PC, so its window can open the port on your home network.' : 'Try again in a moment.'));
+      res.writeHead(302, { location: `https://${hostOf(req).includes(':') ? `[${hostOf(req)}]` : hostOf(req)}:${lane.outer}${pm[2] || '/'}${url.search}`, 'cache-control': 'no-store' });
+      return res.end();
+    }
     if (p === '/') {
       let key = cookieOf(req, 'ww'), who = phone.phoneOf(key, hostOf(req));
       const pair = url.searchParams.get('pair');

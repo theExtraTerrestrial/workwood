@@ -176,6 +176,23 @@ test('reads a conversation from the shared history', async () => {
   assert.equal(s.context.used, 42000);
 });
 
+test('links: pull requests and issues say what they are now, asked of gh once in a while; ports say whether they answer; a session lists the pull requests its answers linked', async () => {
+  const from = readLog(sb).length, pr = n => `https://github.com/acme/shop/pull/${n}`, issue = 'https://github.com/acme/shop/issues/9';
+  const q = (...u) => 'gh?' + u.map(x => 'u=' + encodeURIComponent(x)).join('&');
+  assert.deepEqual((await svc.call(q(pr(214), pr(7), pr(8), issue, 'https://example.com/pull/1'))).body, {
+    [pr(214)]: { kind: 'pr', state: 'open', title: 'Number 214' }, [pr(7)]: { kind: 'pr', state: 'merged', title: 'Merged one' },
+    [pr(8)]: { kind: 'pr', state: 'draft', title: 'Draft one' }, [issue]: { kind: 'issue', state: 'closed', title: 'Closed one', reason: 'not planned' } });
+  await svc.call(q(pr(214)));   // from the cache
+  const asked = () => readLog(sb).slice(from).filter(l => l.startsWith('gh '));
+  assert.deepEqual(asked().sort(), ['gh api repos/acme/shop/issues/9', 'gh api repos/acme/shop/pulls/214', 'gh api repos/acme/shop/pulls/7', 'gh api repos/acme/shop/pulls/8']);
+  const srv = http.createServer().listen(0, '127.0.0.1'); await new Promise(r => srv.once('listening', r));
+  const free = http.createServer().listen(0, '127.0.0.1'); await new Promise(r => free.once('listening', r)); const gone = free.address().port; free.close();
+  try { assert.deepEqual((await svc.call(`ports?p=${srv.address().port},${gone}`)).body, { [srv.address().port]: true, [gone]: false }); } finally { srv.close(); }
+  const id = await newSession(`Opened ${pr(5)}, then ${pr(6)}; ${pr(5)} again is the newest.`);
+  const s = await idle(id);
+  assert.deepEqual(s.prs, [pr(6), pr(5)]);
+});
+
 test('starts a session on the global profile without touching Claudius', async () => {
   const before = readLog(sb).length;
   const id = await newSession('plain hello');
@@ -1080,8 +1097,8 @@ test('worktrees: a session in a worktree belongs to its project, and reports the
   await idle(await newSession('nudge a refresh'));
   const s = await until(() => listed(id), 'the worktree session', 15000);
   assert.deepEqual([s.project, s.root], ['beta', sb.projects.beta]);
-  assert.deepEqual((await session(id)).place, { cwd: wt, top: wt, project: 'beta', worktree: 'beta-login-fix', branch: 'login-fix' });
-  assert.deepEqual((await session(sb.sessions.betaOther)).place, { cwd: sb.projects.beta, top: sb.projects.beta, project: 'beta', worktree: null, branch: 'main' });
+  assert.deepEqual((await session(id)).place, { cwd: wt, top: wt, project: 'beta', worktree: 'beta-login-fix', branch: 'login-fix', repo: null });
+  assert.deepEqual((await session(sb.sessions.betaOther)).place, { cwd: sb.projects.beta, top: sb.projects.beta, project: 'beta', worktree: null, branch: 'main', repo: null });
 
   // VS Code opens where the work is: the worktree's own folder, not the project it was made from
   assert.equal((await svc.call('open-editor', { sessionId: id })).status, 200);
@@ -2850,6 +2867,35 @@ ui('window: files and folders an answer names are links to VS Code once they tur
     await page.click('.ai [data-epath="src/main.js:7"]');
     await until(() => readLog(sb).slice(from).includes(`code ${dir} -g ${path.join(dir, 'src', 'main.js')}:7`), 'VS Code at the line');
   } finally { fs.rmSync(path.join(dir, 'src'), { recursive: true, force: true }); }
+});
+
+ui('window: links in an answer open in your browser: a pull request or issue as a chip with its state, a port as the tray\'s chip, others as links; hover or right-click to copy; the newest pull request sits beside the title', async () => {
+  const srv = http.createServer().listen(0, '127.0.0.1'); await new Promise(r => srv.once('listening', r)); const port = srv.address().port;
+  try {
+    await startNew(`Opened [the fix](https://github.com/acme/shop/pull/7), then https://github.com/acme/shop/pull/8. Closes https://github.com/acme/shop/issues/9. Up at http://localhost:${port}/admin and \`localhost:1\`; see (https://vite.dev/guide/env?a=1&b=2).`);
+    await page.waitForSelector('.ai a.gh.closed');
+    assert.deepEqual(await page.$$eval('.ai a.gh', es => es.map(e => [e.dataset.gh, ['open', 'draft', 'merged', 'closed'].find(c => e.classList.contains(c)), e.textContent.trim(), e.target])), [
+      ['https://github.com/acme/shop/pull/7', 'merged', 'acme/shop#7', '_blank'], ['https://github.com/acme/shop/pull/8', 'draft', 'acme/shop#8', '_blank'], ['https://github.com/acme/shop/issues/9', 'closed', 'acme/shop#9', '_blank']]);
+    await page.waitForSelector(`.ai a.prt[data-port="${port}"].live`); await page.waitForSelector('.ai a.prt[data-port="1"].n');
+    assert.equal(await page.getAttribute(`.ai a.prt[data-port="${port}"]`, 'href'), `http://localhost:${port}/admin`);
+    assert.deepEqual(await page.$$eval('.ai a.wl', es => es.map(e => [e.getAttribute('href'), e.innerText.trim(), e.target])), [['https://vite.dev/guide/env?a=1&b=2', 'https://vite.dev/guide/env?a=1&b=2', '_blank']]);
+    // the newest pull request beside the title; the others in a menu
+    await page.waitForSelector('#hPr a.gh.draft[data-gh="https://github.com/acme/shop/pull/8"]');
+    assert.equal(await page.innerText('#ghMore'), '+1');
+    await page.click('#ghMore'); await page.waitForSelector('#prm:visible');
+    assert.deepEqual(await page.$$eval('#prm a', es => es.map(e => [e.getAttribute('href'), e.querySelector('.prt1').innerText])), [['https://github.com/acme/shop/pull/8', 'Draft one'], ['https://github.com/acme/shop/pull/7', 'Merged one']]);
+    await page.click('#ghMore'); await page.waitForSelector('#prm', { state: 'hidden' });
+    // pointing at a link shows where it goes, and Copy; a right-click offers Copy link too
+    await page.evaluate(() => { window.copied = null; navigator.clipboard.writeText = t => { window.copied = t; return Promise.resolve(); }; });
+    await page.hover('.ai a.wl'); await page.waitForSelector('#lcard:visible');
+    assert.equal(await page.innerText('#lcard .lu'), 'vite.dev/guide/env?a=1&b=2');
+    await page.click('#lcard [data-lcopy]'); await page.waitForSelector('#lcard [data-lcopy].ok');
+    assert.equal(await page.evaluate(() => window.copied), 'https://vite.dev/guide/env?a=1&b=2');
+    await page.hover('.ai a.gh.merged'); await page.waitForFunction(() => document.querySelector('#lcard .lt')?.innerText.includes('Merged one'));
+    await page.click('.ai a.gh.closed', { button: 'right' }); await page.waitForSelector('#lmenu:visible');
+    await page.click('#lmenu [data-lcopy]'); await page.waitForSelector('#lmenu', { state: 'hidden' });
+    assert.equal(await page.evaluate(() => window.copied), 'https://github.com/acme/shop/issues/9');
+  } finally { srv.close(); await page.mouse.move(0, 0); }
 });
 
 ui('window: a code block in an answer copies just its code, from the button that shows when you point at it', async () => {

@@ -1037,6 +1037,45 @@
   .prt.live::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--k-sv);margin-right:2px;animation:bgblink 1.6s ease-in-out infinite}
   .prt.n{color:var(--faint);background:rgba(128,128,128,.14)}
   .tl .prt{height:20px}.tray.open .tl .prt svg{transform:none}
+  /* links in replies (round 81): a port, a pull request or issue, any other address */
+  .ai .prt,.ai a.gh{vertical-align:1px;line-height:1}
+  .prt .ad{opacity:.7;font-weight:500}
+  .ai a.wl{color:inherit;text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 35%,transparent);text-underline-offset:3px;overflow-wrap:anywhere}
+  .ai a.wl:hover{text-decoration-color:currentColor}
+  .ai a.wl>svg{display:inline;width:11px;height:11px;margin-left:2px;vertical-align:-1px;opacity:.55}
+  .ai a.wl code{text-decoration:none}
+  a.gh{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 7px 0 6px;border-radius:7px;font-size:12.5px;font-weight:600;color:var(--text);background:rgba(128,128,128,.14);text-decoration:none;white-space:nowrap;--gs:var(--faint)}
+  a.gh:hover{background:rgba(128,128,128,.22)}
+  .gm{width:13px;height:13px;flex:none;fill:currentColor;stroke:none;opacity:.8}
+  a.gh .rp{color:var(--faint);font-weight:550}
+  a.gh svg.st,.prm svg.st{width:12px;height:12px;flex:none;stroke-width:2.2;color:var(--gs)}
+  .gh.open,.prm .st.open{--gs:hsl(140 55% 52%)}.gh.merged,.prm .st.merged{--gs:hsl(265 70% 70%)}.gh.closed,.prm .st.closed{--gs:hsl(0 70% 64%)}
+  [data-theme=light] .gh.open,[data-theme=light] .prm .st.open{--gs:hsl(140 60% 32%)}[data-theme=light] .gh.merged,[data-theme=light] .prm .st.merged{--gs:hsl(265 55% 50%)}
+  .prm svg.st{color:var(--gs,var(--faint))}
+  /* the session's pull request, beside its title */
+  .hd .tline{display:flex;align-items:center;gap:8px;min-width:0}
+  .hd .tline h1{min-width:0}
+  .hpr{display:inline-flex;align-items:center;gap:3px;flex:none}.hpr:empty{display:none}
+  .hpr a.gh{height:20px;font-size:11.5px}
+  .ghmore{height:20px;padding:0 6px;border-radius:7px;font-size:11px;font-weight:650;color:var(--faint);background:rgba(128,128,128,.1)}
+  .ghmore:hover{color:var(--text);background:rgba(128,128,128,.2)}
+  .prm{width:auto;min-width:220px;max-width:min(420px,90vw)}
+  .prm a{display:flex;align-items:center;gap:9px;padding:6px 9px;border-radius:7px;color:var(--text);text-decoration:none;white-space:nowrap}
+  .prm a:hover{background:rgba(128,128,128,.16)}
+  .prm .prt1{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+  .prm .k{color:var(--faint);font-size:11px;flex:none}
+  .lmenu{width:auto;min-width:170px}
+  /* hovering a link: where it goes, and Copy */
+  .lcard{position:fixed;z-index:31;display:flex;flex-direction:column;gap:5px;max-width:min(460px,90vw);padding:6px 6px 6px 10px;border-radius:10px;background:var(--pop);border:1px solid var(--line2);box-shadow:var(--shadow);font-size:12px}
+  .lcard .lt{color:var(--text);font-weight:550;padding-right:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lcard .lt b{font-weight:650;margin-right:6px;color:var(--faint)}
+  .lcard .lt b.open{color:hsl(140 55% 52%)}.lcard .lt b.merged{color:hsl(265 70% 70%)}.lcard .lt b.closed{color:hsl(0 70% 64%)}
+  .lcard .lr{display:flex;align-items:center;gap:8px;min-width:0}
+  .lcard .lu{font:11.5px "Cascadia Code",ui-monospace,Consolas,monospace;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+  .lcard button{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:6px;background:rgba(128,128,128,.14);color:var(--text);font-size:11.5px;font-weight:600;flex:none}
+  .lcard button:hover{background:rgba(128,128,128,.24)}
+  .lcard button svg{width:12px;height:12px}
+  .lcard button.ok{color:var(--k-sv)}
   .who{font-size:10.5px;font-weight:600;color:var(--faint);flex:none}
   .tk.gone .tk1 b{color:var(--faint)}.tk.gone .tki{opacity:.5}
   .kids{grid-column:2/4;display:flex;flex-direction:column;gap:3px;margin:6px 0 2px;padding-left:10px;border-left:1.5px solid var(--line2);min-width:0}

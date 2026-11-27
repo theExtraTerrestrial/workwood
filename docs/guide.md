@@ -135,6 +135,16 @@ Everything Workwood does, one feature at a time. The [README](../README.md) has 
   side panel, M switches it to full width and back, ← and → step through the files.
 - The window opens where you left it, at the size you left it (and maximized,
   if it was).
+- Links in replies open in your browser. A GitHub pull request or issue shows as
+  a chip with its number (and its repository when it is not the session's), its
+  icon coloured by what it is now: open, draft, merged or closed (asked of `gh`
+  when the link appears and when you open the session; without `gh`, a plain
+  chip). A port on this PC (`http://localhost:5173`, or `localhost:5173` on its
+  own) shows as the tray's chip, green while something answers there and grey
+  once nothing does. Any other address is a link. Pointing at one shows where
+  it goes (and a pull request's title) with Copy; a right-click offers Open in
+  browser and Copy link. The newest pull request the session's answers linked
+  sits beside its title; +N beside it lists the others.
 - Session actions, from the "…" on a session or a right-click:
   - Rename: saved in the session's history the way Claude Code's `/rename` does,
     so the name also shows in `claude --resume`.
@@ -252,6 +262,10 @@ Everything Workwood does, one feature at a time. The [README](../README.md) has 
   name (DESKTOP-AX.local), the app opens there and keeps working when the router gives the PC another
   address; a phone that knows only the old address is marked in Settings, and Pair again makes a code
   that pairs it again as itself, keeping its name and notifications.
+  A server on this PC that a reply or the tray links to (`localhost:5173`) opens on the phone at the
+  PC's address: Workwood passes it through a port of its own (from 47453), and lets in only a paired
+  phone's browser, so the server is not open to the rest of the Wi-Fi. Inside WSL the Windows window
+  opens those ports too.
 - **At the PC or away.** While you are at the PC, a notification waits until a minute passes with no
   input there (so it is not sent while you are typing an answer), and one you handle there meanwhile
   (you answer it, or open its session) is never sent. With no keyboard or mouse input

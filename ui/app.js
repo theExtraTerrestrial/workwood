@@ -2,6 +2,10 @@
 const P={
   cold:'<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
+  pr:'<circle cx="6" cy="6" r="2.2"/><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2v7.6M18 15.8V9a3 3 0 0 0-3-3h-4m2-2-2 2 2 2"/>',
+  merge:'<circle cx="6" cy="6" r="2.2"/><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="12" r="2.2"/><path d="M6 8.2v7.6M6 8c0 3 3 4 9.8 4"/>',
+  issue:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>',
+  issuex:'<circle cx="12" cy="12" r="8"/><path d="m9 12 2 2 4-4"/>',
   chat:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   term:'<path d="m4 17 6-6-6-6M12 19h8"/>',
   diff:'<path d="M12 4v8M8 8h8M8 18h8"/>',
@@ -149,15 +153,109 @@ const PVPATH=/^(?:~?\/|\.{1,2}\/)?[^\s:`'"<>|*?]+\.(?:html?|svg|png|jpe?g|gif|we
 const EDPATH=/^(?!-)(?:~?\/|\.{1,2}\/)?[\w@.+-]+(?:\/[\w@.+-]+)*\/?(?::\d+(?::\d+)?)?$/,EDLIKE=p=>EDPATH.test(p)&&!/^\d+([.:]\d+)*$/.test(p)&&(p.includes('/')||/\.[A-Za-z]\w{0,7}(?::\d+(?::\d+)?)?$/.test(p));
 const TXPATH=/(<a\b[\s\S]*?<\/a>|<[^>]+>)|(?<![\w\/.~:@+-])((?:~|\.{1,2})?\/?[\w@.+-]+(?:\/[\w@.+-]+)+\.[A-Za-z]\w{0,7}(?::\d+(?::\d+)?)?)(?![\w\/])/g;
 const pathTag=(tag,p,inner)=>PVPATH.test(p)?`<${tag} class="fl" data-fpath="${esc(p)}">${inner}</${tag}>`:EDLIKE(p)&&!PHONE?`<${tag} class="ep" data-epath="${esc(p)}">${inner}</${tag}>`:null;
+// A web address in a reply. A GitHub pull request or issue is a chip with its state (asked of gh by the service); a
+// port on this PC is the tray's chip, green while something answers there (on the phone it goes through the PC, see
+// service/links.mjs); anything else is a link. All open in your browser.
+const GHU=/^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/(pull|issues)\/(\d+)(?=$|[\/?#])/;
+const LOCU=/^(?:(https?):\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{1,5})(\/\S*)?$/i;
+const WEBU=/^(?:https?:\/\/\S+|(?:localhost|127\.0\.0\.1):\d{1,5}(?:\/\S*)?)$/i;
+const BAREU=/(?<![\w\/.@:%~=-])(https?:\/\/[^\s<>"'`\u0001]+|(?:localhost|127\.0\.0\.1):\d{2,5}(?!\d)(?:\/[^\s<>"'`\u0001]*)?)/gi;
+const PRU=/https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/g;
+const GHS=new Map(),GHW=new Set();   // pull request or issue -> { kind, state, title }; the ones being asked
+const PORTS=new Map();               // port -> { live, at }
+const GHMARK='<svg viewBox="0 0 16 16" class="gm"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.71 1.23 1.87.87 2.33.67.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>';
+// A trailing full stop, comma, bracket or emphasis belongs to the sentence, not the address.
+function trimUrl(u){let r='';for(;;){const c=u.at(-1),n=ch=>(u.match(new RegExp('\\'+ch,'g'))||[]).length;
+  if(/[.,;:!?*_'"]/.test(c)||(c===')'&&n('(')<n(')'))||(c===']'&&n('[')<n(']'))){r=c+r;u=u.slice(0,-1)}else return [u,r]}}
+const ghIcon=(kind,st)=>st==='merged'?'merge':kind==='pr'?'pr':st==='closed'?'issuex':'issue';
+const ghKey=u=>{const m=GHU.exec(u);return m?m[0]:null};
+function ghChip(u){const m=GHU.exec(u),key=m[0],repo=m[1]+'/'+m[2],kind=m[3]==='pull'?'pr':'issue',g=GHS.get(key);
+  return `<a class="gh ${g?.state||''}" href="${esc(u)}" target="_blank" rel="noopener" data-url="${esc(u)}" data-gh="${esc(key)}" data-kind="${kind}">${GHMARK}${repo.toLowerCase()!==(V.place?.repo||'').toLowerCase()?`<span class="rp">${esc(repo)}</span>`:''}${svg(ghIcon(kind,g?.state),'st')}#${m[4]}</a>`}
+const portHref=(p,path,scheme)=>PHONE?`${location.origin}/port/${p}${path||'/'}`:`${scheme||'http'}://localhost:${p}${path||'/'}`;
+function portChip(u){const m=LOCU.exec(u),p=+m[2],path=m[3]&&m[3]!=='/'?m[3]:'',k=PORTS.get(p),href=portHref(p,path,m[1]);
+  return `<a class="prt wp${k?(k.live?' live':' n'):''}" href="${esc(href)}" target="_blank" rel="noopener" data-url="${esc(href)}" data-port="${p}"><span class="ad">${esc(PHONE?location.hostname:'localhost')}:</span>${p}${path?`<span class="ad">${esc(path.length>28?path.slice(0,26)+'…':path)}</span>`:''}${svg('ext')}</a>`}
+// `text` is markup already (a Markdown link's words); none: the address itself, in code when it was written in code.
+function webLink(u,text=null,code=false){
+  if(GHU.test(u))return ghChip(u);
+  const lm=LOCU.exec(u);if(lm&&+lm[2]>0&&+lm[2]<65536)return portChip(u);
+  if(!/^https?:\/\/[^\s/]/i.test(u))return null;
+  return `<a class="wl" href="${esc(u)}" target="_blank" rel="noopener" data-url="${esc(u)}">${text??(code?`<code>${esc(u)}</code>`:esc(u))}${svg('ext')}</a>`}
+// What a pull request or issue is now, and whether ports answer: asked once the links are on screen, then painted in place.
+let lookT=0;
+function linkLook(){clearTimeout(lookT);lookT=setTimeout(()=>{
+  const gh=new Set(),ports=new Set(),now=performance.now();
+  document.querySelectorAll('a[data-gh]').forEach(a=>{const k=a.dataset.gh;if(!GHS.has(k)&&!GHW.has(k))gh.add(k)});
+  document.querySelectorAll('a[data-port]').forEach(a=>{const p=+a.dataset.port,k=PORTS.get(p);if(!k||(!k.wait&&now-k.at>8000))ports.add(p)});
+  if(gh.size)ghAsk([...gh]);
+  if(ports.size){const l=[...ports];for(const p of l)PORTS.set(p,{...PORTS.get(p),wait:true,at:now});
+    api('ports?p='+l.join(',')).then(r=>{for(const p of l)PORTS.set(p,{live:!!r[p],at:performance.now()});paintLinks()}).catch(()=>{for(const p of l)PORTS.delete(p)})}
+},60)}
+function ghAsk(keys,fresh=false){keys=keys.filter(k=>!GHW.has(k));if(!keys.length)return;keys.forEach(k=>GHW.add(k));
+  api('gh?'+keys.map(k=>'u='+encodeURIComponent(k)).join('&')+(fresh?'&fresh=1':'')).then(r=>{for(const [k,v] of Object.entries(r))GHS.set(k,v)}).catch(()=>{})
+    .finally(()=>{keys.forEach(k=>GHW.delete(k));paintLinks()})}
+function paintLinks(){
+  document.querySelectorAll('a[data-gh]').forEach(a=>{const g=GHS.get(a.dataset.gh);if(!g)return;
+    for(const c of ['open','draft','merged','closed'])a.classList.toggle(c,g.state===c);
+    const st=a.querySelector('svg.st'),ic=ghIcon(a.dataset.kind,g.state);if(st&&st.dataset.ic!==ic){st.outerHTML=svg(ic,'st');a.querySelector('svg.st').dataset.ic=ic}});
+  document.querySelectorAll('a[data-port]').forEach(a=>{const k=PORTS.get(+a.dataset.port);if(!k||k.live==null)return;a.classList.toggle('live',k.live);a.classList.toggle('n',!k.live)});
+  if(!$('lcard').hidden&&lcFor)lcFill(lcFor);
+}
+// The pull requests this session's answers linked to, the newest last: what the service read from the whole history,
+// then what is on screen (which may have come since).
+function sessionPrs(){const seen=new Map(),add=u=>{seen.delete(u);seen.set(u,1)};
+  for(const u of V.prs||[])add(u);
+  for(const it of V.items)if(it.kind==='assistant'&&typeof it.text==='string')for(const [u] of it.text.matchAll(PRU))add(u);
+  return [...seen.keys()]}
+const ghLabel=k=>{const m=GHU.exec(k);return m?(m[1]+'/'+m[2]).toLowerCase()===(V.place?.repo||'').toLowerCase()?'#'+m[4]:`${m[1]}/${m[2]}#${m[4]}`:k};
+const ghWord=g=>!g?.state?'':g.state==='open'?(g.kind==='pr'?'Open':'Open issue'):g.state==='draft'?'Draft':g.state==='merged'?'Merged':g.reason?'Closed, '+g.reason:'Closed';
+function renderPrs(){const el=$('hPr');if(!el)return;const l=V.isNew?[]:sessionPrs();
+  if(!l.length){if(el.innerHTML)el.innerHTML='';return}
+  const html=ghChip(l.at(-1))+(l.length>1?`<button class="ghmore" id="ghMore" data-tip="${l.length-1} more pull request${l.length>2?'s':''} in this session">+${l.length-1}</button>`:'');
+  if(el.dataset.h!==html){el.innerHTML=html;el.dataset.h=html}
+}
+function openPrMenu(){const l=sessionPrs().reverse(),m=$('prm'),r=$('ghMore').getBoundingClientRect();
+  m.innerHTML=l.map(k=>{const g=GHS.get(k);return `<a class="prrow" href="${esc(k)}" target="_blank" rel="noopener" data-url="${esc(k)}">${svg(ghIcon('pr',g?.state),'st '+(g?.state||''))}<span class="prt1">${esc(g?.title||ghLabel(k))}</span><span class="k">${esc(ghLabel(k))}</span></a>`}).join('');
+  m.hidden=false;m.style.left=Math.max(8,Math.min(r.left,innerWidth-m.offsetWidth-8))+'px';m.style.top=(r.bottom+6)+'px';ghAsk(l.filter(k=>!GHS.has(k)))}
+// Hovering a link shows where it goes and Copy; a right-click offers Open and Copy link.
+let lcFor=null,lcT=0;
+function lcFill(a){const u=a.dataset.url,g=a.dataset.gh&&GHS.get(a.dataset.gh),c=$('lcard');
+  c.innerHTML=`${g?.title?`<span class="lt">${g.state?`<b class="${g.state}">${ghWord(g)}</b>`:''}${esc(g.title)}</span>`:''}<span class="lr"><span class="lu">${esc(u.replace(/^https?:\/\//,'').replace(/\/$/,''))}</span><button data-lcopy>${svg('copy')}Copy</button></span>`}
+function lcShow(a){lcFor=a;lcFill(a);const c=$('lcard'),r=a.getBoundingClientRect();c.hidden=false;
+  const w=c.offsetWidth,h=c.offsetHeight,below=r.bottom+6+h<innerHeight;
+  c.style.left=Math.max(8,Math.min(r.left,innerWidth-w-8))+'px';c.style.top=(below?r.bottom+6:r.top-6-h)+'px'}
+function lcHide(){clearTimeout(lcT);lcFor=null;$('lcard').hidden=true}
+if(!PHONE){
+  document.addEventListener('mouseover',e=>{const a=e.target.closest?.('a[data-url]');
+    if(a&&!a.closest('#lcard,#lmenu')){clearTimeout(lcT);if(lcFor!==a)lcT=setTimeout(()=>lcShow(a),lcFor?0:350);return}
+    if(e.target.closest?.('#lcard')){clearTimeout(lcT);return}
+    if(lcFor||lcT){clearTimeout(lcT);lcT=setTimeout(lcHide,250)}});
+  document.addEventListener('contextmenu',e=>{const a=e.target.closest('a[data-url]');if(!a||getSelection().toString())return;e.preventDefault();closePops();lcHide();
+    const m=$('lmenu');m.dataset.url=a.dataset.url;m.innerHTML=`<button data-lopen>${svg('ext')}Open in browser</button><button data-lcopy>${svg('copy')}Copy link</button>`;
+    m.hidden=false;m.style.left=Math.min(e.clientX,innerWidth-m.offsetWidth-8)+'px';m.style.top=Math.min(e.clientY,innerHeight-m.offsetHeight-8)+'px'});
+}
+document.addEventListener('click',e=>{
+  const cp=e.target.closest('#lcard [data-lcopy],#lmenu [data-lcopy]');
+  if(cp){e.preventDefault();e.stopPropagation();const u=cp.closest('#lmenu')?$('lmenu').dataset.url:lcFor?.dataset.url;
+    Promise.resolve(copyText(u||'')).then(()=>{if(cp.closest('#lcard')){cp.innerHTML=svg('check')+'Copied';cp.classList.add('ok')}}).catch(()=>{});
+    if(cp.closest('#lmenu'))$('lmenu').hidden=true;return}
+  if(e.target.closest('#lmenu [data-lopen]')){e.stopPropagation();window.open($('lmenu').dataset.url,'_blank','noopener');$('lmenu').hidden=true;return}
+  if(e.target.closest('#ghMore')){e.stopPropagation();const was=$('prm').hidden;closePops();hideTip();if(was)openPrMenu();return}
+  if(e.target.closest('#prm a'))$('prm').hidden=true;
+  if(e.target.closest('a[data-url]'))lcHide();
+},true);
+
 // Just enough Markdown for agent replies. Everything is escaped first.
 function md(src){
   const blocks=[];let s=String(src).replace(/```[^\n]*\n([\s\S]*?)```/g,(_,c)=>{blocks.push(`<div class="cdb"><pre><code>${esc(c.replace(/\n$/,''))}</code></pre><button class="cpy" data-cpcode data-tip="Copy">${svg('copy')}</button></div>`);return `\u0000${blocks.length-1}\u0000`});
   // A code span opens with a run of backticks and closes on a run of the same length, so `` a`b `` holds a backtick;
   // one space either side is padding. Its text is set aside first so bold and links never reach inside it.
-  const inline=t=>{const cs=[];
-    t=String(t).replace(/(?<!`)(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g,(_,f,c)=>{if(/^ [\s\S]* $/.test(c)&&c.trim())c=c.slice(1,-1);cs.push(pathTag('code',c,esc(c))||`<code>${esc(c)}</code>`);return `\u0001${cs.length-1}\u0001`});
-    return esc(t).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(_,t,h)=>{h=h.replace(/&amp;/g,'&').replace(/^file:\/\//,'');return pathTag('a',h,t)||t})
-      .replace(TXPATH,(m,tag,p)=>tag||pathTag('span',p,p)||p).replace(/\u0001(\d+)\u0001/g,(_,i)=>cs[i])};
+  // Links are set aside the same way, before escaping, so an address keeps its & and a quote after it ends it.
+  const inline=t=>{const cs=[],hold=h=>(cs.push(h),`\u0001${cs.length-1}\u0001`),put=x=>x.replace(/\u0001(\d+)\u0001/g,(_,i)=>cs[i]);
+    const words=x=>esc(x).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+    t=String(t).replace(/(?<!`)(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g,(_,f,c)=>{if(/^ [\s\S]* $/.test(c)&&c.trim())c=c.slice(1,-1);return hold((WEBU.test(c)&&webLink(c,null,true))||pathTag('code',c,esc(c))||`<code>${esc(c)}</code>`)})
+      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(m,x,h)=>{const f=h.replace(/^file:\/\//,'');return hold(pathTag('a',f,put(words(x)))||webLink(h,put(words(x)))||put(words(x)))})
+      .replace(BAREU,(m,u)=>{const [a,rest]=trimUrl(u),h=webLink(a);return h?hold(h)+rest:m});
+    return put(words(t).replace(TXPATH,(m,tag,p)=>tag||pathTag('span',p,p)||p))};
   const out=[];let list=null,para=[],table=null;
   // A list keeps each item's indent, so items written under another become a list inside it.
   const listHtml=items=>{let h='';const stack=[];
@@ -332,7 +430,7 @@ async function openSession(id,sending){
   V.thread=null;V.handing=null;V.rewound=null;V.rw=null;V.rp=null;V.cont=null;V.older=new Map();V.shown=0;V.focus=null;V.hopen.clear();V.olOpen=new Set([id]);
   render();
   let got=null;
-  try{const d=await readSession(id);if(!d)return;if(V.sel!==id){held.delete(id);return}got=d;V.thread=d.thread||null;V.handing=d.handing||null;V.rewound=d.rewound||null;V.cont=d.continued||null;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.place=d.place||null;V.used={model:d.model||'',effort:d.effort||'',mode:d.mode||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||'',mode:d.defaults?.mode||''}}
+  try{const d=await readSession(id);if(!d)return;if(V.sel!==id){held.delete(id);return}got=d;V.thread=d.thread||null;V.handing=d.handing||null;V.rewound=d.rewound||null;V.cont=d.continued||null;V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.place=d.place||null;V.prs=d.prs||[];V.used={model:d.model||'',effort:d.effort||'',mode:d.mode||''};V.def={model:d.defaults?.model||'',effort:d.defaults?.effort||'',mode:d.defaults?.mode||''}}
   catch(e){oops(e.message)}
   V.loading=false;render();toBottom(true);loadChanges();
   if(got)letGo(id,got.seq);
@@ -506,7 +604,7 @@ function workCards(it,latest){
 }
 function fitThumbs(){document.querySelectorAll('.ht iframe').forEach(f=>{const w=f.parentNode.clientWidth,h=f.parentNode.clientHeight;if(!w)return;const k=w/1280;f.style.transform=`scale(${k})`;f.style.height=Math.ceil(h/k)+'px'})}
 new ResizeObserver(fitThumbs).observe($('thread'));
-function renderThread(){
+function renderThread(){linkLook();
   const nw=V.isNew,t=$('thread');
   // What you just sent is shown straight away, and gives way to the real message when the service reports it.
   if(V.pend&&V.items.filter(it=>it.kind==='user').length>=V.pend.need)V.pend=null;
@@ -819,7 +917,7 @@ $('rwm').onclick=e=>{e.stopPropagation();rwAct(e.target,$('rwm'))};
 $('thread').addEventListener('click',e=>{const b=e.target.closest('[data-rw]');if(!b)return;e.stopPropagation();const n=+b.dataset.rw;if(V.rw?.n===n&&!$('rwm').hidden)return closePops();openRw(n,b)});
 // The session as the service has it now (after a rewind, or its undo): items, context and the strip.
 async function reread(){const id=V.sel;const d=await readSession(id);if(!d)return;if(V.sel!==id){held.delete(id);return}
-  V.items=d.items;V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.rewound=d.rewound||null;V.ctx=null;render();toBottom(true);loadChanges();letGo(id,d.seq)}
+  V.items=d.items;V.prs=d.prs||[];V.run=d.run;V.context=d.context;V.cut=d.cut;V.work=d.work||[];V.rewound=d.rewound||null;V.ctx=null;render();toBottom(true);loadChanges();letGo(id,d.seq)}
 async function doRewind(it,files,edit){
   closePops();if(V.rwing)return;V.rwing=true;oops('');
   try{const r=await api(`sessions/${V.sel}/rewind`,{at:it.uid,files});await reread();V.rewound=r;renderStrip();if(edit)rwEdit(it.text)}
@@ -2357,7 +2455,7 @@ function renderMenus(){
     +'<div class="sep"></div><div class="lab">Effort</div><div class="eseg">'+EFFORTS.filter(x=>x[0]||!de).map(([v,n,d])=>`<button class="${v===shownEffort()?'on':''}" data-e="${esc(v)}" data-tip="${esc(d+(v&&v===de?'. Your default.':''))}">${n}</button>`).join('')+'</div>'
     +`<div class="cap2" style="padding-top:6px">${de?`${esc(EFFORTS.find(x=>x[0]===de)?.[1]||de)} is your default effort. `:''}Applies from your next message.</div>`;
 }
-function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('rwm').hidden=true;$('olm').hidden=true;if(V.rw||V.rp){V.rw=null;V.rp=null;renderThread()}$('mHand').hidden=true;$('pCtx').classList.remove('open');$('gmenu').hidden=true;$('emenu').hidden=true;$('smenu').hidden=true;$('hmenu').hidden=true;$('bMore').classList.remove('on');$('srvm').hidden=true;V.menuFor=null;document.querySelectorAll('.sess.mopen').forEach(b=>b.classList.remove('mopen'));$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
+function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('prm').hidden=true;$('lmenu').hidden=true;$('rwm').hidden=true;$('olm').hidden=true;if(V.rw||V.rp){V.rw=null;V.rp=null;renderThread()}$('mHand').hidden=true;$('pCtx').classList.remove('open');$('gmenu').hidden=true;$('emenu').hidden=true;$('smenu').hidden=true;$('hmenu').hidden=true;$('bMore').classList.remove('on');$('srvm').hidden=true;V.menuFor=null;document.querySelectorAll('.sess.mopen').forEach(b=>b.classList.remove('mopen'));$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
 const toggle=(btn,pop,then)=>e=>{e.stopPropagation();const was=$(pop).hidden;closePops();if(was){V.mk=false;V.find='';renderMenus();$(pop).hidden=false;$(btn).classList.add('open');then?.()}};
 $('pProject').onclick=toggle('pProject','mProject',()=>$('pFind').focus());
 $('pProfile').onclick=toggle('pProfile','mProfile');
@@ -2368,7 +2466,7 @@ $('mMode').onclick=async e=>{e.stopPropagation();const t=e.target.closest('[data
     try{await api('default-mode',{profile:who,mode:m});if(curProfile()===who)V.def.mode=m;renderComposer()}catch(err){oops(err.message)}}};
 // Menus close when you press anywhere outside them. (Listening for a click instead let a second click event, which some
 // windows deliver for one press, close a menu the moment it opened.)
-document.addEventListener('pointerdown',e=>{if(!e.target.closest('.pop,.fmenu,.menu,.pick,#bGear,#moreBtn,#bMore,#pcb,[data-dots]'))closePops()});
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('.pop,.fmenu,.menu,.pick,#bGear,#moreBtn,#bMore,#pcb,#ghMore,[data-dots]'))closePops()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePops();$('dim').hidden=true;if(!$('sdim').hidden&&!L)closeSettings()}});
 $('mProject').addEventListener('input',e=>{if(e.target.id==='pFind'){V.find=e.target.value;const at=e.target.selectionStart;renderMenus();const i=$('pFind');i.focus();i.setSelectionRange(at,at)}});
 $('mProject').addEventListener('keydown',e=>{if(e.target.id==='mkName'&&e.key==='Enter')$('mProject').querySelector('[data-create]').click()});
@@ -2453,7 +2551,7 @@ const srvList=()=>srvHere()?.list||[];
 const srvByTask=()=>{const m=new Map();for(const s of srvList())if(s.task?.sessionId===V.sel)m.set(s.task.id,s);return m};   // started by this session's agent: shown on its command's row
 const srvRows=()=>{const mine=new Set(bgList().map(t=>t.id));return srvList().filter(s=>!(s.task?.sessionId===V.sel&&mine.has(s.task.id)))};
 const srvCanStart=()=>{const h=srvHere();if(!h?.conf?.names?.length)return [];const on=new Set(srvList().filter(s=>s.state!=='exited').flatMap(s=>s.lines||[]));return h.conf.names.filter(n=>!on.has(n))};
-const portEl=(p,live=true)=>PHONE?`<span class="prt${live?' live':''}">:${p}</span>`:`<a class="prt${live?' live':''}" href="http://localhost:${p}/" target="_blank" rel="noopener" data-tip="Open localhost:${p}">:${p}${svg('ext')}</a>`;
+const portEl=(p,live=true)=>`<a class="prt${live?' live':''}" href="${portHref(p)}" target="_blank" rel="noopener" data-tip="Open ${PHONE?location.hostname:'localhost'}:${p}">:${p}${svg('ext')}</a>`;
 // a few ports, then how many more (one on the phone, where the row is narrow); the tooltip and the side panel list them all
 const portsEl=(ps,max=PHONE?1:4)=>ps.slice(0,max).map(p=>portEl(p)).join('')+(ps.length>max?`<span class="prt n" data-tip="${esc(ps.slice(max).map(p=>':'+p).join(' '))}">+${ps.length-max}</span>`:'');
 const WHO={workwood:'Workwood',agent:'agent',you:'yours'};
@@ -2500,7 +2598,7 @@ function srvInfo(s){
   $('tkInfo').innerHTML=[`<span>Command</span><code>${esc(s.cmd)}</code>`,`<span>Folder</span><code>${esc(s.top)}</code>`,
     `<span>Started</span><div>${by} · ${clock(new Date(s.start))}${gone?' · ended':' · running '+clockEl(s.start)}</div>`].join('');
   const open=s.ports[0];
-  $('tkAct').innerHTML=(open&&!gone&&!PHONE?`<a class="mini" href="http://localhost:${open}/" target="_blank" rel="noopener">${svg('ext')}Open :${open}</a>`:'')+(s.restart?`<button class="mini" data-srvre="${esc(s.id)}">${svg('refresh')}${gone?'Start again':'Restart'}</button>`:'');
+  $('tkAct').innerHTML=(open&&!gone?`<a class="mini" href="${portHref(open)}" target="_blank" rel="noopener">${svg('ext')}Open :${open}</a>`:'')+(s.restart?`<button class="mini" data-srvre="${esc(s.id)}">${svg('refresh')}${gone?'Start again':'Restart'}</button>`:'');
   $('tkAct').hidden=!$('tkAct').innerHTML;
   const out=$('tkOut');out.hidden=false;clearTimeout(tkTimer);
   if(s.who!=='workwood'){out.classList.add('none');out.textContent=s.who==='agent'?'Its output goes to the agent\'s command that started it.':'Its output goes to the terminal it was started in.';return}
@@ -3150,6 +3248,7 @@ addEventListener('pointermove',e=>{
 function renderHead(){
   const nw=V.isNew,s=selSession(),w=$('where');
   $('title').textContent=nw?(isHome()?'Home':'New session'):s?.title||'';
+  renderPrs();linkLook();
   if(nw||!s){w.innerHTML='';return}
   const pl=V.place||{project:s.project,worktree:null,branch:s.branch,cwd:s.cwd};
   w.dataset.tip=pl.cwd||s.cwd;

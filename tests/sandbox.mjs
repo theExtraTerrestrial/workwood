@@ -77,6 +77,13 @@ export function makeSandbox() {
 
   // Opening an editor or a terminal is only recorded.
   for (const name of ['code', 'terminal']) w(path.join(bin, name), `#!/usr/bin/env bash\necho "${name} $*" >> ${JSON.stringify(sb.log)}\n`, 0o755);
+  // GitHub's state of a pull request or issue: #7 is merged, #8 a draft, #9 closed, any other open; the title names it.
+  w(path.join(bin, 'gh'), `#!/usr/bin/env bash
+echo "gh $*" >> ${JSON.stringify(sb.log)}
+n="\${2##*/}"
+case "$n" in 7) echo '{"state":"closed","merged_at":"2026-01-01T00:00:00Z","title":"Merged one"}';; 8) echo '{"state":"open","draft":true,"title":"Draft one"}';;
+  9) echo '{"state":"closed","state_reason":"not_planned","title":"Closed one"}';; *) echo "{\\"state\\":\\"open\\",\\"title\\":\\"Number $n\\"}";; esac
+`, 0o755);
 
   sb.env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^CLAUDE|^ANTHROPIC|^WORKWOOD|^NODE_|^npm_/.test(k))),
     HOME: home, PATH: `${bin}:${process.env.PATH}`, ASDF_DATA_DIR: process.env.ASDF_DATA_DIR || path.join(REAL_HOME, '.asdf'),

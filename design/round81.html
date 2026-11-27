@@ -1,0 +1,85 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 81 — Links in replies</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<link rel="stylesheet" href="../ui/app.css">
+<style>
+html,body{height:auto}
+body{overflow:auto;background:var(--bg);padding:36px 24px 80px}
+.top{max-width:1040px;margin:0 auto 8px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top>span{color:var(--faint);font-size:12.5px}
+.tg{margin-left:auto;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:8px;box-shadow:0 0 0 1px var(--line2)}
+.lede{max-width:1040px;margin:0 auto 26px;color:var(--faint);font-size:12.5px;line-height:1.55}.lede b{color:var(--dim);font-weight:650}
+.rw{display:block;max-width:1040px;margin:0 auto 24px}
+.rw h2{font-size:13px;margin:0 0 7px;font-weight:700;display:flex;gap:8px;align-items:baseline}.rw h2 span{font-weight:500;color:var(--faint);font-size:12px}
+.fr{position:relative;border-radius:12px;box-shadow:0 0 0 1px var(--line2);background:var(--surface,var(--bg));overflow:visible}
+.fr.pad{padding:18px 22px 8px}
+.fr.narrow{max-width:520px}.fr.phone{max-width:380px;padding:16px 16px 6px}
+.fr .head{border-bottom:0}.fr .hd{flex:1;min-width:0}
+.hd .where{font-size:11.5px;color:var(--faint)}
+.ib svg,.doneb svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ib.wide svg{width:15px;height:15px}
+
+/* a plain web link in a reply */
+.ai a.wl{color:var(--text);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--text) 35%,transparent);text-underline-offset:3px;cursor:pointer}
+.ai a.wl:hover,.ai a.wl.hv{text-decoration-color:currentColor}
+.ai a.wl svg{display:inline;width:11px;height:11px;margin-left:2px;vertical-align:-1px;fill:none;stroke:currentColor;stroke-width:2;opacity:.55}
+/* a GitHub pull request or issue */
+.gh{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px 0 6px;border-radius:7px;font-size:12.5px;font-weight:600;line-height:1;color:var(--text);background:rgba(128,128,128,.14);text-decoration:none;vertical-align:1px;cursor:pointer}
+.gh:hover{background:rgba(128,128,128,.22)}
+.gh .gm{width:13px;height:13px;fill:currentColor;opacity:.8}
+.gh .rp{color:var(--faint);font-weight:550}
+.gh .st{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.gh.open .st{color:hsl(140 55% 52%)}.gh.merged .st{color:hsl(265 70% 70%)}.gh.closed .st{color:hsl(0 70% 64%)}.gh.draft .st{color:var(--faint)}
+[data-theme=light] .gh.open .st{color:hsl(140 60% 32%)}[data-theme=light] .gh.merged .st{color:hsl(265 55% 50%)}
+/* a localhost port: the tray's chip */
+.ai .prt{vertical-align:1px;cursor:pointer}.ai .prt svg{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:2.2}
+.ai .prt .ad{opacity:.7;font-weight:500}
+/* hover card: the whole address and Copy */
+.lc{position:absolute;z-index:3;display:flex;align-items:center;gap:6px;padding:5px 5px 5px 10px;border-radius:9px;background:var(--surface);box-shadow:0 0 0 1px var(--line2),0 8px 24px rgba(0,0,0,.3);font:11.5px "Cascadia Code",ui-monospace,monospace;color:var(--dim);white-space:nowrap}
+.lc button{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 7px;border:0;border-radius:6px;background:rgba(128,128,128,.14);color:var(--text);font:600 11.5px Manrope,sans-serif;cursor:pointer}
+.lc button svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.lc .ok{color:hsl(140 55% 52%)}
+.anchor{position:relative;display:inline-block}
+/* the PR in the header, beside the title */
+.hd .tline{display:flex;align-items:center;gap:8px;min-width:0}.hd .tline h1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.hd .gh{height:20px;font-size:11.5px;flex:none}
+.note{font-size:11.5px;color:var(--faint);padding:2px 22px 14px}
+.oq{max-width:1040px;margin:34px auto 0;font-size:12.5px;color:var(--dim)}
+.oq h3{font-size:14px;margin:0 0 6px;color:var(--text)}.oq li{margin:5px 0;line-height:1.55;max-width:860px}
+</style></head><body>
+<div class="top"><h1>Links in replies</h1><span>round 81 · mockup</span><button class="tg" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<div class="lede">Every web link in a reply opens in <b>your browser</b>. A <b>pull request</b> or issue shows as a chip, a <b>localhost</b> address as the tray's green port. Hover shows the whole address with <b>Copy</b>. The session's PR sits beside its title.</div>
+<div id="out"></div>
+<div class="oq"><h3>Open questions</h3><ol>
+  <li>The PR's state (open, draft, merged, closed) colours its icon. Workwood asks <code>gh</code> for it when the link appears and when you open the session. Worth it, or a plain chip with no state?</li>
+  <li>The header shows the <b>last</b> PR the agent linked in the session. If a session opened several, should the others be listed in the chip's menu?</li>
+</ol></div>
+<script>
+const P={ext:'<path d="M7 17 17 7M9 7h8v8"/>',copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',check:'<path d="M20 6 9 17l-5-5"/>',
+pr:'<circle cx="6" cy="6" r="2.2"/><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2v7.6M18 15.8V9a3 3 0 0 0-3-3h-4m2-2-2 2 2 2"/>',
+merge:'<circle cx="6" cy="6" r="2.2"/><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="12" r="2.2"/><path d="M6 8.2v7.6M6 8c0 3 3 4 9.8 4"/>',
+issue:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>',
+chat:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',term:'<path d="m4 17 6-6-6-6M12 19h8"/>',diff:'<path d="M12 4v8M8 8h8M8 18h8"/>',
+kebab:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',pulse:'<path d="M4 12h3l2-6 4 12 2-6h5"/>'};
+const s=(k,c='')=>`<svg viewBox="0 0 24 24" class="${c}">${P[k]}</svg>`;
+const GM='<svg viewBox="0 0 16 16" class="gm"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.71 1.23 1.87.87 2.33.67.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>';
+const gh=(st,n,repo,ic='pr')=>`<a class="gh ${st}">${GM}${repo?`<span class="rp">${repo}</span>`:''}${s(st==='merged'?'merge':ic,'st')}#${n}</a>`;
+const port=(p,live,host="localhost",ic="ext")=>`<a class="prt${live?" live":" n"}"><span class="ad">${host}:</span>${p}${s(ic)}</a>`;
+const wl=(t,c='')=>`<a class="wl ${c}">${t}${s('ext')}</a>`;
+const card=(u,copied)=>`<span class="lc" style="left:0;top:26px">${u}<button class="${copied?'ok':''}">${s(copied?'check':'copy')}${copied?'Copied':'Copy'}</button></span>`;
+const head=(t,w,pr,...x)=>`<header class="head"><div class="hd"><div class="tline"><h1>${t}</h1>${pr||''}</div><div class="where">${w}</div></div>${x.join('')}</header>`;
+const seg=`<div class="seg"><button class="ib on">${s('chat')}</button><button class="ib">${s('term')}</button></div>`;
+const chip=(i,n)=>`<button class="ib wide">${s(i)}<span>${n}</span></button>`;
+const done=`<button class="doneb">${s('check')}<span>Done</span></button>`,more=`<button class="ib">${s('kebab')}</button>`;
+const ST=[
+ ['In a reply','PR, issue, port, ordinary link',`<div class="fr pad"><div class="ai">
+  <p>Opened ${gh('open',214,'')} with the parser fix; it closes ${gh('open',198,'acme/shop','issue')}. The dev server is up at ${port(5173,true)}, and Storybook at ${port(6006,true)}.</p>
+  <p>The old preview on ${port(4000,false)} has stopped. The change follows the ${wl('Vite guide on env files')}.</p></div></div>`],
+ ['Hover','the whole address, and Copy; right-click gives Open and Copy link too',`<div class="fr pad" style="padding-bottom:46px"><div class="ai"><p>Opened <span class="anchor">${gh('open',214,'')}${card('github.com/acme/shop/pull/214')}</span> with the parser fix, and the docs follow the <span class="anchor" style="margin-left:150px">${wl('Vite guide on env files','hv')}${card('vite.dev/guide/env-and-mode',true)}</span>.</p></div></div>`],
+ ['The header','the last PR linked in the session, beside the title',`<div class="fr">${head('Fix the parser','shop · fix-parser',gh('open',214,''),chip('diff',5),seg,done,more)}</div>`],
+ ['Merged','',`<div class="fr">${head('Fix the parser','shop · fix-parser',gh('merged',214,''),chip('diff',5),seg,done,more)}</div>`],
+ ['Narrow','the title gives way first; the chip keeps its number',`<div class="fr narrow">${head('Fix the parser and the tokenizer','shop',gh('draft',214,''),chip('diff',5),seg,more)}</div>`],
+ ['Phone','localhost becomes the PC\'s home address',`<div class="fr phone"><div class="ai"><p>Opened ${gh('open',214,'')}. The dev server is up at ${port(5173,true,'192.168.1.20')}.</p><p>The admin at ${port(8080,false,"localhost","copy")} listens only on the PC.</p></div></div><div class="note" style="max-width:380px;padding-left:0">A server bound to 127.0.0.1 can't be reached from the phone: its chip is grey, and a tap copies the address.</div>`],
+];
+document.getElementById('out').innerHTML=ST.map(([t,d,h])=>`<div class="rw"><h2>${t}<span>${d}</span></h2>${h}</div>`).join('');
+</script>
+</body></html>

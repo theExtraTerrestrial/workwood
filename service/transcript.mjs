@@ -539,6 +539,14 @@ export function failedCommand(m) {
 
 const textOfError = msg => (msg?.content || []).filter(b => b.type === 'text').map(b => b.text).join(' ').split('\n')[0] || 'something went wrong';
 
+// The pull requests the answers linked to, in the order they were last named: the header shows the newest.
+const PR_URL = /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/g;
+export function prsIn(items) {
+  const seen = new Map();
+  for (const it of items) if (it.kind === 'assistant' && typeof it.text === 'string') for (const [u] of it.text.matchAll(PR_URL)) { seen.delete(u); seen.set(u, 1); }
+  return [...seen.keys()];
+}
+
 /** Reads a transcript file into items. Returns only the newest `limit` items. */
 export async function readTranscript(file, limit = 400, cwd = null) {
   const b = new Builder(0, cwd);
@@ -571,5 +579,5 @@ export async function readTranscript(file, limit = 400, cwd = null) {
     work = work.concat(earlyFiles(file).filter(f => !seen.has(f.path) && seen.add(f.path)));
   }
   const items = b.items.slice(-limit).map(({ open, ...it }) => it);
-  return { items, context: b.context, total: b.items.length, cut: start > 0 || b.items.length > limit, work, model: b.model || null, effort: b.effort || null, mode };
+  return { items, context: b.context, total: b.items.length, cut: start > 0 || b.items.length > limit, work, model: b.model || null, effort: b.effort || null, mode, prs: prsIn(b.items) };
 }

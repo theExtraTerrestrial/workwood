@@ -2857,6 +2857,7 @@ ui('window: an answer is read aloud from the speaker before Copy, sentence by se
   const id = await page.locator('.sess.sel').getAttribute('data-id'); await idle(id); await page.waitForSelector('#send[data-tip="Send"]');
   const now = () => page.evaluate(() => { const h = CSS.highlights.get('ra-now'); return h ? [...h][0].toString() : null; });
   const before = readLog(sb).length;
+  try {
   // the strip: in front, lit sentence, Space pauses, → steps, Esc stops
   await page.click('.tfoot [data-ra]');
   await page.waitForSelector('#hstrip.ply:has-text("Reading aloud · 1 of 2")');
@@ -2890,7 +2891,8 @@ ui('window: an answer is read aloud from the speaker before Copy, sentence by se
   await page.evaluate(() => localStorage.removeItem('ww.raSpot'));
   await page.click('.tfoot [data-ra]'); await page.waitForSelector('#raMini:not([hidden]):has-text("Reading aloud")');
   assert.equal(await page.locator('#raMini').evaluate(m => m.style.left), '50%');
-  const g = await page.locator('#raMini [data-ra-grip]').boundingBox(), conv = await page.locator('#conv').boundingBox();
+  let g = null; await until(async () => (g = await page.locator('#raMini [data-ra-grip]').boundingBox())?.width > 0, 'the card to be laid out');
+  const conv = await page.locator('#conv').boundingBox();
   await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2); await page.mouse.down();
   await page.mouse.move(conv.x + conv.width - 60, conv.y + 40, { steps: 4 });
   await page.waitForSelector('.radrop [data-spot="top-right"].hl');
@@ -2905,7 +2907,11 @@ ui('window: an answer is read aloud from the speaker before Copy, sentence by se
   await page.click('#spage .rlc[data-rplace="strip"]'); await page.waitForSelector('#spage .rlc.on[data-rplace="strip"]');
   await page.click('#spage [data-rspd="1.5"]'); await page.waitForSelector('#spage [data-rspd="1.5"].on');
   assert.equal((await svc.call('settings', {})).body.readSpeed, 1.5);
-  await svc.call('settings', { readSpeed: 1 }); await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  } finally {  // a failure here must not leave the next tests a card, or reading on
+    await page.mouse.up(); await page.evaluate(() => { raStop(); localStorage.removeItem('ww.raSpot'); });
+    await svc.call('settings', { readPlace: 'strip', readSpeed: 1 });
+  }
 });
 
 ui('window: before Kokoro is here the speaker opens Speech settings, where Download gets it and the speaker then reads', async () => {

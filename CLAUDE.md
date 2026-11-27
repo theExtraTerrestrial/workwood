@@ -20,8 +20,10 @@ own git worktree, never in the main checkout:
   Previews of pages in the worktree (design rounds) work as they do in the main folder.
 - When the feature is done and its tests pass, say so and offer to merge it into `main` and clean up. Only on a yes:
   commit in the worktree, rebase it on `main` (other sessions may have merged meanwhile; rerun the tests after),
-  merge with a fast-forward, then remove the worktree (`git worktree remove`) and delete its branch.
-  Never merge or remove a worktree without asking.
+  merge with a fast-forward, push `main` to GitHub (`git push origin main`), then remove the worktree
+  (`git worktree remove`) and delete its branch. Never merge or remove a worktree without asking. If the push is
+  refused because `origin/main` moved, pull with a rebase (`git pull --rebase origin main`), rerun the tests, and push
+  again; never force-push.
 
 ## A test that fails now and then
 

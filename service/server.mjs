@@ -161,7 +161,7 @@ async function goAuto(id, run) {
 async function nameLater(id) {
   const title = titleLater.get(id), s = state.sessions.find(x => x.id === id);
   if (!title || !s?.file) return;
-  try { await src.renameSession(s.file, id, title); titleLater.delete(id); s.title = title; renamed.set(id, [++order, title]); pushState(); } catch {}
+  try { await src.renameSession(s.file, id, title); titleLater.delete(id); s.title = title; renamed.set(id, [++order, title]); pushState(); } catch {}   // not saved yet: the next list refresh tries again
 }
 const readings = usage.makeQueue((name, ev) => {
   if (ev.queued || ev.reading) reading.add(name); else reading.delete(name);
@@ -276,6 +276,7 @@ async function doRefresh() {
     if (!own) { own = new Set(sessions.filter(s => !done.has(s.id)).map(s => s.id)); keep(); }   // first run with an inbox: nothing vanishes unasked
     for (const [id, at] of done) { const s = sessions.find(x => x.id === id); if (s && s.mts > at + 2) { done.delete(id); own.add(id); } }   // worked on since, here or in a terminal
   }
+  for (const id of titleLater.keys()) if (runs.get(id)?.status === 'idle') nameLater(id);   // a thread's new session that was not listed, or had no history, when its turn ended
   state.projects = await src.loadProjects(state.sessions, folders());
   state.ready = true; state.fresh = !!(profiles && sessions);
   pushState();
@@ -376,6 +377,7 @@ async function handOff(s, b) {
     prevOf.set(id, s.id); await ho.saveHandoff(id, h);
     titleLater.set(id, s.title);
     await listNew(id, s.cwd, s.title, profile);
+    if (runs.get(id)?.status === 'idle') nameLater(id);   // its first turn ended before it was listed
     done.set(s.id, Math.max(nowS(), s.mts)); unread.delete(s.id); await keep();   // the thread goes on in the new session: the old one leaves the inbox
     handing.delete(s.id);
     emit('handoff', { sessionId: s.id, state: 'done', to: id }); pushState();

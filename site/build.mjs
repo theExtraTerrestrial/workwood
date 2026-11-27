@@ -25,5 +25,7 @@ for (const [id, files] of Object.entries(made)) for (const f of files) {
   const to = path.join(app, 'demo-files', id, 'home', 'you', 'workspace', f);
   fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(path.join(root, 'site', 'demo-files', f), to);
 }
+// the features grid's pictures (npm run shots makes them)
+fs.cpSync(path.join(root, 'site', 'shots'), path.join(out, 'shots'), { recursive: true });
 fs.writeFileSync(path.join(out, '.nojekyll'), '');
 console.log('Built ' + out);

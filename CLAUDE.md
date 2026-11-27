@@ -25,6 +25,20 @@ own git worktree, never in the main checkout:
   refused because `origin/main` moved, pull with a rebase (`git pull --rebase origin main`), rerun the tests, and push
   again; never force-push.
 
+## Versions
+
+Workwood follows Semantic Versioning (MAJOR.MINOR.PATCH) in `package.json`; Settings, About shows it. Every merge
+into `main` raises it, in its last commit, in both `package.json` and `package-lock.json` (by hand: `npm version`
+would run npm through the shared `node_modules` link).
+
+- PATCH (0.2.0 → 0.2.1) is the default: fixes, small changes, docs, tests.
+- Weigh the change. A new feature someone would notice, or a clear change in how something works, fits MINOR
+  (0.2.1 → 0.3.0); something that breaks how Workwood is installed, set up or used, or drops a feature, fits MAJOR.
+  When it seems more than a patch, say which and why when offering to merge, and ask; raise it so only on a yes,
+  otherwise raise PATCH. The user may also say up front that a change is MINOR or MAJOR.
+- A MINOR or MAJOR release is tagged on the merged commit (`git tag -a v0.3.0 -m "<what is new>"`) and the tag is
+  pushed with `main` (`git push origin main v0.3.0`). Patches are not tagged.
+
 ## A test that fails now and then
 
 - A failing test in `tests/app.test.mjs` leaves its evidence in `<tmp>/workwood-test-failures/<run>/<test>/` (the fake

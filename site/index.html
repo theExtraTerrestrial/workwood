@@ -152,6 +152,24 @@
   .code pre s{text-decoration:none;color:#4fd6a4;user-select:none}.code pre q{quotes:none;color:#777c86}
   .after{margin:18px auto 0;color:var(--dim);font-size:15px;max-width:560px}.after b{color:var(--text)}
   .why{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;margin-top:34px;color:var(--faint);font-size:14px}.why span{display:flex;align-items:center;gap:8px}.why svg{color:var(--accent);font-size:16px}
+  /* the features grid: one picture and one line each, a dark and a light picture swapped with the theme */
+  section.more{padding-top:40px;padding-bottom:96px}
+  section.more .lead{color:var(--dim);font-size:18px;margin:0 0 40px;max-width:560px}
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .tile{background:var(--bg);border-radius:18px;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden;display:flex;flex-direction:column;transition:transform .2s,box-shadow .2s}
+  .tile:hover{transform:translateY(-3px);box-shadow:inset 0 0 0 1px var(--line2),0 24px 60px rgba(0,0,0,.3)}
+  .tile.w2{grid-column:span 2}
+  .tile .pic{height:220px;position:relative;overflow:hidden;background:var(--chrome)}
+  .tile .pic img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}
+  .tile .pic.ph img{inset:auto;top:24px;left:calc(50% - 160px);width:auto;height:150%;object-fit:initial;border-radius:20px;box-shadow:0 18px 50px rgba(0,0,0,.45),0 0 0 1px var(--line2)}
+  .tile .pic.ph img.b{left:calc(50% + 12px)}
+  [data-theme=dark] .tile img.l,[data-theme=light] .tile img.d{display:none}
+  .tile .tx{padding:18px 20px 20px}
+  .tile .tx b{display:block;font-size:17px;letter-spacing:-.01em;margin-bottom:3px}
+  .tile .tx p{margin:0;color:var(--dim);font-size:14px;line-height:1.5}
+  .tile .new{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:6px;margin-left:8px;vertical-align:3px}
+  @media (max-width:900px){.tiles{grid-template-columns:1fr 1fr}}
+  @media (max-width:600px){.tiles{grid-template-columns:1fr}.tile.w2{grid-column:auto}}
   footer{border-top:1px solid var(--line);padding:26px 0 40px;color:var(--faint);font-size:14px}footer .wrap{display:flex;gap:20px;align-items:center}footer a:hover{color:var(--text)}
 
   @media(max-width:900px){
@@ -186,7 +204,7 @@
 
 <nav id="nav"><div class="wrap">
   <a class="logo" href="#"><svg><use href="#logo"/></svg>Workwood</a>
-  <a class="l" href="#why">Why</a><a class="l" href="#get">Get it</a><a class="l" href="https://github.com/theExtraTerrestrial/workwood">GitHub</a>
+  <a class="l" href="#why">Why</a><a class="l" href="#features">Features</a><a class="l" href="#get">Get it</a><a class="l" href="https://github.com/theExtraTerrestrial/workwood">GitHub</a>
   <button class="tg" id="theme" title="Light / dark"><svg class="i"><use href="#i-sun"/></svg></button>
   <a class="btn s" href="#get">Get it</a>
 </div></nav>
@@ -215,6 +233,21 @@
   <section class="f"><div class="copy rv"><span class="k">Nothing new to learn</span><h2>Still <em>Claude Code.</em></h2><p>Same sessions, same history, same skills. The real terminal is one switch away, and everything runs on your own machine.</p></div>
     <div class="vis rv"><iframe class="live" inert tabindex="-1" aria-hidden="true" data-scene="terminal" data-w="1100" data-h="525" data-x="0" title="Workwood demo"></iframe></div></section>
 </main>
+
+<section class="more wrap" id="features">
+  <div class="rv"><span class="k">And the rest</span><h2>Everything a long day <em>needs.</em></h2>
+  <p class="lead">Small things that add up when five agents are working at once.</p></div>
+  <div class="tiles">
+    <div class="tile w2 rv"><div class="pic"><img class="d" src="shots/wall-dark.jpg" alt="" loading="lazy"><img class="l" src="shots/wall-light.jpg" alt="" loading="lazy"></div><div class="tx"><b>The Wall<span class="new">New</span></b><p>Leave it up on a second screen. Answer permissions and short questions from the dock.</p></div></div>
+    <div class="tile rv"><div class="pic ph"><img class="d" src="shots/phone-dark.jpg" alt="" loading="lazy"><img class="l" src="shots/phone-light.jpg" alt="" loading="lazy"><img class="d b" src="shots/phone-session-dark.jpg" alt="" loading="lazy"><img class="l b" src="shots/phone-session-light.jpg" alt="" loading="lazy"></div><div class="tx"><b>On your phone<span class="new">New</span></b><p>Over your home Wi-Fi. No account, no outside server.</p></div></div>
+    <div class="tile rv"><div class="pic"><img class="d" src="shots/read-dark.jpg" alt="" loading="lazy"><img class="l" src="shots/read-light.jpg" alt="" loading="lazy"></div><div class="tx"><b>Read aloud<span class="new">New</span></b><p>Answers read to you sentence by sentence, on your own computer.</p></div></div>
+    <div class="tile rv"><div class="pic"><img class="d" src="shots/rewind-dark.jpg" alt="" loading="lazy"><img class="l" src="shots/rewind-light.jpg" alt="" loading="lazy"></div><div class="tx"><b>Rewind</b><p>Take back a message and everything after it, files included.</p></div></div>
+    <div class="tile rv"><div class="pic"><img class="d" src="shots/previews-dark.jpg" alt="" loading="lazy"><img class="l" src="shots/previews-light.jpg" alt="" loading="lazy"></div><div class="tx"><b>Previews</b><p>Pages, pictures and PDFs the agent made open beside the chat.</p></div></div>
+    <div class="tile rv"><div class="pic"><img class="d" src="shots/handoff-dark.jpg" alt="" loading="lazy"><img class="l" src="shots/handoff-light.jpg" alt="" loading="lazy"></div><div class="tx"><b>Handoff</b><p>A long session goes on in a fresh one without losing anything.</p></div></div>
+    <div class="tile rv"><div class="pic"><img class="d" src="shots/dictation-dark.jpg" alt="" loading="lazy"><img class="l" src="shots/dictation-light.jpg" alt="" loading="lazy"></div><div class="tx"><b>Dictation</b><p>Talk instead of typing. Speech stays on your computer.</p></div></div>
+    <div class="tile rv"><div class="pic"><img class="d" src="shots/drafts-dark.jpg" alt="" loading="lazy"><img class="l" src="shots/drafts-light.jpg" alt="" loading="lazy"></div><div class="tx"><b>Drafts that stay put</b><p>What you didn't send waits in its own session.</p></div></div>
+  </div>
+</section>
 
 <section class="get" id="get"><div class="wrap">
   <p class="tag rv">Stop watching <em>terminals.</em></p>

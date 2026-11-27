@@ -1409,7 +1409,7 @@ test('settings: default profile and dictation language are kept; sign-in again r
   assert.deepEqual([kept.defaultProfile, kept.language, typeof kept.done], ['other', 'latvian', 'object']);
   assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, handoff });
   const a = (await svc.call('about')).body;
-  assert.deepEqual([a.version, a.claude, typeof a.speech.model], ['0.1.0', '2.1.322', 'string']);
+  assert.deepEqual([a.version, a.claude, typeof a.speech.model], [JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version, '2.1.322', 'string']);
   assert.equal((await svc.call('profiles/nobody/login', {})).status, 404);
 });
 

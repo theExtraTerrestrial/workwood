@@ -2871,7 +2871,15 @@ function phInit(){
   // The preview's Open in browser would leave the app in a window Back cannot get out of; the phone gets Fit instead:
   // the page laid out at a desktop width and scaled down to the screen, as a browser shows a page made for a computer.
   $('bExt').dataset.i='zoomout';$('bExt').dataset.tip='Fit the whole page';hydrate($('bExt').parentNode);
-  $('bExt').onclick=()=>{V.pvFit=!V.pvFit;phFit()};addEventListener('resize',phFit);   // the phone's own picker offers the camera, photos and files
+  $('bExt').onclick=()=>{V.pvFit=!V.pvFit;phFit()};addEventListener('resize',phFit);
+  // Zoomed out, a swipe in from the left or right edge goes to the previous or next preview. The page takes its own
+  // touches, so two thin strips over its edges catch these.
+  for(const d of [-1,1]){const e=document.createElement('div');e.className='phedge '+(d<0?'l':'r');e.innerHTML=`<i>${svg(d<0?'chev-l':'chev-r')}</i>`;$('pvw').appendChild(e);
+    let x0=null,dx=0;const pull=v=>{e.style.setProperty('--dx',v+'px');e.classList.toggle('arm',Math.abs(v)>=56)};
+    e.addEventListener('touchstart',t=>{x0=t.touches[0].clientX;dx=0;e.classList.add('drag')},{passive:true});
+    e.addEventListener('touchmove',t=>{if(x0==null)return;t.preventDefault();dx=t.touches[0].clientX-x0;pull(Math.max(0,Math.min(80,-d*dx))*-d)},{passive:false});
+    const end=()=>{if(x0==null)return;x0=null;e.classList.remove('drag');const go=-d*dx>=56;pull(0);if(go)step(d)()};
+    e.addEventListener('touchend',end,{passive:true});e.addEventListener('touchcancel',()=>{x0=null;e.classList.remove('drag');pull(0)},{passive:true})}   // the phone's own picker offers the camera, photos and files
   // Swipe up on the box, or on the line under it, opens the drawer. It opens while the finger moves, so a gesture the
   // browser takes over (a focused box, the keyboard moving the page) still counts. Text that scrolls keeps its swipe.
   for(const el of [$('box'),sum]){let y0=null;
@@ -2890,6 +2898,7 @@ function phInit(){
 }
 const PH_FIT=980;
 function phFit(){const st=$('stage'),on=!!V.pvFit;$('pvw').classList.toggle('fit',on);$('bExt').classList.toggle('on',on);
+  $('pvw').classList.toggle('many',pvList().length>1);$('pvw').style.setProperty('--st',st.offsetTop+'px');
   if(on&&st.clientWidth){const k=st.clientWidth/PH_FIT;st.style.setProperty('--fs',k);st.style.setProperty('--fh',st.clientHeight/k+'px')}}
 function phGo(k){phClose();if(k==='home'||k==='new'){PT=k;newSession();if(k==='home')$('input').blur()}else{PT=k;render()}if(k==='settings')phSettings();$('scroll').scrollTop=0}
 function phFromNote(sid,act){if(!sid)return;phAfter={s:sid,act};PT='session';openSession(sid)}

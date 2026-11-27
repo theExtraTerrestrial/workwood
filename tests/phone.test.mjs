@@ -270,6 +270,13 @@ test('on the phone: tabs, a session full screen with the pill and its drawer, a 
     const code = new URL((await svc.call('phone')).body.url).searchParams.get('pair');
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ignoreHTTPSErrors: true });
     const page = await ctx.newPage(); page.setDefaultTimeout(8000);
+    // a finger: Playwright has taps but no swipes
+    const cdp = await ctx.newCDPSession(page);
+    const swipe = async (x, y1, y2, steps = 8, x2 = x) => {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: y1 }] });
+      for (let i = 1; i <= steps; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + (x2 - x) * i / steps, y: y1 + (y2 - y1) * i / steps }] }); await page.waitForTimeout(16); }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
     await page.goto(`https://127.0.0.1:${INNER}/?pair=${code}`);
     await page.waitForSelector('html.ph[data-pt=home]');
     assert.deepEqual(await page.locator('#ptabs button span').allTextContents(), ['Home', 'Sessions', 'New', 'Settings']);
@@ -316,6 +323,18 @@ test('on the phone: tabs, a session full screen with the pill and its drawer, a 
     assert.ok(Math.abs(fit.fw - fit.sw) < 1 && Math.abs(fit.fb - fit.sb) < 2, 'the scaled page fills the stage: ' + JSON.stringify(fit));
     assert.equal(await page.frameLocator('#stage iframe').locator('body').evaluate(b => innerWidth), 980);
     if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT + '-fit.png' });
+    // zoomed out, a swipe in from an edge goes to the next or previous preview; a short one does not
+    const other = path.join(sb.projects.alpha, 'other.html'); fs.writeFileSync(other, '<h1>Other</h1>');
+    await page.evaluate(p => { addWork([{ path: p, name: 'other.html', kind: 'page', v: 1 }]); renderPanel(); }, other);
+    const st = await page.locator('#stage').boundingBox(), mid = st.y + st.height / 2, first = await page.locator('#pName').textContent();
+    await swipe(st.x + st.width - 6, mid, mid, 6, st.x + st.width - 30);
+    assert.equal(await page.locator('#pName').textContent(), first, 'a short pull stays');
+    await swipe(st.x + st.width - 6, mid, mid, 8, st.x + st.width - 120);
+    await page.waitForFunction(f => document.querySelector('#pName').textContent !== f, first);
+    const second = await page.locator('#pName').textContent();
+    await swipe(st.x + 6, mid, mid, 8, st.x + 120);
+    await page.waitForFunction(f => document.querySelector('#pName').textContent !== f, second);
+    assert.equal(await page.locator('#pName').textContent(), first, 'and back from the left edge');
     await page.click('#bExt');
     assert.equal(await page.frameLocator('#stage iframe').locator('body').evaluate(b => innerWidth) < 500, true, 'and back to the phone\'s width');
     await page.click('#bClose');
@@ -329,12 +348,6 @@ test('on the phone: tabs, a session full screen with the pill and its drawer, a 
     await page.click('[data-dback]');
     await page.mouse.click(195, 30);
     // swipe up on the box opens the drawer; pulled down by its handle it closes; a short pull springs back
-    const cdp = await ctx.newCDPSession(page);
-    const swipe = async (x, y1, y2, steps = 8, x2 = x) => {
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: y1 }] });
-      for (let i = 1; i <= steps; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + (x2 - x) * i / steps, y: y1 + (y2 - y1) * i / steps }] }); await page.waitForTimeout(16); }
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    };
     const box = await page.locator('#box').boundingBox();
     await swipe(195, box.y + 20, box.y - 80);
     await page.waitForSelector('#phDim:not([hidden])');

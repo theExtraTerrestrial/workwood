@@ -1744,6 +1744,15 @@ html.ph #bFull,html.ph #bRefresh{display:none}
 /* Fit: the page at a desktop width, scaled to the screen */
 html.ph #pvw.fit .stage{padding:0;overflow:hidden;display:block}
 html.ph #pvw.fit .stage>.pvf{width:980px;height:var(--fh);transform:scale(var(--fs));transform-origin:0 0;border-radius:0;box-shadow:none}
+html.ph #pvw{position:relative}
+html.ph #pvw.fit.many .phedge{display:block}
+.phedge{display:none;position:absolute;top:var(--st,0);bottom:0;width:22px;z-index:2;touch-action:none}
+.phedge.l{left:0}.phedge.r{right:0}
+.phedge i{position:absolute;top:50%;width:36px;height:36px;margin-top:-18px;border-radius:50%;display:grid;place-items:center;background:var(--surface2);color:var(--text);box-shadow:var(--shadow);opacity:0;transition:opacity .15s,background .15s,transform .2s ease-out}
+.phedge.l i{left:-36px;transform:translateX(var(--dx,0))}.phedge.r i{right:-36px;transform:translateX(var(--dx,0))}
+.phedge.drag i{opacity:1;transition:opacity .15s,background .15s}
+.phedge.arm i{background:var(--text);color:var(--bg)}
+.phedge svg{width:18px;height:18px}
 /* the queue: one short line over it, and buttons big enough for a finger */
 html.ph .queue{border-radius:18px 18px 0 0;padding:8px 6px 4px 14px;font-size:14px}
 html.ph .queue .hint{display:none}

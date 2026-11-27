@@ -1577,7 +1577,7 @@ function speechRow(){
 // Look: the theme, and a background for Home, a session and the sidebar, each with its own Motion and Warn at limits.
 function renderLook(pg){
   const ed=V.lookEdit||'home',b=bgOf(ed),k=b.kind,still=BGSTILL.includes(k),th=themePref(),who=ed==='session'?'this session':'an agent';
-  const key=[ed,k,b.motion,b.limits,th,root.dataset.theme,bgHues(ed,selSession()),skyList().map(s=>s.id)].join('|');
+  const key=[ed,k,b.motion,b.limits,th,root.dataset.theme,bgHues(ed,selSession()),skyList().map(s=>s.id),wallOn(),skyLabels()].join('|');
   if(pg.dataset.look===key&&pg.querySelector('.hbgs')){for(const t of pg.querySelectorAll('[data-tk="constel"]'))skyMark(t);return}
   pg.dataset.look=key;
   const seg=(items,cur,attr)=>`<div class="lseg">${items.map(([v,n])=>`<button data-${attr}="${v}" class="${v===cur?'on':''}">${n}</button>`).join('')}</div>`;
@@ -1588,7 +1588,9 @@ function renderLook(pg){
     <div class="lgrp">Moving</div>${tiles(BGMOVE)}
     <div class="lgrp">Calm, for reading</div>${tiles([...BGCALM,'none'])}
     <div class="srow lstack ${still?'off':''}"><span>Motion<small>${still?(k==='none'?'Nothing to move.':'This one is always still.'):b.motion==='working'?`Only while ${who} works, then it comes to rest.`:b.motion==='always'?`Livelier while ${who} works.`:'Holds still, in the same colours.'}</small></span>${seg([['always','Always'],['working','While working'],['never','Never']],b.motion,'bgm')}</div>
-    <div class="srow"><span>Warn at limits<small>Warm near ${ed==='session'?'this session’s':'a'} limit, red at it. Even when still or None.</small></span><i class="stog ${b.limits?'on':''}" data-set="bglim"></i></div>`;
+    <div class="srow"><span>Warn at limits<small>Warm near ${ed==='session'?'this session’s':'a'} limit, red at it. Even when still or None.</small></span><i class="stog ${b.limits?'on':''}" data-set="bglim"></i></div>`
+    +(ed==='home'&&k==='constel'?`<div class="srow"><span>Project names<small>Each figure’s project, written under it.</small></span><i class="stog ${skyLabels()?'on':''}" data-set="skylab"></i></div>`:'')
+    +(ed==='home'?`<div class="srow"><span>Wall<small>A Home view of only this background and what’s running, to watch from. A soft chime plays when a session needs you while it shows.</small></span><i class="stog ${wallOn()?'on':''}" data-set="wall"></i></div>`:'');
   const [h1,h2,h3]=bgHues(ed,selSession());
   for(const t of pg.querySelectorAll('[data-tk]')){const v=t.dataset.tk;t.style.cssText=`--h1:${h1};--h2:${h2};--h3:${h3}`;
     t.innerHTML=v==='none'?'':v==='constel'?skySVG(skyList(),skyDims(t,true),null):hbgHTML(v)+'<span class="fld grain"></span>';if(v==='constel')skyMark(t)}
@@ -1856,6 +1858,8 @@ $('spage').onclick=async e=>{
   if(lk){const ed=V.lookEdit||'home',d=lk.dataset;
     if(d.th)setTheme(d.th);else if(d.bgp)V.lookEdit=d.bgp;else if(d.bgk)setBg(ed,'bg',d.bgk);else if(d.bgm)setBg(ed,'motion',d.bgm);
     renderSettings();return}
+  if(s?.dataset.set==='wall'){localStorage.setItem('ww.wall',wallOn()?'off':'on');renderHome();renderSettings();return}
+  if(s?.dataset.set==='skylab'){localStorage.setItem('ww.skylabels',skyLabels()?'off':'on');renderBgs();renderSettings();return}
   if(s?.dataset.set==='bglim'){const ed=V.lookEdit||'home';setBg(ed,'limits',bgOf(ed).limits?'off':'on');renderSettings();return}
   if(e.target.closest('#lgOpen')&&L?.url){openLink(e,L.url);return}
   if(e.target.closest('#lgCopy')&&L?.url){const b=$('lgCopy');try{await copyText(L.url);b.textContent='Copied'}catch{b.textContent='Select it in the terminal'}setTimeout(()=>{if(b.isConnected)b.textContent='Copy link'},1500);return}
@@ -2441,7 +2445,10 @@ async function sendText(text,asProfile,attachments){
 // Shown in place of an empty new session: the message box stays under it, so starting new work is still one step.
 // Three views of the same things: what to pick up, each project, and when you worked.
 const H={seen:new Set(),d:null,act:null,fresh:false,view:(v=>v==='week'?'time':v)(localStorage.getItem('ww.home')||'pick'),busy:false,again:false,sig:'',actAt:0,actBusy:false};
-const HVIEWS=[['pick','Pick up','Where each piece of work was left'],['projects','Projects','Each project at a glance'],['time','Time','When you worked: a day, a week or 30 days']];
+const HVIEWS=[['pick','Pick up','Where each piece of work was left'],['projects','Projects','Each project at a glance'],['time','Time','When you worked: a day, a week or 30 days'],['wall','Wall','The background and what’s running, to watch from']];
+const wallOn=()=>localStorage.getItem('ww.wall')!=='off'&&!PHONE;
+const homeViews=()=>HVIEWS.filter(v=>v[0]!=='wall'||wallOn());
+const inWall=()=>isHome()&&H.view==='wall'&&wallOn();
 // What Home showed last time, so it opens with that instead of empty boxes; fresh readings replace it in place.
 // Only the very first opening, with nothing remembered, draws skeletons.
 const HCACHE='ww.homeCache';
@@ -2582,10 +2589,12 @@ function timeView(){
 }
 function renderHome(){
   const on=isHome(),d=$('dash');
-  d.hidden=!on;$('dseg').hidden=$('hset').hidden=!on;$('main').classList.toggle('home',on);renderHomeBg();
+  d.hidden=!on;$('dseg').hidden=$('hset').hidden=!on;$('main').classList.toggle('home',on);$('main').classList.toggle('wall',on&&H.view==='wall'&&wallOn());renderHomeBg();
+  renderNow();skyPaint();
   if(!on)return;
-  $('dseg').innerHTML=HVIEWS.map(([k,n,t])=>`<button class="${H.view===k?'on':''}" data-hv="${k}" data-tip="${t}">${n}</button>`).join('');
-  const parts=PHONE?[leftOff(),limits()].filter(Boolean):H.view==='projects'?projectsView():H.view==='time'?timeView():[leftOff(),limits(),notCommitted(),madeLately()].filter(Boolean);
+  if(H.view==='wall'&&!wallOn())H.view='pick';
+  $('dseg').innerHTML=homeViews().map(([k,n,t])=>`<button class="${H.view===k?'on':''}" data-hv="${k}" data-tip="${t}">${n}</button>`).join('');
+  const parts=PHONE?[leftOff(),limits()].filter(Boolean):H.view==='wall'?[]:H.view==='projects'?projectsView():H.view==='time'?timeView():[leftOff(),limits(),notCommitted(),madeLately()].filter(Boolean);
   patch(d,parts.map(([k,h])=>[H.view+':'+k,h]));fitThumbs();
   // A section fades in when it first appears, not each time a reading redraws it.
   for(const el of d.children){if(H.seen.has(el.dataset.k))el.style.animation='none';H.seen.add(el.dataset.k)}
@@ -2690,8 +2699,16 @@ function skySVG(list,{W,H,z},born){
 }
 // Working state only changes classes, so the sky never restarts: a working star pulses and light runs along its figure.
 function skyMark(el){
-  const work=new Set(A.sessions.filter(s=>s.status==='work').map(s=>s.id));
-  for(const g of el.querySelectorAll('.star'))g.classList.toggle('w',work.has(g.dataset.id));
+  const work=new Set(A.sessions.filter(s=>s.status==='work').map(s=>s.id)),wait=new Map(A.sessions.filter(s=>s.status==='wait').map(s=>[s.id,s]));
+  const page=el.id==='hbg';
+  for(const g of el.querySelectorAll('.star')){const id=g.dataset.id,w=wait.get(id);
+    g.classList.toggle('w',work.has(id));g.classList.toggle('a',!!w);g.classList.toggle('g',!w&&!work.has(id)&&NOW.glow.has(id));
+    // on Home a waiting star says what it waits on, beside it
+    let t=g.querySelector('.askt');
+    if(page&&w){const st=g.querySelector('.st'),say=`${w.title} · ${w.line}`;
+      if(!t){t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('class','askt');g.append(t)}
+      t.setAttribute('x',(+st.getAttribute('cx')+22).toFixed(0));t.setAttribute('y',(+st.getAttribute('cy')+7).toFixed(0));if(t.textContent!==say)t.textContent=say}
+    else t?.remove()}
   for(const f of el.querySelectorAll('.fig'))f.classList.toggle('w',!!f.querySelector('.star.w'));
 }
 // A turn that ends: its star flares and a shooting star crosses the sky.
@@ -2729,7 +2746,7 @@ function paintBg(id,place,s){
   const [h1,h2,h3]=bgHues(place,s);
   el.style.cssText=`--h1:${h1};--h2:${h2};--h3:${h3}`;
   const moves=!BGSTILL.includes(k)&&!document.hidden&&(b.motion==='always'||b.motion==='working'&&working);
-  el.className='hbg '+({home:'',session:'insession',side:'inside'}[place])+(BGCALM.includes(k)?' calm':'')+(k==='paper'?' paperbg':'')
+  el.className='hbg '+({home:'',session:'insession',side:'inside'}[place])+(place==='home'&&!skyLabels()?' nolab':'')+(BGCALM.includes(k)?' calm':'')+(k==='paper'?' paperbg':'')
     +(BGMOVE.includes(k)?' moving-kind':'')+(b.motion==='always'&&working?' working':'')+(moves?' moving':'')+(warn?' '+warn:'');
   let key=place+'|'+k+'|'+h1+h2+h3,born=null;
   if(k==='constel'){const list=skyList(),ids=list.map(x=>x.id);const dm=skyDims(el,false);key+='|'+dm.W+'x'+dm.H+'|'+ids.join();
@@ -2750,6 +2767,108 @@ const renderHomeBg=renderBgs;
 document.addEventListener('visibilitychange',renderBgs);   // a hidden window holds still
 new ResizeObserver(()=>{if(!$('hbg').hidden&&bgOf('home').kind==='constel'&&isHome())renderBgs()}).observe($('hbg'));
 $('hset').onclick=()=>{V.lookEdit='home';openSettings(STABS.indexOf('Look'))};
+
+/* ---------- watching from Home: a dock of what's live, the Wall, stars you can read and answer ----------
+   Home's Wall view is only its background and a dock, to watch from: a card per session that works or waits on you,
+   where a permission or one short question is answered; a session that starts waiting while it shows
+   plays a soft chime. On the constellation each star can be read on hover, and a waiting one answered. */
+const NOW={was:new Map(),ended:new Map(),glow:new Map(),busy:new Set(),all:false,ac:null};
+const NOW_KEEP=60000,GLOW_KEEP=180000,NOW_MAX=5;
+const skyLabels=()=>localStorage.getItem('ww.skylabels')!=='off';
+const nowLive=s=>!s.done&&!s.outside&&!s.term&&(s.status==='work'||s.status==='wait');
+// What changed since the last reading: a turn that ended keeps its card a minute and its star an afterglow.
+function nowTrack(){
+  const t=performance.now();
+  for(const s of A.sessions){const was=NOW.was.get(s.id);
+    if(was==='work'&&s.status==='idle'){NOW.ended.set(s.id,t);NOW.glow.set(s.id,t)}
+    if(s.status==='work'||s.status==='wait')NOW.ended.delete(s.id);
+    if(was&&was!=='wait'&&s.status==='wait'&&inWall())chime();
+    NOW.was.set(s.id,s.status)}
+  for(const [id,at] of NOW.ended)if(t-at>NOW_KEEP)NOW.ended.delete(id);
+  for(const [id,at] of NOW.glow)if(t-at>GLOW_KEEP)NOW.glow.delete(id);
+}
+const nowList=()=>A.sessions.filter(s=>nowLive(s)||NOW.ended.has(s.id)&&!s.done)
+  .sort((a,b)=>(b.status==='wait')-(a.status==='wait')||(b.status==='work')-(a.status==='work')||b.mts-a.mts);
+// A card's body: what it waits on and how to answer, or what it is doing.
+function nowBody(s){
+  const a=s.ask,w=s.status==='wait',busy=NOW.busy.has(s.id)?' disabled':'';
+  if(w&&a?.kind==='permission')return `<span class="stp">${esc(s.line)}</span>${a.what?`<code>${esc(a.what)}</code>`:''}<span class="acts"><button class="nb go" data-nact="allow"${busy}>Allow</button><button class="nb" data-nact="deny"${busy}>Deny</button></span>`;
+  if(w&&a?.opts)return `<span class="qq">${esc(a.q)}</span><span class="acts">${a.opts.map((o,i)=>`<button class="nb" data-nopt="${i}"${busy}>${esc(o)}</button>`).join('')}</span>`;
+  if(w)return `<span class="stp">${esc(s.line)}</span><span class="acts"><button class="nb" data-nopen>Open</button></span>`;
+  return `<span class="stp">${esc(s.status==='work'?s.line:'Done')}</span>`;
+}
+const nowCard=s=>`<div class="nc ${s.status==='wait'?'ask':s.status==='work'?'work':'gone'}" data-nid="${esc(s.id)}" style="--h:${hueOf(s.project)}"><span class="tt"><i class="nd"></i><b>${esc(s.title)}</b></span>${nowBody(s)}</div>`;
+function renderNow(){
+  nowTrack();
+  const el=$('now'),on=inWall(),list=on?nowList():[];   // the dock is the Wall's: the other views have their own lists
+  const wait=A.sessions.filter(s=>s.status==='wait'&&!s.done).length;
+  const tt=document.querySelector('title'),want=wait?`(${wait}) Workwood`:'Workwood';if(tt.textContent!==want)tt.textContent=want;   // the window's title counts what waits
+  el.hidden=!list.length;if(!list.length){el.innerHTML='';return}
+  const shown=NOW.all?list:list.slice(0,NOW_MAX),more=list.length-shown.length;
+  el.innerHTML=shown.map(nowCard).join('')+(more?`<button class="nmore" data-nmore>+${more}</button>`:NOW.all&&list.length>NOW_MAX?'<button class="nmore" data-nmore>Fewer</button>':'');
+  if(NOW.ended.size)setTimeout(()=>{if(isHome())renderNow()},NOW_KEEP+50);
+}
+async function nowClick(e){
+  if(e.target.closest('[data-nmore]')){NOW.all=!NOW.all;renderNow();return}
+  const c=e.target.closest('[data-nid]');if(!c)return;
+  const s=A.sessions.find(x=>x.id===c.dataset.nid);if(!s)return;
+  const b=e.target.closest('[data-nact],[data-nopt]');
+  if(!b){skyUnpin();openSession(s.id);return}
+  const a=s.ask;if(!a||NOW.busy.has(s.id))return;
+  const payload=b.dataset.nopt!=null?{action:'answer',answers:{[a.q]:a.opts[+b.dataset.nopt]}}:{action:b.dataset.nact};
+  NOW.busy.add(s.id);renderNow();skyPaint();
+  try{await api(`sessions/${s.id}/answer`,{requestId:a.id,...payload});skyUnpin()}catch(err){oops(err.message)}
+  finally{NOW.busy.delete(s.id);renderNow();skyPaint()}
+}
+$('now').onclick=nowClick;
+// A soft two-note chime, made here rather than shipped as a sound.
+function chime(){
+  try{const c=NOW.ac||=new AudioContext();c.resume();const t=c.currentTime;
+    for(const [f,d] of [[660,0],[880,.16]]){const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=f;
+      g.gain.setValueAtTime(0,t+d);g.gain.linearRampToValueAtTime(.07,t+d+.02);g.gain.exponentialRampToValueAtTime(.0001,t+d+.9);
+      o.connect(g).connect(c.destination);o.start(t+d);o.stop(t+d+1)}}catch{}
+}
+// The stars: hover one to read it, click a waiting one to answer it, any other to open its session.
+const SKY={pin:null,hov:null,raf:0,pop:null};
+function skyStar(x,y,target){
+  if(!isHome()||PHONE||bgOf('home').kind!=='constel'||$('hbg').hidden)return null;
+  if(target&&!(target.closest?.('#now,#skypop')==null&&['scroll','dash','conv','split','main','hello'].includes(target.id)))return null;
+  let best=null,bd=18;
+  for(const g of $('hbg').querySelectorAll('.star')){const r=g.querySelector('.st').getBoundingClientRect(),d=Math.hypot(r.left+r.width/2-x,r.top+r.height/2-y);if(d<bd){bd=d;best=g}}
+  return best;
+}
+function skyShow(g,pinned){
+  const s=A.sessions.find(x=>x.id===g.dataset.id);if(!s)return skyHide();
+  const p=SKY.pop||=Object.assign(document.createElement('div'),{id:'skypop'});if(!p.isConnected){document.body.append(p);p.onclick=nowClick}
+  const w=H.d?.words?.[s.id],say=s.status==='work'?'':w?.text||w?.first||'';
+  const when=s.status==='work'?'working':s.status==='wait'?'waiting':NOW.glow.has(s.id)?'done '+ago(s.mts):ago(s.mts);
+  p.className='nc '+(s.status==='wait'?'ask':s.status==='work'?'work':'gone')+(pinned?' pin':'');p.dataset.nid=s.id;p.style.setProperty('--h',hueOf(s.project));
+  p.innerHTML=`<span class="tt"><i class="nd"></i><b>${esc(s.title)}</b><span class="t">${esc(when)}</span></span><span class="spj">${esc(s.project)}</span>${nowBody(s)}${say?`<span class="say">${esc(say)}</span>`:''}`;
+  const r=g.querySelector('.st').getBoundingClientRect(),pw=p.offsetWidth,ph=p.offsetHeight;
+  let x=r.right+14,y=r.top+r.height/2+10;if(x+pw>innerWidth-12)x=r.left-14-pw;if(y+ph>innerHeight-12)y=innerHeight-12-ph;
+  p.style.left=Math.max(12,x)+'px';p.style.top=Math.max(12,y)+'px';p.hidden=false;
+  for(const o of $('hbg').querySelectorAll('.star.hov'))o.classList.remove('hov');g.classList.add('hov');
+  SKY.hov=g.dataset.id;if(pinned)SKY.pin=g.dataset.id;
+}
+function skyHide(){SKY.pin=null;SKY.hov=null;if(SKY.pop)SKY.pop.hidden=true;for(const o of document.querySelectorAll('#hbg .star.hov'))o.classList.remove('hov')}
+const skyUnpin=()=>{if(SKY.pin)skyHide()};
+function skyPaint(){const id=SKY.pin||SKY.hov;if(!id||!SKY.pop||SKY.pop.hidden)return;const g=$('hbg').querySelector(`.star[data-id="${CSS.escape(id)}"]`);g?skyShow(g,!!SKY.pin):skyHide()}
+addEventListener('pointermove',e=>{
+  if(SKY.pin||e.pointerType==='touch')return;
+  cancelAnimationFrame(SKY.raf);SKY.raf=requestAnimationFrame(()=>{
+    if(e.target.closest?.('#skypop'))return;
+    const g=skyStar(e.clientX,e.clientY,e.target);
+    if(g){if(SKY.hov!==g.dataset.id||SKY.pop?.hidden)skyShow(g,false)}else if(SKY.hov)skyHide()});
+},{passive:true});
+addEventListener('click',e=>{
+  if(e.target.closest?.('#skypop'))return;
+  const g=skyStar(e.clientX,e.clientY,e.target);
+  if(!g){if(SKY.pin)skyHide();return}
+  const s=A.sessions.find(x=>x.id===g.dataset.id);if(!s)return;
+  if(s.status==='wait'&&s.ask&&s.ask.kind==='permission'||s.status==='wait'&&s.ask?.opts){skyShow(g,true);return}
+  skyHide();openSession(s.id);
+});
+addEventListener('keydown',e=>{if(e.key==='Escape'&&SKY.pin)skyHide()});
 
 /* ---------- everything together ---------- */
 // Under the title, always starting at the same place: where the work is happening. The worktree when there is one,

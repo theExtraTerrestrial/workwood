@@ -219,7 +219,8 @@ function decorate(s) {
   return { id: s.id, title: s.title, project: s.project, cwd: s.cwd, branch: s.branch, mts: s.mts, reply: s.reply || null,
     root: s.root || s.cwd, profile: run?.profile || s.profile, status, line, outside, term, locked: (outside || term) && !!live && live.status !== 'idle',
     unread: status === 'idle' && unread.has(s.id), done: isDone(s, status), bg: run?.bg?.size || 0,
-    auto: autos.has(s.id) ? { to: autos.get(s.id).to, at: autos.get(s.id).at, wait: AUTO_WAIT } : null, ...(prevOf.has(s.id) ? { thread: chainOf(s.id).length } : {}) };
+    auto: autos.has(s.id) ? { to: autos.get(s.id).to, at: autos.get(s.id).at, wait: AUTO_WAIT } : null, ...(prevOf.has(s.id) ? { thread: chainOf(s.id).length } : {}),
+    ...(mine && run.status === 'waiting' && run.pending ? { ask: askOf(run.pending) } : {}) };
 }
 // Out of the inbox: marked done with nothing new since, never worked on here and not running anywhere, or left
 // untouched for longer than the setting allows. Anything working, waiting or unread is always in.
@@ -231,6 +232,15 @@ function isDone(s, status) {
   if (own && !own.has(s.id)) return true;
   return prefs.doneDays > 0 && nowS() - s.mts > prefs.doneDays * 86400;
 }
+// What Home needs to answer a waiting card without opening the session: a permission's command or file, or one
+// question with a few single-pick options. Anything larger is answered in the session.
+const askOf = p => {
+  const clip = (t, n) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+  const q = p.kind === 'question' && p.input.questions.length === 1 ? p.input.questions[0] : null;
+  return { id: p.id, kind: p.kind,
+    what: p.kind === 'permission' ? clip(p.input?.command || p.input?.file_path || p.input?.notebook_path || p.input?.url || '', 120) : '',
+    ...(q ? { q: q.question, ...(!q.multiSelect && q.options.length <= 4 ? { opts: q.options.map(o => o.label) } : {}) } : {}) };   // whole: the answer is keyed by them
+};
 const waitingLine = p => !p ? 'Waiting for you'
   : p.kind === 'question' ? (p.input.questions.length === 1 ? '1 question for you' : `${p.input.questions.length} questions for you`)
   : p.kind === 'plan' ? 'Plan ready for review'

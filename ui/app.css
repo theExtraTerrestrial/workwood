@@ -1660,6 +1660,51 @@
 
 /* ---------- the phone (html.ph: served to a paired phone). One screen at a time, tabs at the bottom. ---------- */
 .ptabs,.phback,.phpill,.phuse,.phsum,.phcache,.phset,.phdim{display:none}
+  /* watching from Home: the dock of what's live, the Wall, and the stars' cards */
+  .now{display:flex;justify-content:center;align-items:flex-end;flex-wrap:wrap;gap:8px;max-width:900px;margin:0 auto 10px;position:relative;z-index:2}
+  .nc{--glass:rgba(32,34,40,.62);display:flex;flex-direction:column;gap:3px;min-width:0;width:200px;padding:8px 11px 9px;border-radius:12px;background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 0 0 1px var(--line2),0 6px 20px rgba(0,0,0,.25);font-size:11.5px;cursor:pointer;text-align:left;transition:box-shadow .15s,opacity .4s}
+  [data-theme=light] .nc{--glass:rgba(255,255,255,.72);box-shadow:0 0 0 1px var(--line2),0 6px 20px rgba(20,25,40,.08)}
+  .nc:hover{box-shadow:0 0 0 1px color-mix(in srgb,hsl(var(--h) 60% 60%) 50%,var(--line2)),0 6px 20px rgba(0,0,0,.25)}
+  .nc .tt{display:flex;align-items:center;gap:7px;min-width:0;white-space:nowrap}
+  .nc .tt b{font-weight:600;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .nc .tt .t{margin-left:auto;color:var(--faint);font-size:10.5px}
+  .nc .nd{width:7px;height:7px;border-radius:50%;flex:none;background:hsl(var(--h) 60% 62%)}
+  .nc.work .nd{animation:ncpulse 1.6s ease-in-out infinite}
+  .nc.ask .nd{background:var(--warn);animation:ncpulse 2.6s ease-in-out infinite}
+  @keyframes ncpulse{50%{opacity:.3}}
+  .nc .stp,.nc .spj{color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nc .qq{color:var(--text);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .nc code{font:11px ui-monospace,Consolas,monospace;background:rgba(128,128,128,.16);border-radius:6px;padding:3px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+  .nc .acts{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}
+  .nc .nb{height:22px;padding:0 10px;border-radius:7px;background:rgba(128,128,128,.2);font-size:11px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nc .nb:hover{background:rgba(128,128,128,.3)}
+  .nc .nb.go{background:var(--go);color:#0b1714}
+  .nc .nb:disabled{opacity:.5;cursor:default}
+  .nc.ask{box-shadow:0 0 0 1.5px var(--warn-line),0 6px 20px rgba(0,0,0,.25);background:color-mix(in srgb,var(--warn) 9%,var(--glass))}
+  .nc.gone{opacity:.55}
+  .nc .say{color:var(--dim);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;margin-top:2px}
+  .nmore{align-self:center;height:26px;padding:0 10px;border-radius:9px;color:var(--dim);font-size:11.5px}
+  .nmore:hover{background:rgba(128,128,128,.14);color:var(--text)}
+  #skypop{position:fixed;z-index:60;width:250px;cursor:default}
+  #skypop .tt b{font-size:12.5px}
+  #skypop.pin{box-shadow:0 0 0 1.5px var(--warn),0 10px 30px rgba(0,0,0,.4)}
+  /* the Wall: Home's background and the dock, nothing else; the dock sits low, over the sky */
+  #main.wall .dash,#main.wall .box,#main.wall .support{display:none}
+  #main.wall .composer{padding-bottom:22px}
+  /* the stars: a waiting one amber with what it waits on, a finished one glowing a while */
+  .sky .star.a .st{fill:var(--warn)}
+  .sky .star.a .halo{fill:var(--warn);opacity:.55;animation:skybreath 2.8s ease-in-out infinite}
+  @keyframes skybreath{50%{opacity:.12}}
+  .sky .star.a .ring{display:none}
+  .sky .star.g .halo{fill:#fff;opacity:.5;transition:opacity 2s}
+  [data-theme=light] .sky .star.g .halo{fill:hsl(var(--h) 60% 50%);opacity:.35}
+  .sky .star.hov .st{fill:#fff}
+  [data-theme=light] .sky .star.hov .st{fill:var(--text)}
+  .sky .askt{font:600 21px "Manrope",sans-serif;fill:var(--warn);paint-order:stroke;stroke:rgba(0,0,0,.35);stroke-width:4px}
+  [data-theme=light] .sky .askt{stroke:rgba(255,255,255,.7)}
+  .hbg.nolab .sky .lab{display:none}
+  .hbg .star{pointer-events:none}
+
 html.ph{--tabh:calc(58px + env(safe-area-inset-bottom));-webkit-text-size-adjust:100%}
 html.ph[data-pt=session]{--tabh:0px}
 html.ph body{height:100%;overflow:hidden;overscroll-behavior:none}

@@ -3288,6 +3288,59 @@ ui('window: an answered card goes at once, and comes back if the answer could no
   await page.waitForSelector('#send[data-tip="Send"]');
 });
 
+ui('window: Home\'s Wall is its background and a dock of what is live, answered from the dock or a star that says what waits', async () => {
+  await page.evaluate(() => localStorage.setItem('ww.bg.home', 'constel'));
+  await page.click('#newBtn'); await page.waitForSelector('#dash .hcard');
+  assert.equal(await page.locator('#now').isVisible(), false);                           // the dock is the Wall's alone
+  await page.click('#dseg [data-hv="wall"]'); await page.waitForSelector('#main.wall');
+  assert.equal(await page.locator('#dash').isVisible(), false);
+  assert.equal(await page.locator('#box').isVisible(), false);
+  const waiting = async () => (await state()).sessions.filter(s => s.status === 'wait' && !s.done).length;
+  const perm = await newSession('PERMISSION please'); await pending(perm);
+  const card = `#now .nc.ask[data-nid="${perm}"]`;
+  await page.waitForSelector(`${card} code:has-text("touch probe.txt")`);               // what it wants to run, on the card
+  const n = await waiting(); await page.waitForFunction(n => document.title === `(${n}) Workwood`, n);   // the window's title counts what waits
+  await page.waitForSelector(`#hbg .star.a[data-id="${perm}"] .askt:has-text("Wants to run a command")`);   // its star turns amber and says why
+  await page.click(`${card} [data-nact="allow"]`);
+  await until(async () => /^RAN/.test(lastText(await idle(perm)) || ''), 'the command to be allowed');
+  await page.waitForSelector(`#now .nc.ask[data-nid="${perm}"]`, { state: "detached" });     // answered: its card stops asking
+  // one question with a few options is answered on its card
+  const q = await newSession('POINTED pick one'); await pending(q);
+  await page.waitForSelector(`#now .nc.ask[data-nid="${q}"] .qq:has-text("Which one?")`);
+  await page.click(`#now .nc[data-nid="${q}"] [data-nopt="0"]`);
+  await until(async () => (lastText(await idle(q)) || '').includes('PICKED {"Which one?":"Calm"}'), 'the pick to arrive');
+  // two questions are answered in the session: the card offers Open
+  const two = await newSession('ASK me something'); await pending(two);
+  await page.waitForSelector(`#now .nc.ask[data-nid="${two}"] [data-nopen]`);
+  // a session that starts waiting while the Wall shows chimes
+  await page.evaluate(() => { window.chimed = 0; window.chime = () => window.chimed++; });
+  const deny = await newSession('PERMISSION again'); await pending(deny);
+  await page.waitForFunction(() => window.chimed === 1);
+  // a waiting star opens a card where it is answered (clicked on the sky itself: the dock may cover it in this window)
+  await page.waitForSelector(`#hbg .star.a[data-id="${deny}"] .st`, { state: 'attached' });
+  await page.evaluate(id => { const r = document.querySelector(`#hbg .star[data-id="${id}"] .st`).getBoundingClientRect();
+    document.getElementById('scroll').dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); }, deny);
+  await page.waitForSelector(`#skypop.pin[data-nid="${deny}"] [data-nact="deny"]`);
+  await page.click('#skypop [data-nact="deny"]');
+  await until(async () => /^DENIED/.test(lastText(await idle(deny)) || ''), 'the command to be denied');
+  await page.waitForSelector('#skypop', { state: 'hidden' });
+  // the two-question one is answered in its session, which the card opens
+  await page.click(`#now .nc[data-nid="${two}"] [data-nopen]`); await page.waitForSelector(`.sess.sel[data-id="${two}"]`);
+  await page.waitForSelector('#main:not(.wall)');
+  await page.click('#qcard [data-act=stop]'); await idle(two);
+  // Look: the constellation's project names can go, and the Wall need not be offered
+  await page.click('#newBtn'); await page.waitForSelector('#main.wall');                   // Home opens on the view last left
+  await page.click('#hset'); await page.waitForSelector('#spage [data-set="skylab"].on');
+  await page.click('#spage [data-set="skylab"]'); await page.waitForSelector('#hbg.nolab');
+  await page.click('#spage [data-set="wall"]'); await page.waitForSelector('#spage [data-set="wall"]:not(.on)');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#dseg [data-hv="pick"].on'); await page.waitForSelector('#main:not(.wall)');
+  await page.waitForSelector('#now', { state: 'hidden' });
+  assert.equal(await page.locator('#dseg [data-hv="wall"]').count(), 0);
+  await page.evaluate(() => { for (const k of ['ww.bg.home', 'ww.wall', 'ww.skylabels', 'ww.home']) localStorage.removeItem(k); });
+  for (const id of [perm, q, two, deny]) await svc.call(`sessions/${id}/done`, {});
+});
+
 test('sandbox containment', () => {
   assert.deepEqual(assertContained(sb), []);
   assert.ok(sb.home.startsWith(fs.realpathSync(os.tmpdir())));

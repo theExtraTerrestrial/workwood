@@ -343,8 +343,8 @@ test('on the phone: tabs, a session full screen with the pill and its drawer, a 
     assert.equal(await page.locator('#ptabs').isVisible(), false);
     assert.ok(await page.locator('#phBack').isVisible());
     assert.match(await page.locator('#phCache').textContent(), /Warm|Cools in|Cache cold/);
-    await page.waitForFunction(() => /7d/.test(document.querySelector('#phPill').textContent));
-    assert.match(await page.locator('#phPill').textContent(), /7d.*41%/, '7d shows because it is closer to its limit (41% vs 34%)');
+    await page.waitForFunction(() => /5h/.test(document.querySelector('#phPill').textContent));
+    assert.match(await page.locator('#phPill').textContent(), /5h.*34%/, 'the 5h window first, though the week is further along (41% vs 34%): it is not near its end');
     // the composer: a one-line hint, the context ring beside the pill, which opens what fills the context
     assert.equal(await page.locator('#input').getAttribute('placeholder'), 'Message the agent…');
     await page.waitForSelector('#phCtx:not([hidden]) .ring');

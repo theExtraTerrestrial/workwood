@@ -66,8 +66,6 @@ const prefs = { defaultProfile: kept.defaultProfile || null, language: kept.lang
   cacheMinutes: CACHE_MINUTES.includes(kept.cacheMinutes) ? kept.cacheMinutes : 60,
   // the phone's notifications while you are at this PC (wait a minute, don't send, send at once), and after how many
   // minutes without input you are away
-  // a folder that lists servers, with none running: a line above the message box to start them, or only the menus
-  serveLine: kept.serveLine !== false,
   pcHold: pc.HOLDS.includes(kept.pcHold) ? kept.pcHold : 'wait', awayMin: pc.AWAY_MINS.includes(kept.awayMin) ? kept.awayMin : 5,
   // handing off: who writes the handoff (Auto picks by how much went on), and from how many tokens of context it is offered
   handoff: { model: ho.MODELS.includes(kept.handoff?.model) ? kept.handoff.model : 'auto', effort: ho.EFFORTS.includes(kept.handoff?.effort) ? kept.handoff.effort : 'medium',
@@ -647,7 +645,6 @@ async function api(req, res, url, who = null) {
     await srvChanged(); return send(res, 200, { ok: true });
   }
   if (parts[0] === 'settings') {
-    if ('serveLine' in b) prefs.serveLine = b.serveLine !== false;
     if ('defaultProfile' in b) prefs.defaultProfile = state.profiles.some(p => p.name === b.defaultProfile) ? b.defaultProfile : null;
     if ('doneDays' in b) prefs.doneDays = [0, 1, 3, 7, 14, 30].includes(+b.doneDays) ? +b.doneDays : 7;
     if ('bypass' in b) prefs.bypass = b.bypass === true;

@@ -16,6 +16,12 @@ Everything Workwood does, one feature at a time. The [README](../README.md) has 
 - A session in a git worktree is listed under the project the worktree was made
   from. Under the title, always in the same place, the header names the worktree
   (or the branch when there is none), then the project.
+- The header's actions: Preview and Running (background work) are always there,
+  muted when there is nothing to show, so nothing moves; Serve comes in at their
+  left in a project that lists or runs servers. The rest is in ⋮: Changes,
+  Outline, the chat / terminal switch, Open in VS Code, Open in a terminal
+  window, Done (Ctrl+D), Rename and Delete. A pin beside one keeps it in the
+  header; Done is pinned to start with.
 - Home: Workwood opens on it, and the Home button at the top of the sidebar brings it back. The message box
   stays under it, so a new session starts there. "Pick up" shows the last words of the newest sessions (one
   waiting for you first), a card per profile with its 5-hour and 7-day limits (how fast each is being used, from
@@ -89,7 +95,7 @@ Everything Workwood does, one feature at a time. The [README](../README.md) has 
   cuts the current step short and sends it at once. The send button stops the
   turn only while the message box is empty.
 - Long conversations: marks along the right edge, one per turn, jump to that
-  turn; the list button in the header opens an outline of the turns that you
+  turn; Outline (in ⋮, or pinned to the header) opens an outline of the turns that you
   can search.
 - Context: the figure under the message box opens what fills the agent's
   context, as Claude Code counts it, with two ways on: "Continue in a new
@@ -156,7 +162,8 @@ Everything Workwood does, one feature at a time. The [README](../README.md) has 
     `name: command` a line), and may add `.workwood/servers.json`:
     `{ "procfile": "Procfile.dev", "setup": "bin/worktree-setup",
     "teardown": "bin/worktree-teardown", "open": "web" }` (all optional; //
-    comments allowed). Then Start (on the tray, in ⋮, or `/serve [name…]`)
+    comments allowed). Then Serve in the header (Start on the tray, the
+    session's menu in the sidebar, or `/serve [name…]`)
     runs them, each on a port of its own: a block of ten for each folder, the
     same every time, from 3100, given as `PORT` (use `$PORT` in the Procfile).
     They also get `WORKWOOD_WORKTREE`, `WORKWOOD_BRANCH` and
@@ -164,22 +171,22 @@ Everything Workwood does, one feature at a time. The [README](../README.md) has 
     start (copy the shared dev database, pick a Redis namespace); when the
     worktree is removed, its servers stop and the teardown runs from the
     checkout it was made from. Workwood holds their output (Output, in the side
-    panel) and can restart them. With none running, a line above the message box
-    offers Start (Settings, Sessions: "A line to start them").
+    panel) and can restart them. While they run, Serve turns green with the first
+    one's port, and opens the tray.
   - The agent in such a project is told to use `workwood serve` instead of
     starting servers itself: `workwood serve [name…]` starts them and waits
     until they are up, printing their addresses; `--status`, `--logs <name>
     [lines]`, `--restart [name…]` and `--stop [name…]` do the rest. Servers
     Workwood started keep running after the session; quitting Workwood asks
     first, then stops them.
-- Terminal view: the switch in the header (chat / terminal) shows the session's
+- Terminal view: the chat / terminal switch (in ⋮, or pinned to the header) shows the session's
   real Claude Code terminal inside the window. It keeps running while you look
   at other sessions. A session has one owner at a time: the terminal waits for
   a chat turn to end (or you stop it), and sending a message in the chat closes
   an idle terminal. Leaving Claude Code (`/exit`) returns you to the chat.
   Ctrl+Shift+C copies the selection.
-- Changes view: the "±" button in the header (with the number of changed files)
-  opens a read-only list of what differs from the project's last commit, new
+- Changes view: Changes in ⋮ (with the number of changed files; pinned, a "±"
+  button in the header) opens a read-only list of what differs from the project's last commit, new
   files included, and each file's diff. It shows only for projects that are git
   repositories, and updates as the agent works; the refresh button picks up
   changes made elsewhere.

@@ -417,6 +417,21 @@
   .ol .note,.inl .note{color:var(--faint);font-size:12px;padding:8px}
   .pwrap{display:contents}.pwrap[hidden]{display:none}
   .ib.wide[hidden]{display:none}
+  /* the header's actions (see app.js): muted when there is nothing to act on, so none comes and goes and nothing moves */
+  #tools .ib.mute{color:var(--faint);opacity:.45;cursor:default}#tools .ib.mute:hover{background:none}
+  #tools .hcnt span:empty{display:none}#tools .hcnt{min-width:30px}
+  .hpins{display:contents}.hpins .np{display:none!important}
+  .hsv{height:28px;margin-right:2px}.hsv svg{width:12px;height:12px}
+  .hsv.go{color:var(--k-sv);background:color-mix(in srgb,var(--k-sv) 12%,transparent)}
+  .hsv.go:hover{background:color-mix(in srgb,var(--k-sv) 20%,transparent);color:var(--k-sv)}
+  .hsv .dot{width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 22%,transparent)}
+  .hsv .pt{font:11px "Cascadia Code",ui-monospace,monospace;opacity:.85}.hsv .hsvn{opacity:.7;font-size:11px}
+  .hmenu{width:236px}.hmenu button.cur{color:var(--text);font-weight:600}
+  .hmenu .k{margin-left:auto;color:var(--faint);font-size:11px}
+  .hmenu .pin{margin-left:auto;width:22px;height:22px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:var(--faint);opacity:0;margin-right:-4px}
+  .hmenu .k+.pin{margin-left:6px}
+  .hmenu button:hover .pin,.hmenu .pin.on{opacity:1}.hmenu .pin:hover{background:rgba(128,128,128,.2);color:var(--text)}.hmenu .pin.on{color:var(--text)}
+  .hmenu .pin svg{width:12px;height:12px}
   .diff .note{color:var(--faint);padding:14px 16px;white-space:normal;font-family:inherit}
   .file i{font-style:normal;color:var(--faint);flex:none}
   .ctitle{font-weight:600;padding-left:6px}.cstat{margin-left:10px;font-size:12px}
@@ -530,6 +545,7 @@
   @keyframes shim{to{background-position:-200% 0}}
   .shim{background:linear-gradient(90deg,var(--dim) 30%,var(--text) 50%,var(--dim) 70%) 0 0/200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shim 2s linear infinite}
   .w1{display:flex;align-items:center;gap:10px;margin:0 0 12px}
+  .w1>.shim{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.w1>.el,.w1>.spin{flex:none}.w1>.el{font-variant-numeric:tabular-nums}   /* a long step shortens; the clock stays in view */
   .w1 .ib{width:22px;height:22px;margin-left:-4px}.w1 .ib svg{width:13px;height:13px;transition:transform .15s}
   .w1.open .ib svg{transform:rotate(180deg)}
   .w2{border-radius:13px;box-shadow:0 0 0 1px var(--line);padding:9px 14px;margin:0 0 16px}
@@ -990,7 +1006,7 @@
   .tkk::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--faint);flex:none}
   .tkk.shell::before{background:var(--k-sh)}.tkk.monitor::before{background:var(--k-mo)}.tkk.agent::before{background:var(--k-ag)}
   .tl svg{width:13px;height:13px;color:var(--faint);flex:none;transition:transform .12s}.tray.open .tl svg{transform:rotate(180deg)}
-  .tasks{border-top:1px solid var(--line);padding:4px;max-height:220px;overflow:auto}
+  .tasks{border-top:1px solid var(--line);padding:4px;max-height:220px;overflow:hidden auto}   /* down only: a growing clock never makes it scroll sideways */
   .tk{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:0 9px;align-items:center;padding:6px 8px;border-radius:8px}
   .tk.on{background:var(--sel,rgba(128,128,128,.12))}
   .tkl .tk{cursor:pointer}
@@ -999,12 +1015,12 @@
   .tki.shell{color:var(--k-sh);background:color-mix(in srgb,var(--k-sh) 15%,transparent)}
   .tki.monitor{color:var(--k-mo);background:color-mix(in srgb,var(--k-mo) 15%,transparent)}
   .tki.agent{color:var(--k-ag);background:color-mix(in srgb,var(--k-ag) 15%,transparent)}
-  .tk1{display:flex;align-items:center;gap:7px;min-width:0;font-size:12.5px}
+  .tk1{display:flex;align-items:center;flex-wrap:wrap;gap:4px 7px;min-width:0;font-size:12.5px}
   .tk1 b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tk2{grid-column:2;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tk2.mono{font-family:"Cascadia Code",ui-monospace,Consolas,monospace}
   .tka{display:flex;align-items:center;gap:4px;grid-row:1/3;grid-column:3}
-  .tka .el{min-width:48px;text-align:right;font-size:11.5px}
+  .tka .el{min-width:48px;text-align:right;font-size:11.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
   .mini{width:auto;flex:none;height:22px;padding:0 8px;border-radius:6px;box-shadow:inset 0 0 0 1px var(--line2);font:inherit;font-size:11px;font-weight:600;color:var(--dim);display:inline-flex;align-items:center;gap:4px;background:none;border:0;cursor:pointer}
   .mini:hover{color:var(--text)}.mini.stop{color:var(--text)}.mini svg{width:9px;height:9px}.mini:disabled{opacity:.5}
   /* servers: a green of their own, their ports one click from the page */
@@ -1019,6 +1035,7 @@
   a.prt:hover{background:color-mix(in srgb,var(--k-sv) 22%,transparent)}
   .prt svg{width:10px;height:10px}
   .prt.live::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--k-sv);margin-right:2px;animation:bgblink 1.6s ease-in-out infinite}
+  .prt.n{color:var(--faint);background:rgba(128,128,128,.14)}
   .tl .prt{height:20px}.tray.open .tl .prt svg{transform:none}
   .who{font-size:10.5px;font-weight:600;color:var(--faint);flex:none}
   .tk.gone .tk1 b{color:var(--faint)}.tk.gone .tki{opacity:.5}

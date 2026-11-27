@@ -29,16 +29,21 @@
       <button class="ib hset" id="hset" data-tip="Look" data-tip-d="The theme, and the backgrounds for Home, sessions and the sidebar." data-i="sliders" hidden></button>
       <div class="dseg" id="dseg" hidden></div>
       <div id="tools" style="display:flex;align-items:center;gap:4px">
-        <div class="seg" id="seg">
-          <button class="ib on" id="vChat" data-tip="Chat" data-i="chat"></button>
-          <button class="ib" id="vTerm" data-tip="Terminal" data-i="term"></button>
-        </div>
-        <button class="ib" id="bOutline" data-tip="Conversation outline" data-i="list"></button>
-        <button class="ib wide" id="bPreview" data-tip="Preview what the agent made" data-tip-k="N" hidden><i data-i="monitor"></i><span id="pvN"></span></button>
-        <button class="ib wide" id="bTasks" data-tip="Running in the background" hidden><i data-i="pulse"></i><span id="tkN"></span></button>
-        <button class="ib wide" id="bChanges" data-tip="Changes" hidden><i data-i="diff"></i><span id="chN"></span></button>
-        <button class="ib" id="bCode" data-tip="Open in VS Code" data-i="code"></button>
-        <button class="doneb" id="bDone"></button>
+        <button class="ib wide hsv" id="bServe"></button>
+        <button class="ib wide hcnt" id="bPreview" data-tip="Preview what the agent made" data-tip-k="N" hidden><i data-i="monitor"></i><span id="pvN"></span></button>
+        <button class="ib wide hcnt" id="bTasks" data-tip="Running in the background"><i data-i="pulse"></i><span id="tkN"></span></button>
+        <span class="hpins" id="hpins">
+          <button class="ib wide hcnt" id="bChanges" data-tip="Changes" data-pin="changes"><i data-i="diff"></i><span id="chN"></span></button>
+          <button class="ib" id="bOutline" data-tip="Conversation outline" data-i="list" data-pin="outline"></button>
+          <div class="seg" id="seg" data-pin="view">
+            <button class="ib on" id="vChat" data-tip="Chat" data-i="chat"></button>
+            <button class="ib" id="vTerm" data-tip="Terminal" data-i="term"></button>
+          </div>
+          <button class="ib" id="bCode" data-tip="Open in VS Code" data-i="code" data-pin="code"></button>
+          <button class="ib" id="bOTerm" data-tip="Open in a terminal window" data-i="ext" data-pin="oterm"></button>
+          <button class="doneb" id="bDone" data-pin="done"></button>
+        </span>
+        <button class="ib" id="bMore" data-tip="More" data-tip-d="Pin any of them to keep it in the header." data-i="kebab"></button>
       </div>
     </header>
 
@@ -128,6 +133,7 @@
 <div class="fmenu olm" id="olm" hidden></div>
 <div class="fmenu" id="gmenu" hidden style="width:220px"><button id="gUpd" hidden></button><button id="gTheme">Theme<span id="gThemeV"></span></button><button id="gProf">Default profile<span id="gProfV"></span></button><button id="gLogin" hidden>Open at login<span id="gLoginV"></span></button><hr><button id="gAll">All settings…</button></div>
 <div class="fmenu" id="smenu" hidden></div>
+<div class="fmenu hmenu" id="hmenu" hidden></div>
 <div class="fmenu srvm" id="srvm" hidden></div>
 <div class="dim" id="sdim" hidden><div class="dlg" id="dlg"><div class="dtabs"><h3>Settings</h3><div id="stabs"></div></div><div class="pg"><button class="ib cls" id="dClose" data-tip="Close" data-tip-k="Esc" data-i="x"></button><div id="spage"></div></div></div></div>
 <div class="dim" id="fdim" hidden><div class="finder"><label class="find"><i data-i="search"></i><input id="fQ" placeholder="Find a session" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></label><div class="flist" id="fList"></div></div></div>

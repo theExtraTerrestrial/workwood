@@ -1473,11 +1473,11 @@ test('read aloud: on a computer without Kokoro it is got from Settings, then rea
 
 test('settings: default profile and dictation language are kept; sign-in again runs Claudius in a terminal', async () => {
   const handoff = { model: 'auto', effort: 'medium', offer: 400000 };
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, serveLine: true, pcHold: 'wait', awayMin: 5, handoff });
-  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, serveLine: true, pcHold: 'wait', awayMin: 5, handoff });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, pcHold: 'wait', awayMin: 5, handoff });
+  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, pcHold: 'wait', awayMin: 5, handoff });
   const kept = JSON.parse(fs.readFileSync(path.join(sb.home, '.config', 'workwood', 'state.json'), 'utf8'));
   assert.deepEqual([kept.defaultProfile, kept.language, typeof kept.done], ['other', 'latvian', 'object']);
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, serveLine: true, pcHold: 'wait', awayMin: 5, handoff });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, pcHold: 'wait', awayMin: 5, handoff });
   const a = (await svc.call('about')).body;
   assert.deepEqual([a.version, a.claude, typeof a.speech.model], [JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version, '2.1.322', 'string']);
   assert.equal((await svc.call('profiles/nobody/login', {})).status, 404);
@@ -1746,6 +1746,7 @@ async function settle(before) {
     + '. End what the test started (answer it, stop it, or wait for its turn to end) before the test does.');
 }
 const send = async text => { await page.fill('#input', text); await page.press('#input', 'Enter'); };
+const more = async k => { await page.click('#bMore'); await page.click(`#hmenu [data-h="${k}"]`); };   // one of the header's actions in ⋮
 const startNew = async (text, pick = {}) => {
   await page.click('#newBtn');
   if (pick.project) { await page.click('#pProject'); await page.click(`#mProject .item:has-text("${pick.project}")`); }
@@ -1869,15 +1870,19 @@ ui('window: servers in the tray: a line to start them, their ports one click awa
   const here = async () => (await state()).servers?.[wt];
   const pids = [];
   try {
-    // nothing runs: a quiet line offers them
-    await page.waitForSelector('#tray.ghost .tl:has-text("Start servers")');
-    assert.equal(await page.locator('#tray.ghost .gn').innerText(), 'web · worker');
-    assert.equal(await page.locator('#bTasks').isHidden(), true);
-    await page.click('#tray.ghost .tl');
+    // nothing runs: Serve, at the left end of the header's actions, offers them; no line above the message box
+    await page.waitForSelector('#bServe:visible:has-text("Serve")');
+    assert.equal(await page.locator('#tray').isHidden(), true);
+    assert.match(await page.locator('#bServe').getAttribute('data-tip-d'), /web · worker/);
+    assert.equal(await page.locator('#bTasks.mute').isVisible(), true, 'Running stays, muted');
+    assert.equal(await page.evaluate(() => document.querySelector('#bServe').nextElementSibling.id), 'bPreview');
+    await page.click('#bServe');
     assert.deepEqual((await page.locator('#srvm button').allInnerTexts()).map(x => x.replace(/\s+/g, ' ').trim()), ['All web · worker', 'web', 'worker']);
     await page.click('#srvm button:has-text("All")');
     const web = await until(async () => (await here())?.list.find(x => x.name === 'web' && x.ports.length), 'web up', 15000), port = web.ports[0];
     await page.waitForSelector('#tray .tl:has-text("2 running")');
+    await page.waitForSelector(`#bServe.go:has-text("web"):has-text(":${port}"):has-text("+1")`);
+    assert.equal(await page.locator('#bTasks.mute').count(), 0);
     assert.deepEqual(await page.locator('#tray .tkk.server').allInnerTexts(), ['web', 'worker']);
     assert.equal(await page.locator(`#tray .tl a.prt[href="http://localhost:${port}/"]`).count(), 1, 'the port opens the page');
     assert.equal(await page.locator('#tray .tl [data-srvmenu]').count(), 0, 'all of them run: no Start');
@@ -1917,12 +1922,8 @@ ui('window: servers in the tray: a line to start them, their ports one click awa
     await page.waitForFunction(() => ![...document.querySelectorAll('#tray .who')].some(x => x.textContent === 'yours'), null, { timeout: 15000 });
 
     await page.click('#tray .tk:has-text("web") [data-srvstop]');
-    await page.waitForSelector('#tray.ghost .tl:has-text("Start servers")');
-    // the setting: no line, and Start is still in ⋮ and /serve
-    await page.click('#bGear'); await page.click('#gAll'); await page.click('#stabs >> text=Sessions');
-    await page.click('[data-set="serve"]');
+    await page.waitForSelector('#bServe:not(.go):has-text("Serve")');
     await page.waitForSelector('#tray', { state: 'hidden' });
-    await page.click('#stabs >> text=General'); await page.click('#dClose');
     await page.fill('#input', '/ser');
     await page.waitForSelector('#slash .skr:has-text("/serve")');
     await page.fill('#input', '');
@@ -1933,7 +1934,6 @@ ui('window: servers in the tray: a line to start them, their ports one click awa
     await send('/serve worker');
     await until(async () => (await here())?.list.find(x => x.name === 'worker'), 'the worker from /serve', 15000);
     await page.waitForSelector('#tray .tl:has-text("1 running")');
-    assert.equal((await svc.call('settings', { serveLine: true })).status, 200);
     if (await page.locator('#tray.open').count()) await page.click('#tray .tl');   // as the next test expects it: closed
   } finally {
     for (const p of pids) try { process.kill(-p); } catch {}
@@ -1975,7 +1975,7 @@ ui('window: background work: a closed tray over the message box, a header button
   await page.waitForSelector('#tray .tl:has-text("1 running")');
   await page.click('#tray .tk:has-text("Watch the tests") [data-bgstop]');
   await page.waitForSelector('#tray', { state: 'hidden' });
-  await page.waitForSelector('#bTasks', { state: 'hidden' });
+  await page.waitForSelector('#bTasks.mute');   // stays, muted: nothing moves
   await page.waitForFunction(r => !document.querySelector(r + ' .bgc'), row);
   assert.equal(await page.locator('#tkw').isHidden(), true);
 });
@@ -2399,7 +2399,7 @@ ui('window: preview cards open at full width, the header button beside the conve
   await page.keyboard.press('n'); assert.equal(await page.locator('#panel').isHidden(), true);
   await page.click('.hc:has-text("dark.html")'); await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`);
   await page.waitForSelector('.ai:has-text("The readme is tidied.")'); assert.equal(await page.locator('#panel').isHidden(), true); // another session, no panel
-  assert.equal(await page.locator('#bPreview').isHidden(), true);                                      // and nothing to preview
+  assert.equal(await page.locator('#bPreview.mute').count(), 1);                                       // and nothing to preview: muted, still there
 });
 
 ui('window: new folder from the project menu', async () => {
@@ -2486,12 +2486,18 @@ ui('window: terminal view: type in it, go back to the chat, come back to the sam
   const id = await newSession('for the terminal'); await idle(id);
   const row = `.sess[data-id="${id}"]`;
   await page.waitForSelector(row); await page.click(row); await page.waitForSelector('.me:has-text("for the terminal")');
-  await page.click('#vTerm');
+  // the switch is in ⋮ until pinned; Done is pinned to start with
+  assert.equal(await page.locator('#seg').isVisible(), false); assert.equal(await page.locator('#bDone').isVisible(), true);
+  await more('view');
   await page.waitForFunction(() => document.querySelector('#xt .xterm-rows')?.innerText.includes('resumed'));
   assert.equal(await page.locator('#conv').isHidden(), true);
   await page.click('#xt'); await page.keyboard.type('hi from the window'); await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.querySelector('#xt .xterm-rows').innerText.includes('you said: hi from the window'));
   await page.waitForSelector(`${row} .xb`);                                   // the sidebar says where the session lives now
+  await page.click('#bMore'); await page.click('#hmenu [data-hpin="view"]');   // pinned: the switch shows in the header, the menu stays open
+  assert.equal(await page.locator('#hmenu [data-hpin="view"].on').count(), 1);
+  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('ww.pins'))), ['done', 'view']);
+  await page.keyboard.press('Escape'); await page.mouse.click(5, 5);
   await page.click('#vChat');
   await page.waitForSelector('.ai:has-text("TERMINAL REPLY to hi from the window")');
   assert.equal(await page.locator('#term').isHidden(), true);
@@ -2500,11 +2506,13 @@ ui('window: terminal view: type in it, go back to the chat, come back to the sam
   await page.click('#xt'); await page.keyboard.type('/exit'); await page.keyboard.press('Enter'); // leaving it returns to the chat
   await page.waitForFunction(() => !document.querySelector('#conv').hidden && document.querySelector('#term').hidden);
   await page.waitForFunction(r => !document.querySelector(r + ' .xb'), row);
+  await page.click('#bMore'); await page.click('#hmenu [data-hpin="view"]'); await page.mouse.click(5, 5);   // back to how it was
+  assert.equal(await page.locator('#seg').isVisible(), false);
 });
 
 ui('window: terminal view waits for a chat turn, and reports a terminal that failed', async () => {
   await send('SLOW job'); await page.waitForSelector('.w1');
-  await page.click('#vTerm');
+  await more('view');
   assert.match(await page.locator('#tnote').innerText(), /working in the chat/);
   await page.click('#tnote [data-stopterm]');
   await page.waitForFunction(() => document.querySelector('#xt .xterm-rows')?.innerText.includes('resumed'));
@@ -2561,11 +2569,12 @@ ui('window: the settings menu stays open when one press arrives as two clicks', 
 ui('window: the changes panel lists changed files and shows each one\'s diff', async () => {
   await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`);
   await page.waitForSelector('.me:has-text("Tidy the alpha readme")');
-  assert.equal(await page.isVisible('#bChanges'), false);               // alpha is not a repository
+  await page.click('#bMore'); assert.equal(await page.locator('#hmenu [data-h="changes"]').count(), 0);   // alpha is not a repository
+  await page.keyboard.press('Escape'); await page.mouse.click(5, 5);
   await page.click(`.sess[data-id="${sb.sessions.betaOther}"]`);
-  await page.waitForSelector('#bChanges:visible');
-  assert.match(await page.innerText('#chN'), /^\d+$/);
-  await page.click('#bChanges');
+  await until(async () => /^\d+$/.test(await page.innerText('#chN').catch(() => '')) || null, 'the count');
+  await page.click('#bMore'); assert.match(await page.locator('#hmenu [data-h="changes"] .k').innerText(), /^\d+$/);
+  await page.click('#hmenu [data-h="changes"]');
   await page.waitForSelector('#chT:has-text("changed files")');
   await page.click('#files [data-file="notes.txt"]');
   await page.waitForSelector('#diff .m:has-text("-two")');
@@ -2814,7 +2823,7 @@ ui('window: a long conversation has a rail of turns and an outline you can searc
   await page.waitForSelector('.ai:has-text("Echo: third and last")');
   await page.waitForFunction(() => document.querySelectorAll('#rail button').length === 3);
   assert.match(await page.locator('#rail button').nth(1).getAttribute('data-tip'), /^Turn 2 of 3 .*1 command.* — take a SCREENSHOT$/);
-  await page.click('#bOutline');
+  await more('outline');
   assert.equal(await page.locator('#olT').innerText(), 'Conversation · 3 turns');
   assert.deepEqual(await page.locator('#oll .olrow b').allInnerTexts(), ['first thing to do', 'take a SCREENSHOT', 'third and last']);
   assert.equal(await page.locator('#oll .daysep').innerText(), 'Today');
@@ -3021,7 +3030,7 @@ ui('window: rewind from the arrow beside a message, Esc Esc or /rewind, and the 
   await page.click('#hstrip [data-unrw]'); await page.waitForSelector('.me:has-text("third step")');
   assert.ok(fs.existsSync(plan));
   // the outline: ⋮ on a row has Go to, Rewind and Copy
-  await page.click('#bOutline'); await page.hover('#oll .olw >> nth=2'); await page.click('#oll .olw >> nth=2 >> .olk');
+  await more('outline'); await page.hover('#oll .olw >> nth=2'); await page.click('#oll .olw >> nth=2 >> .olk');
   assert.deepEqual(await page.locator('#olm button').allInnerTexts(), ['Go to', 'Rewind', 'Copy']);
   await page.click('#olm [data-olrw]'); await page.waitForSelector('#rwm:not([hidden])'); await page.click('#rwm [data-rwgo]');
   await page.waitForSelector('#hstrip.rw:has-text("1 turn out")');
@@ -3385,7 +3394,7 @@ ui('window: the settings dialog: tabs, default profile for new sessions, sign in
   await page.click('#stabs [data-st="6"]'); await page.waitForSelector('#spage .lgrp:has-text("Dictation")');
   await page.selectOption('#sLang', 'german');
   await page.click('#stabs [data-st="5"]'); await page.waitForSelector('#spage [data-set="bypass"]');
-  assert.deepEqual(await page.locator('#spage .lgrp').allInnerTexts(), ['LIMITS', 'HANDOFF', 'SERVERS']);
+  assert.deepEqual(await page.locator('#spage .lgrp').allInnerTexts(), ['LIMITS', 'HANDOFF']);
   await page.selectOption('#sDays', '14'); await until(async () => (await state()).prefs.doneDays === 14, 'the clearing time to be saved'); await page.selectOption('#sDays', '7');
   await until(async () => { const p = (await state()).prefs; return p.defaultProfile === 'other' && p.language === 'german'; }, 'the settings to be saved');
   await page.click('#stabs [data-st="0"]');

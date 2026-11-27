@@ -20,6 +20,7 @@ const P={
   archive:'<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/>',
   trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   dots:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+  pin:'<path d="M12 17v5M9 3h6l-1 6 4 4v2H6v-2l4-4z"/>',
   kebab:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
   rewind:'<path d="M11 6.5v11L3.5 12z"/><path d="M20.5 6.5v11L13 12z"/>',
   file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
@@ -257,14 +258,17 @@ function openMenu(id,x,y){
 $('list').oncontextmenu=e=>{const b=e.target.closest('.sess[data-id]');if(!b||b.classList.contains('ren'))return;e.preventDefault();openMenu(b.dataset.id,e.clientX,e.clientY)};
 $('smenu').onclick=e=>{
   e.stopPropagation();const b=e.target.closest('[data-do]'),s=A.sessions.find(x=>x.id===V.menuFor);closePops();if(!b||!s)return;
-  const d=b.dataset.do,fail=err=>oops(err.message);
+  sessAct(b.dataset.do,s);
+};
+function sessAct(d,s){
+  const fail=err=>oops(err.message);
   if(d==='rename'){if(V.compact)setSide('full');V.renaming=s.id;V.renameText=s.title;V.caret=s.title.length;renderList();$('renIn')?.select()}
   else if(d==='code')api('open-editor',{sessionId:s.id}).catch(fail);
   else if(d==='term')api(`sessions/${s.id}/terminal`,{}).catch(fail);
   else if(d==='done')setDone(s,!s.done);
-  else if(d==='serve')srvMenu($('tray').hidden?null:$('tray'));
+  else if(d==='serve')srvMenu($('bServe').offsetParent?$('bServe'):$('tray').hidden?null:$('tray'));
   else askDelete(s);
-};
+}
 // When the session you are looking at goes away, show the next one that needs you, so you can work down the list.
 function leave(id){if(V.isNew||V.sel!==id)return render();const rest=A.sessions.filter(s=>s.id!==id&&!s.done),n=rest.find(s=>s.status==='wait')||rest.find(s=>s.unread)||rest[0];n?openSession(n.id):newSession()}
 async function setDone(s,on){
@@ -562,7 +566,7 @@ function pvList(){const out=[...V.work],has=new Set(out.map(f=>f.path));
   return out}
 function renderPanel(){
   const W=pvList(),i=W.findIndex(f=>f.path===V.pv),f=W[i],open=!V.isNew&&!!f&&!!A.preview,ch=!V.isNew&&V.side==='changes'&&!!V.ch?.repo,ol=!open&&!V.isNew&&V.side==='outline',cm=!open&&V.side==='compare'?compareSet():null;
-  const pb=$('bPreview');pb.hidden=V.isNew||!A.preview||!W.length;$('pvN').textContent=W.length>1?W.length:'';pb.classList.toggle('on',open);
+  const pb=$('bPreview');pb.hidden=V.isNew||!A.preview;hMute(pb,!W.length,'Nothing to preview yet','Preview what the agent made');$('pvN').textContent=W.length>1?W.length:'';pb.classList.toggle('on',open);
   const tk=!open&&!V.isNew&&V.side==='tasks'&&(bgList().length+srvRows().length)>0;$('tkw').hidden=!tk;if(tk)renderTasks();else clearTimeout(tkTimer);
   $('panel').hidden=!open&&!ch&&!cm&&!ol&&!tk;$('pvw').hidden=!open;$('cmw').hidden=!cm;renderCompare(cm);$('olw').hidden=!ol;renderOutline();$('chw').hidden=open||!ch;renderChanges();
   if(PHONE)phPane();
@@ -1279,7 +1283,7 @@ $('menu').onclick=e=>{const b=e.target.closest('[data-pick]');if(b){closePops();
 $('bFull').onclick=()=>{V.full=!V.full;renderPanel()};
 $('bClose').onclick=()=>{V.pv=null;V.full=false;renderPanel()};
 // the header button opens the preview on what you last looked at (or the newest), and closes it again
-$('bPreview').onclick=()=>{if(V.pv){V.pv=null;V.full=false;renderPanel();return}
+$('bPreview').onclick=()=>{if($('bPreview').classList.contains('mute'))return;if(V.pv){V.pv=null;V.full=false;renderPanel();return}
   const W=pvList(),p=(W.find(f=>f.path===V.lastPv)||W[0])?.path;if(p)showWork(p,false)};
 $('bExt').onclick=()=>{const f=pvList().find(w=>w.path===V.pv);if(f)window.open(fileUrl(f),'_blank','noopener')};
 // A turn's new files go to the top of the list; a file written again replaces its older entry.
@@ -1357,7 +1361,7 @@ for(const ev of ['wheel','touchstart','pointerdown','keydown'])$('scroll').addEv
 /* ---------- changes: the project's working tree against its last commit, read only ---------- */
 function renderChanges(){
   const c=V.ch,b=$('bChanges');
-  b.hidden=!c?.repo;$('chN').textContent=c?.count||'';b.classList.toggle('on',V.side==='changes'&&!V.pv);
+  hMute(b,!c?.repo,'Changes','Changes');b.dataset.tipD=c?.repo?'':'This folder is not a git repository.';$('chN').textContent=c?.count||'';b.classList.toggle('on',V.side==='changes'&&!V.pv);
   if($('chw').hidden)return;
   $('chT').textContent=c.count===1?'1 changed file':`${c.count} changed files`;
   $('chS').innerHTML=c.count?`<span class="plus">+${c.add}</span> <span class="minus">−${c.del}</span>`:'';
@@ -1385,7 +1389,7 @@ async function loadDiff(){
   const keep=V.chDiff?.path===p?$('diff').scrollTop:0;V.chDiff=d;renderChanges();$('diff').scrollTop=keep;
 }
 let chTimer;const changesSoon=()=>{clearTimeout(chTimer);chTimer=setTimeout(loadChanges,900)};
-$('bChanges').onclick=()=>{V.side=V.side==='changes'&&!V.pv?null:'changes';V.pv=null;V.full=false;renderPanel();if(V.side)loadChanges()};
+$('bChanges').onclick=()=>{if($('bChanges').classList.contains('mute'))return;V.side=V.side==='changes'&&!V.pv?null:'changes';V.pv=null;V.full=false;renderPanel();if(V.side)loadChanges()};
 $('chClose').onclick=()=>{V.side=null;renderPanel()};
 $('chRefresh').onclick=()=>loadChanges();
 $('files').onclick=e=>{const f=e.target.closest('[data-file]');if(!f||f.dataset.file===V.chFile)return;V.chFile=f.dataset.file;V.chDiff=null;renderChanges();loadDiff()};
@@ -1641,8 +1645,7 @@ function renderSettings(){
     <div class="lgrp">Limits</div>${A.profiles.length>1?`<div class="srow"><span>Continue on another profile at a limit<small>At a limit, it goes on with the profile that has the most room after 5 minutes. You can cancel.</small></span><i class="stog ${pf.autoContinue?'on':''}" data-set="auto"></i></div>`:''}
     <div class="srow"><span>Cache lasts<small>How long Claude keeps a conversation cached after a reply. A countdown shows in its last ten minutes.</small></span><select class="sval" id="sCache">${[[0,'No warning'],[5,'5 minutes'],[30,'30 minutes'],[60,'1 hour'],[120,'2 hours']].map(([v,n])=>`<option value="${v}" ${cacheMin()===v?'selected':''}>${n}</option>`).join('')}</select></div>
     <div class="lgrp">Handoff</div><div class="srow"><span>Offer a handoff at<small>A strip above the message box offers it from here, or at ¾ of a smaller window.</small></span><select class="sval" id="sHOffer">${[100000,200000,300000,400000,600000].map(v=>`<option value="${v}" ${(pf.handoff?.offer||400000)===v?'selected':''}>${v/1000}k tokens</option>`).join('')}</select></div>
-    <div class="srow"><span>Handoff written by<small>Auto picks Haiku, Sonnet or Opus by how much went on.</small></span><select class="sval" id="sHModel">${[['auto','Auto'],['haiku','Haiku'],['sonnet','Sonnet'],['opus','Opus']].map(([v,n])=>`<option value="${v}" ${(pf.handoff?.model||'auto')===v?'selected':''}>${n}</option>`).join('')}</select><select class="sval" id="sHEffort">${['low','medium','high'].map(v=>`<option value="${v}" ${(pf.handoff?.effort||'medium')===v?'selected':''}>${cap(v)}</option>`).join('')}</select></div>
-    <div class="lgrp">Servers</div><div class="srow"><span>A line to start them<small>When a project lists its servers and none are running, a line above the message box starts them. Off: only ⋮ and /serve do.</small></span><i class="stog ${pf.serveLine!==false?'on':''}" data-set="serve"></i></div>`;
+    <div class="srow"><span>Handoff written by<small>Auto picks Haiku, Sonnet or Opus by how much went on.</small></span><select class="sval" id="sHModel">${[['auto','Auto'],['haiku','Haiku'],['sonnet','Sonnet'],['opus','Opus']].map(([v,n])=>`<option value="${v}" ${(pf.handoff?.model||'auto')===v?'selected':''}>${n}</option>`).join('')}</select><select class="sval" id="sHEffort">${['low','medium','high'].map(v=>`<option value="${v}" ${(pf.handoff?.effort||'medium')===v?'selected':''}>${cap(v)}</option>`).join('')}</select></div>`;
   else if(stab===6)pg.innerHTML=`<div class="pgh">Speech</div>
     <div class="lgrp">Dictation</div><div class="srow"><span>Language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>${speechRow()}${readRows(pf)}`;
   else if(stab===1)renderProfilePage(pg);
@@ -1986,7 +1989,6 @@ $('spage').onclick=async e=>{
   if(s?.dataset.set==='phone'){try{PH=await api('phone/on',{on:!PH?.on});renderSettings()}catch(err){oops(err.message)}return}
   {const pr=e.target.closest('[data-phrep]');if(pr){try{phRep=phRep?.id===pr.dataset.phrep?null:{...await api('phone/repair',{id:pr.dataset.phrep}),at:Date.now()};renderSettings()}catch(err){oops(err.message)}return}}
   {const pr=e.target.closest('[data-phrev]');if(pr){try{PH=await api('phone/revoke',{id:pr.dataset.phrev});renderSettings()}catch(err){oops(err.message)}return}}
-  if(s?.dataset.set==='serve'){try{A.prefs=await api('settings',{serveLine:A.prefs?.serveLine===false});renderSettings();renderTray()}catch(err){oops(err.message)}}
   if(s?.dataset.set==='auto'){try{A.prefs=await api('settings',{autoContinue:!A.prefs?.autoContinue});renderSettings()}catch(err){oops(err.message)}}
   if(s?.dataset.set==='bypass'){try{A.prefs=await api('settings',{bypass:!A.prefs?.bypass});renderSettings();renderComposer()}catch(err){oops(err.message)}}
   if(s?.dataset.set==='updcheck'){U.err='';U.later=null;localStorage.removeItem('ww.updLater');api('update/check',{}).catch(err=>oops(err.message));setTimeout(renderSettings,50)}
@@ -2088,7 +2090,7 @@ document.addEventListener('keydown',e=>{
   if(e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||e.repeat||typing(e.target)||!$('sdim').hidden||!$('fdim').hidden)return;
   const k=e.key.toLowerCase();
   if(k==='b'){e.preventDefault();toggleSide()}
-  else if(k==='n'&&(V.pv||!$('bPreview').hidden)){e.preventDefault();$('bPreview').click()}
+  else if(k==='n'&&(V.pv||!$('bPreview').hidden&&!$('bPreview').classList.contains('mute'))){e.preventDefault();$('bPreview').click()}
   else if(k==='m'&&V.pv){e.preventDefault();$('bFull').click()}
   else if((k==='arrowleft'||k==='arrowright')&&V.pv&&pvList().length>1&&!e.target.closest?.('video,audio')){e.preventDefault();$(k==='arrowleft'?'pPrev':'pNext').click()}   // a playing video keeps its own arrows
 });
@@ -2355,7 +2357,7 @@ function renderMenus(){
     +'<div class="sep"></div><div class="lab">Effort</div><div class="eseg">'+EFFORTS.filter(x=>x[0]||!de).map(([v,n,d])=>`<button class="${v===shownEffort()?'on':''}" data-e="${esc(v)}" data-tip="${esc(d+(v&&v===de?'. Your default.':''))}">${n}</button>`).join('')+'</div>'
     +`<div class="cap2" style="padding-top:6px">${de?`${esc(EFFORTS.find(x=>x[0]===de)?.[1]||de)} is your default effort. `:''}Applies from your next message.</div>`;
 }
-function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('rwm').hidden=true;$('olm').hidden=true;if(V.rw||V.rp){V.rw=null;V.rp=null;renderThread()}$('mHand').hidden=true;$('pCtx').classList.remove('open');$('gmenu').hidden=true;$('emenu').hidden=true;$('smenu').hidden=true;$('srvm').hidden=true;V.menuFor=null;document.querySelectorAll('.sess.mopen').forEach(b=>b.classList.remove('mopen'));$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
+function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('rwm').hidden=true;$('olm').hidden=true;if(V.rw||V.rp){V.rw=null;V.rp=null;renderThread()}$('mHand').hidden=true;$('pCtx').classList.remove('open');$('gmenu').hidden=true;$('emenu').hidden=true;$('smenu').hidden=true;$('hmenu').hidden=true;$('bMore').classList.remove('on');$('srvm').hidden=true;V.menuFor=null;document.querySelectorAll('.sess.mopen').forEach(b=>b.classList.remove('mopen'));$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
 const toggle=(btn,pop,then)=>e=>{e.stopPropagation();const was=$(pop).hidden;closePops();if(was){V.mk=false;V.find='';renderMenus();$(pop).hidden=false;$(btn).classList.add('open');then?.()}};
 $('pProject').onclick=toggle('pProject','mProject',()=>$('pFind').focus());
 $('pProfile').onclick=toggle('pProfile','mProfile');
@@ -2366,7 +2368,7 @@ $('mMode').onclick=async e=>{e.stopPropagation();const t=e.target.closest('[data
     try{await api('default-mode',{profile:who,mode:m});if(curProfile()===who)V.def.mode=m;renderComposer()}catch(err){oops(err.message)}}};
 // Menus close when you press anywhere outside them. (Listening for a click instead let a second click event, which some
 // windows deliver for one press, close a menu the moment it opened.)
-document.addEventListener('pointerdown',e=>{if(!e.target.closest('.pop,.fmenu,.menu,.pick,#bGear,#moreBtn,#pcb,[data-dots]'))closePops()});
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('.pop,.fmenu,.menu,.pick,#bGear,#moreBtn,#bMore,#pcb,[data-dots]'))closePops()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePops();$('dim').hidden=true;if(!$('sdim').hidden&&!L)closeSettings()}});
 $('mProject').addEventListener('input',e=>{if(e.target.id==='pFind'){V.find=e.target.value;const at=e.target.selectionStart;renderMenus();const i=$('pFind');i.focus();i.setSelectionRange(at,at)}});
 $('mProject').addEventListener('keydown',e=>{if(e.target.id==='mkName'&&e.key==='Enter')$('mProject').querySelector('[data-create]').click()});
@@ -2426,24 +2428,20 @@ function bgRow(t,sel){
   const sub=t.kind==='agent'?[t.last,t.steps!=null&&plural(t.steps,'step'),t.tokens&&Math.round(t.tokens/1000)+'k tokens'].filter(Boolean).join(' · ')
     :t.last||(t.kind==='monitor'?'No events yet':t.cmd||'');
   return `<div class="tk ${sel?'on':''}" data-task="${esc(t.id)}"><span class="tki ${sv?'server':t.kind}">${svg(sv?'server':BGI[t.kind]||'term')}</span>
-    <div class="tk1"><b>${esc(t.name)}</b>${sv?`<span class="who">agent</span>${sv.ports.map(p=>portEl(p)).join('')}`:''}${t.sub?`<span class="stt n">${esc(t.sub)}</span>`:''}${fresh?'<span class="stt mo">new event</span>':''}</div>
+    <div class="tk1"><b>${esc(t.name)}</b>${sv?`<span class="who">agent</span>${portsEl(sv.ports)}`:''}${t.sub?`<span class="stt n">${esc(t.sub)}</span>`:''}${fresh?'<span class="stt mo">new event</span>':''}</div>
     <div class="tka">${clockEl(t.start,'go')}<button class="mini" data-bg${a}="${esc(t.id)}">${l}</button><button class="mini stop" data-bgstop="${esc(t.tool||t.id)}" data-tip="Stop it">${svg('stop')}Stop</button></div>
     <div class="tk2 ${t.kind==='agent'?'':'mono'}">${esc(sub)}</div></div>`;
 }
 function renderTray(){
   const l=bgList(),sv=srvRows(),link=srvByTask(),tr=$('tray'),b=$('bTasks'),h=srvHere(),can=srvCanStart(),any=l.length+sv.length;
-  const ghost=!any&&can.length>0&&A.prefs?.serveLine!==false;
-  tr.hidden=!any&&!ghost;b.hidden=!any;$('tkN').textContent=any||'';b.classList.toggle('on',V.side==='tasks'&&!V.pv);
+  tr.hidden=!any;hMute(b,!any,'Nothing running in the background','Running in the background');$('tkN').textContent=any||'';renderServe();b.classList.toggle('on',V.side==='tasks'&&!V.pv);
   if(V.side==='tasks'&&!any){V.side=null;renderPanel()}
-  tr.classList.toggle('ghost',ghost);
   if(tr.hidden){tr.innerHTML='';return}
-  // nothing runs, and the folder lists servers: a quiet line to start them
-  if(ghost){tr.classList.remove('open');tr.innerHTML=`<div class="tl" data-srvmenu role="button" tabindex="0"><span class="pl">${svg('play')}</span><b>Start servers</b><span class="gn">${esc(can.join(' · '))}</span><span class="gap"></span><i>${esc(h.conf.file)}</i>${svg('chev-d')}</div>`;return}
   const it=[...sv.map(s=>['server',s.name]),...l.map(t=>[link.has(t.id)?'server':t.kind,t.name])],up=sv.filter(s=>s.state!=='exited').length+l.length;
   const names=it.slice(0,3).map(([k,n])=>`<span class="tkk ${k}">${esc(n)}</span>`).join('')+(it.length>3?`<span class="tkk">+${it.length-3}</span>`:'');
-  const ports=[...new Set([...sv.filter(s=>s.state!=='exited'),...link.values()].flatMap(s=>s.ports))].slice(0,3);
+  const ports=[...new Set([...sv.filter(s=>s.state!=='exited'),...link.values()].flatMap(s=>s.ports))];
   tr.classList.toggle('open',V.trayOpen);
-  tr.innerHTML=`<div class="tl" data-tray role="button" tabindex="0"><b>${up?up+' running':plural(it.length,'server')+' stopped'}</b>${names}<span class="gap"></span>${ports.map(p=>portEl(p)).join('')}${can.length?`<span class="st" data-srvmenu data-tip="Start this folder's servers">${svg('play')}Start</span>`:''}${svg('chev-d')}</div>${V.trayOpen?`<div class="tasks">${sv.map(s=>srvRow(s)).join('')}${l.map(t=>bgRow(t)).join('')}</div>`:''}`;
+  tr.innerHTML=`<div class="tl" data-tray role="button" tabindex="0"><b>${up?up+' running':plural(it.length,'server')+' stopped'}</b>${names}<span class="gap"></span>${portsEl(ports,PHONE?1:3)}${can.length?`<span class="st" data-srvmenu data-tip="Start this folder's servers">${svg('play')}Start</span>`:''}${svg('chev-d')}</div>${V.trayOpen?`<div class="tasks">${sv.map(s=>srvRow(s)).join('')}${l.map(t=>bgRow(t)).join('')}</div>`:''}`;
   hydrate(tr);
   if(V.side==='tasks'&&!V.pv)renderTasks();
 }
@@ -2456,18 +2454,20 @@ const srvByTask=()=>{const m=new Map();for(const s of srvList())if(s.task?.sessi
 const srvRows=()=>{const mine=new Set(bgList().map(t=>t.id));return srvList().filter(s=>!(s.task?.sessionId===V.sel&&mine.has(s.task.id)))};
 const srvCanStart=()=>{const h=srvHere();if(!h?.conf?.names?.length)return [];const on=new Set(srvList().filter(s=>s.state!=='exited').flatMap(s=>s.lines||[]));return h.conf.names.filter(n=>!on.has(n))};
 const portEl=(p,live=true)=>PHONE?`<span class="prt${live?' live':''}">:${p}</span>`:`<a class="prt${live?' live':''}" href="http://localhost:${p}/" target="_blank" rel="noopener" data-tip="Open localhost:${p}">:${p}${svg('ext')}</a>`;
+// a few ports, then how many more (one on the phone, where the row is narrow); the tooltip and the side panel list them all
+const portsEl=(ps,max=PHONE?1:4)=>ps.slice(0,max).map(p=>portEl(p)).join('')+(ps.length>max?`<span class="prt n" data-tip="${esc(ps.slice(max).map(p=>':'+p).join(' '))}">+${ps.length-max}</span>`:'');
 const WHO={workwood:'Workwood',agent:'agent',you:'yours'};
 function srvRow(s,sel){
   const gone=s.state==='exited';
   const sub=s.setup?(gone?`Setup failed · code ${s.code}`:'Setting up this worktree…'):gone?`Exited${s.code!=null?' · code '+s.code:''}`:s.cmd;
   return `<div class="tk ${sel?'on':''} ${gone?'gone':''}" data-srv="${esc(s.id)}"><span class="tki server">${svg('server')}</span>
-    <div class="tk1"><b>${esc(s.name)}</b><span class="who">${WHO[s.who]}</span>${gone?'':s.ports.map(p=>portEl(p)).join('')}</div>
+    <div class="tk1"><b>${esc(s.name)}</b><span class="who">${WHO[s.who]}</span>${gone?'':portsEl(s.ports)}</div>
     <div class="tka">${gone?'':clockEl(s.start,'go')}${s.who==='workwood'?`<button class="mini" data-srvout="${esc(s.id)}">Output</button>`:''}<button class="mini stop" data-srvstop="${esc(s.id)}" data-tip="${gone?'Clear it':'Stop it'}">${gone?'Clear':svg('stop')+'Stop'}</button></div>
     <div class="tk2 mono">${esc(sub)}</div>${s.kids?.length?`<div class="kids">${s.kids.map(k=>`<div class="kid"><b>${esc(k.name)}</b>${k.ports.length?k.ports.map(p=>portEl(p,false)).join(''):'<span class="q">no port</span>'}<code>${esc(k.cmd)}</code></div>`).join('')}</div>`:''}</div>`;
 }
 function srvPlace(m,el){
   m.hidden=false;const r=(el||$('input')).getBoundingClientRect();
-  m.style.left=Math.max(6,Math.min(r.right-m.offsetWidth,innerWidth-m.offsetWidth-6))+'px';m.style.top=Math.max(6,r.top-m.offsetHeight-6)+'px';
+  m.style.left=Math.max(6,Math.min(r.right-m.offsetWidth,innerWidth-m.offsetWidth-6))+'px';m.style.top=(r.top<innerHeight/2?r.bottom+6:Math.max(6,r.top-m.offsetHeight-6))+'px';
 }
 // Start: all the folder's servers that are not running, or one of them.
 function srvMenu(el){
@@ -2551,7 +2551,7 @@ function bgClick(e){
 }
 $('tray').onclick=bgClick;$('tkList').onclick=bgClick;$('tkAct').onclick=bgClick;
 $('tray').onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.tl')){e.preventDefault();e.target.click()}};
-$('bTasks').onclick=()=>{if(V.side==='tasks'&&!V.pv)V.side=null;else{V.side='tasks';V.pv=null;V.full=false}renderPanel();renderTray()};
+$('bTasks').onclick=()=>{if($('bTasks').classList.contains('mute'))return;if(V.side==='tasks'&&!V.pv)V.side=null;else{V.side='tasks';V.pv=null;V.full=false}renderPanel();renderTray()};
 $('tkClose').onclick=()=>{V.side=null;renderPanel();renderTray()};
 function renderQueue(){renderTray();
   const q=queued(),el=$('queue'),busy=V.run?.status==='working';
@@ -3192,6 +3192,58 @@ document.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey)||e.shiftKey||
   else if(k==='d'&&!V.isNew&&selSession()&&$('fdim').hidden&&$('sdim').hidden){e.preventDefault();const s=selSession();if(!s.done)setDone(s,true)}});
 
 $('bCode').onclick=()=>api('open-editor',{sessionId:V.sel}).catch(e=>oops(e.message));
+$('bOTerm').onclick=()=>api(`sessions/${V.sel}/terminal`,{}).catch(e=>oops(e.message));
+
+/* ---------- the header's actions: what you reach for often stays, the rest is in ⋮ ----------
+   Preview and Running are always there, muted with nothing to show, so nothing moves; Serve, in a project that lists
+   or runs servers, comes in at the left end, where it moves nothing either. The rest (Changes, Outline, the chat and
+   terminal switch, VS Code, a terminal window, Done) is in ⋮, where a pin keeps any of them in the header. */
+const hMute=(el,on,tip,tipOn)=>{el.classList.toggle('mute',on);el.dataset.tip=on?tip:tipOn};
+const PIN_KEYS=['changes','outline','view','code','oterm','done'];
+let pins=(()=>{try{const p=JSON.parse(localStorage.getItem('ww.pins'));if(Array.isArray(p))return new Set(p.filter(k=>PIN_KEYS.includes(k)))}catch{}return new Set(['done'])})();
+function applyPins(){for(const el of $('hpins').querySelectorAll('[data-pin]'))el.classList.toggle('np',!pins.has(el.dataset.pin))}
+function renderServe(){
+  const b=$('bServe'),h=srvHere(),can=srvCanStart(),up=srvList().filter(x=>x.state!=='exited');
+  b.hidden=!h?.conf?.names?.length&&!up.length;if(b.hidden)return;
+  b.classList.toggle('go',!!up.length);
+  if(up.length){const f=up.find(x=>x.ports.length)||up[0];
+    b.innerHTML=`<i class="dot"></i><span>${esc(f.name)}</span>${f.ports[0]?`<span class="pt">:${f.ports[0]}</span>`:''}${up.length>1?`<span class="hsvn">+${up.length-1}</span>`:''}`;
+    b.dataset.tip=plural(up.length,'server')+' running';b.dataset.tipD=up.map(x=>x.name+(x.ports.length?' :'+x.ports.join(' :'):'')).join(' · ')+(can.length?'. Not running: '+can.join(', ')+'.':'')}
+  else{b.innerHTML=`${svg('play')}<span>Serve</span>`;b.dataset.tip="Start this folder's servers";b.dataset.tipD=can.join(' · ')+' · from '+h.conf.file}
+}
+$('bServe').onclick=()=>{
+  if(srvList().some(x=>x.state!=='exited')){V.trayOpen=!V.trayOpen||$('tray').hidden;renderTray();return}
+  if($('srvm').hidden)srvMenu($('bServe'));else $('srvm').hidden=true;
+};
+function hMenuPaint(){
+  const s=selSession(),m=$('hmenu');if(!s)return;
+  const t=view()==='term',c=V.ch;
+  const row=(k,icon,label,meta='',on=false)=>`<button data-h="${k}" class="${on?'cur':''}">${svg(icon)}${label}${meta?`<span class="k">${meta}</span>`:''}<i class="pin ${pins.has(k)?'on':''}" data-hpin="${k}" data-tip="${pins.has(k)?'Unpin from the header':'Pin to the header'}">${svg('pin')}</i></button>`;
+  m.innerHTML=(c?.repo?row('changes','diff','Changes',c.count?String(c.count):''):'')
+    +row('outline','list','Outline','',V.side==='outline'&&!V.pv)
+    +row('view',t?'chat':'term',t?'Back to the chat':'Terminal view')
+    +row('code','code','Open in VS Code')+row('oterm','ext','Open in a terminal window')
+    +row('done',s.done?'refresh':'check',s.done?'Back to inbox':'Done',s.done?'':'Ctrl D')
+    +`<hr><button data-h="rename">${svg('pencil')}Rename</button><button data-h="delete" class="hot">${svg('trash')}Delete…</button>`;
+}
+$('bMore').onclick=e=>{
+  e.stopPropagation();const m=$('hmenu');if(!m.hidden){closePops();return}
+  closePops();hideTip();hMenuPaint();m.hidden=false;$('bMore').classList.add('on');
+  const r=$('bMore').getBoundingClientRect();m.style.left=Math.max(6,r.right-m.offsetWidth)+'px';m.style.top=r.bottom+6+'px';
+};
+$('hmenu').onclick=e=>{
+  e.stopPropagation();const p=e.target.closest('[data-hpin]');
+  if(p){const k=p.dataset.hpin;pins.has(k)?pins.delete(k):pins.add(k);localStorage.setItem('ww.pins',JSON.stringify([...pins]));applyPins();hideTip();hMenuPaint();return}
+  const b=e.target.closest('[data-h]'),s=selSession();if(!b||!s)return;const k=b.dataset.h;closePops();
+  if(k==='changes')$('bChanges').click();
+  else if(k==='outline')$('bOutline').click();
+  else if(k==='view')setView(V.sel,view()==='term'?'chat':'term');
+  else if(k==='code')$('bCode').click();
+  else if(k==='oterm')$('bOTerm').click();
+  else if(k==='done')$('bDone').click();
+  else sessAct(k,s);
+};
+applyPins();
 
 const root=document.documentElement;
 const themePref=()=>{const t=localStorage.getItem('ww.theme');return ['dark','light','auto'].includes(t)?t:'dark'};
@@ -3328,7 +3380,7 @@ function phPill(){
   rg.hidden=!c;rg.className='ctx phctx'+(full?' mid':'');rg.innerHTML=c?`<i class="ring" style="--p:${cp}"></i>${full?`<span class="pct">${cp}%</span>`:''}`:'';
   rg.setAttribute('aria-label',c?`Context ${cp}% used`:'');
   const cur=profile(curProfile()),h5=cur?.h5,d7=cur?.d7;let k='5h',v=h5,r=cur?.r5;
-  if(d7!=null&&(h5==null||d7>h5)){k='7d';v=d7;r=cur?.r7}
+  if(d7!=null&&(h5==null||d7>=80&&d7>h5)){k='7d';v=d7;r=cur?.r7}   // the 5h window, unless the week is near its end and closer than it
   const m=shownModel()?modelName(shownModel()).split(' ')[0]:'Default';
   const lim=v==null?'':v>=100?`<b>${k} full</b>${r?`<small> · clears ${clock(r*1000)}</small>`:''}`:v>=80?`<b>${k} ${Math.round(v)}%</b>${r?`<small> · ${clock(r*1000)}</small>`:''}`
     :`<span class="pk">${k}</span>${full?'':`<span class="pbr"><i style="width:${Math.max(4,v)}%"></i></span>`}${Math.round(v)}%`;

@@ -1,0 +1,90 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 80 — The session's header actions</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<link rel="stylesheet" href="../ui/app.css">
+<style>
+html,body{height:auto}
+body{overflow:auto;background:var(--bg);padding:36px 24px 80px}
+.top{max-width:1040px;margin:0 auto 8px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top>span{color:var(--faint);font-size:12.5px}
+.tg{margin-left:auto;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:8px;box-shadow:0 0 0 1px var(--line2)}
+.lede{max-width:1040px;margin:0 auto 26px;color:var(--faint);font-size:12.5px;line-height:1.55}.lede b{color:var(--dim);font-weight:650}
+.rw{display:block;max-width:1040px;margin:0 auto 22px}
+.rw h2{font-size:13px;margin:0 0 7px;font-weight:700;display:flex;gap:8px;align-items:baseline}.rw h2 span{font-weight:500;color:var(--faint);font-size:12px}
+.rw h2 em{font-style:normal;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);padding:1px 6px;border-radius:5px;box-shadow:0 0 0 1px var(--line2)}
+.fr{position:relative;border-radius:12px;box-shadow:0 0 0 1px var(--line2);background:var(--surface,var(--bg));overflow:visible}
+.fr .head{border-bottom:0}.fr .hd{flex:1;min-width:0}.fr .hd h1{overflow:hidden;text-overflow:ellipsis}
+.fr.narrow{max-width:520px}
+.hd .where{font-size:11.5px;color:var(--faint)}
+.ib svg,.doneb svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ib.wide svg{width:15px;height:15px}
+.gap{flex:1}
+.old{opacity:.55}
+/* the server control: a quiet Start when the folder lists servers, green while they run */
+.sv{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 9px 0 8px;border-radius:8px;font-size:12px;font-weight:550;color:var(--dim);white-space:nowrap}
+.sv:hover{background:rgba(128,128,128,.14)}
+.sv svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sv.go{color:hsl(152 55% 58%);background:color-mix(in srgb,hsl(152 55% 58%) 12%,transparent)}
+[data-theme=light] .sv.go{color:hsl(152 60% 30%)}
+.sv.go i{width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 25%,transparent);animation:pl 2s ease-in-out infinite}
+@keyframes pl{50%{box-shadow:0 0 0 1px color-mix(in srgb,currentColor 25%,transparent)}}
+.sv .pt{font:11px "Cascadia Code",ui-monospace,monospace;opacity:.85}
+.vl{width:1px;height:18px;background:var(--line2);margin:0 4px}
+/* the ⋮ menu, drawn open */
+.fmenu.drawn{position:absolute;right:10px;top:46px;width:236px;display:block}
+.fmenu.drawn button svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.fmenu .pin{margin-left:auto;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:var(--faint);opacity:0}
+.fmenu button:hover .pin,.fmenu .pin.on{opacity:1}.fmenu .pin.on{color:var(--text)}
+.fmenu .pin svg{width:12px;height:12px}
+.fmenu .k{margin-left:auto;color:var(--faint);font-size:11px}
+.fmenu .k+.pin{margin-left:6px}
+.fmenu .cap{padding:4px 9px 2px;font-size:10.5px;color:var(--faint)}
+.fmenu .hot{color:var(--hot)}
+.spacer{height:250px}
+.mbox{margin:0 20px 16px;border-radius:14px;box-shadow:0 0 0 1px var(--line2);padding:12px 14px;color:var(--faint);font-size:13px}
+.strike{margin:0 20px 6px;height:32px;border-radius:10px;box-shadow:0 0 0 1px var(--line2);display:flex;align-items:center;gap:10px;padding:0 12px;font-size:12px;color:var(--faint);position:relative}
+.strike::after{content:"";position:absolute;left:8px;right:8px;top:50%;height:1.5px;background:var(--hot);opacity:.7}
+.strike svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2}
+.oq{max-width:1040px;margin:34px auto 0;font-size:12.5px;color:var(--dim)}
+.oq h3{font-size:14px;margin:0 0 6px;color:var(--text)}.oq li{margin:5px 0;line-height:1.55;max-width:860px}
+</style></head><body>
+<div class="top"><h1>The session's header actions</h1><span>round 80 · mockup</span><button class="tg" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<div class="lede">What you reach for every turn stays in the header; what only appears when there is something (<b>Preview</b>, <b>Running</b>, <b>Changes</b>) comes and goes as today; the rest moves to a <b>⋮</b> menu, where a pin puts any of them back in the header. Servers get one control here, and the <b>Start servers</b> line above the message box goes.</div>
+<div id="out"></div>
+<div class="oq"><h3>Open questions</h3><ol>
+  <li>Pinned by default: <b>Outline</b> only, with <b>VS Code</b> moved into the menu? Or both pinned?</li>
+  <li>While servers run, the tray above the message box (ports, Stop, output) stays as today, and the green header control opens it. Or should the header control be the only place, with its own popover?</li>
+  <li>Pins are one set for every session, not per project. Fine?</li>
+</ol></div>
+<script>
+const P={chat:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',term:'<path d="m4 17 6-6-6-6M12 19h8"/>',diff:'<path d="M12 4v8M8 8h8M8 18h8"/>',code:'<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>',
+kebab:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',play:'<path d="M6 4l14 8-14 8z"/>',server:'<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',pulse:'<path d="M4 12h3l2-6 4 12 2-6h5"/>',check:'<path d="M20 6 9 17l-5-5"/>',monitor:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+pencil:'<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+pin:'<path d="M12 17v5M9 3h6l-1 6 4 4v2H6v-2l4-4z"/>',stop:'<rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none"/>',chev:'<path d="m6 9 6 6 6-6"/>'};
+const s=(k,c='')=>`<svg viewBox="0 0 24 24" class="${c}">${P[k]}</svg>`;
+const hd=(t,w)=>`<div class="hd"><h1>${t}</h1><div class="where">${w}</div></div>`;
+const seg=`<div class="seg"><button class="ib on">${s('chat')}</button><button class="ib">${s('term')}</button></div>`;
+const chip=(i,n)=>`<button class="ib wide">${s(i)}<span>${n}</span></button>`;
+const done=`<button class="doneb">${s('check')}<span>Done</span></button>`;
+const more=`<button class="ib">${s('kebab')}</button>`;
+const start=`<button class="sv" data-tip="Start this folder's servers">${s('play')}Serve</button>`;
+const run=`<button class="sv go"><i></i>web<span class="pt">:3104</span>${s('chev')}</button>`;
+const head=(...x)=>`<header class="head">${x.join('')}</header>`;
+const menu=srv=>`<div class="fmenu drawn">
+  <button>${s('list')}Outline<span class="pin on">${s('pin')}</span></button>
+  <button>${s('code')}Open in VS Code<span class="pin">${s('pin')}</span></button>
+  <button>${s('term')}Open in terminal<span class="pin">${s('pin')}</span></button>
+  ${srv?`<button>${s('server')}Start servers<span class="pin on">${s('pin')}</span></button>`:''}
+  <hr><button>${s('pencil')}Rename</button><button class="hot">${s('trash')}Delete…</button>
+  <hr><div class="cap">Pinned ones show in the header</div></div>`;
+const ST=[
+ ['Today','',`<div class="old">${head(hd('Fix the parser','workwood · main'),seg,`<button class="ib">${s('list')}</button>`,chip('monitor',2),chip('pulse',1),chip('diff',5),`<button class="ib">${s('code')}</button>`,done)}<div class="strike">${s('play')}<b>Start servers</b> web · worker<span class="gap"></span>Procfile.dev</div></div>`],
+ ['A project with no servers','Outline pinned; VS Code moved into ⋮',head(hd('Fix the parser','workwood · main'),chip('monitor',2),chip('diff',5),`<span class="vl"></span>`,`<button class="ib">${s('list')}</button>`,seg,done,more)],
+ ['It lists servers, none running','a quiet Serve; click it to start all, or pick one',head(hd('Site redesign','shop · round-12'),chip('diff',3),`<span class="vl"></span>`,start,`<button class="ib">${s('list')}</button>`,seg,done,more)],
+ ['They run','green, with the first port; opens the tray',head(hd('Site redesign','shop · round-12'),chip('monitor',1),chip('pulse',1),chip('diff',3),`<span class="vl"></span>`,run,`<button class="ib">${s('list')}</button>`,seg,done,more)],
+ ['⋮ open','a pin keeps one in the header',head(hd('Site redesign','shop · round-12'),chip('diff',3),`<span class="vl"></span>`,start,`<button class="ib">${s('list')}</button>`,seg,done,`<button class="ib" style="background:rgba(128,128,128,.16)">${s('kebab')}</button>`)+menu(true)+'<div class="spacer"></div>'],
+ ['Narrow','counts and servers lose their words first',`<div class="narrow">${head(hd('Site redesign','shop'),`<button class="ib wide">${s('diff')}<span>3</span></button>`,`<button class="sv go" style="padding:0 8px"><i></i></button>`,seg,`<button class="doneb" style="padding:0 7px">${s('check')}</button>`,more)}</div>`],
+];
+document.getElementById('out').innerHTML=ST.map(([t,d,h],i)=>`<div class="rw"><h2>${i?'':'<em>before</em>'}${t}<span>${d}</span></h2><div class="fr ${t==='Narrow'?'narrow':''}">${h}</div></div>`).join('');
+</script>
+</body></html>

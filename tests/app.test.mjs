@@ -1098,6 +1098,23 @@ test('worktrees: a session in a worktree belongs to its project, and reports the
   } finally { fs.writeFileSync(stub, kept); }
 });
 
+test('a file or folder a message names opens in VS Code: a file at its line, in the project\'s window; only what is there', async () => {
+  const id = sb.sessions.betaOther, dir = sb.projects.beta, out = fs.mkdtempSync(path.join(os.tmpdir(), 'ww-ed-'));
+  fs.mkdirSync(path.join(dir, 'lib'), { recursive: true }); fs.writeFileSync(path.join(dir, 'lib', 'a.js'), 'x'); fs.writeFileSync(path.join(out, 'b.md'), 'b');
+  try {
+    const r = await svc.call(`sessions/${id}/paths`, { paths: ['lib/a.js:12', 'lib/', path.join(out, 'b.md'), 'e.code', 'lib/gone.js'] });
+    assert.deepEqual(r.body, { 'lib/a.js:12': { path: path.join(dir, 'lib', 'a.js'), dir: false }, 'lib/': { path: path.join(dir, 'lib'), dir: true },
+      [path.join(out, 'b.md')]: { path: path.join(out, 'b.md'), dir: false }, 'e.code': null, 'lib/gone.js': null });
+    assert.equal((await svc.call('open-editor', { sessionId: id, path: 'lib/a.js:12:3' })).status, 200);
+    await until(() => readLog(sb).includes(`code ${dir} -g ${path.join(dir, 'lib', 'a.js')}:12:3`), 'the file at its line, in the project');
+    assert.equal((await svc.call('open-editor', { sessionId: id, path: path.join(out, 'b.md') })).status, 200);
+    await until(() => readLog(sb).includes(`code -g ${path.join(out, 'b.md')}`), 'a file outside the project on its own');
+    assert.equal((await svc.call('open-editor', { sessionId: id, path: 'lib' })).status, 200);
+    await until(() => readLog(sb).includes(`code ${path.join(dir, 'lib')}`), 'the folder as itself');
+    assert.equal((await svc.call('open-editor', { sessionId: id, path: 'lib/gone.js' })).status, 404);
+  } finally { fs.rmSync(path.join(dir, 'lib'), { recursive: true, force: true }); fs.rmSync(out, { recursive: true, force: true }); }
+});
+
 test('open in terminal: resumes under the session\'s own profile, and not while it is in use', async () => {
   // One at a time: the two terminals start on their own, so the log would not keep their order otherwise.
   assert.equal((await svc.call(`sessions/${sb.sessions.alphaLive}/terminal`, {})).status, 200);
@@ -2655,6 +2672,18 @@ ui('window: a long conversation has a rail of turns and an outline you can searc
   assert.equal(await page.locator('#rail').isHidden(), true);
   await page.click(`.sess[data-id="${id}"]`);
   await page.waitForFunction(() => document.querySelectorAll('#rail button').length === 3);
+});
+
+ui('window: files and folders an answer names are links to VS Code once they turn out to be there', async () => {
+  const dir = sb.projects.alpha; fs.mkdirSync(path.join(dir, 'src'), { recursive: true }); fs.writeFileSync(path.join(dir, 'src', 'main.js'), 'x');
+  try {
+    await startNew('changed `src/main.js:7` and src/main.js, in `src/`; not `src/nope.js` or `e.code`', { project: 'alpha' }); await page.waitForSelector('.ai [data-epath="src/main.js:7"].ok');
+    assert.deepEqual(await page.$$eval('.ai [data-epath]', es => es.map(e => [e.dataset.epath, e.classList.contains('ok')])),
+      [['src/main.js:7', true], ['src/main.js', true], ['src/', true], ['src/nope.js', false], ['e.code', false]]);
+    const from = readLog(sb).length;
+    await page.click('.ai [data-epath="src/main.js:7"]');
+    await until(() => readLog(sb).slice(from).includes(`code ${dir} -g ${path.join(dir, 'src', 'main.js')}:7`), 'VS Code at the line');
+  } finally { fs.rmSync(path.join(dir, 'src'), { recursive: true, force: true }); }
 });
 
 ui('window: a code block in an answer copies just its code, from the button that shows when you point at it', async () => {

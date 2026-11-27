@@ -660,6 +660,9 @@
   code.fl:hover{background:color-mix(in srgb,var(--accent) 14%,transparent)}
   code.fl.on{color:var(--accent);background:color-mix(in srgb,var(--accent) 20%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent)}
   a.fl.on{color:var(--accent)}
+  .ep.ok{cursor:pointer;transition:background .1s,color .1s}
+  .ep.ok:hover{color:var(--accent);text-decoration:underline dotted;text-decoration-thickness:1px;text-underline-offset:3px}
+  code.ep.ok:hover{background:color-mix(in srgb,var(--accent) 14%,transparent)}
   code.fl.miss,a.fl.miss{color:var(--faint);text-decoration:line-through;text-decoration-thickness:1px}
   code.fl.miss{background:rgba(128,128,128,.10)}
   .ai pre{margin:0 0 10px;padding:10px 12px;border-radius:10px;background:var(--surface);overflow:auto;font-size:12.5px;line-height:1.55}

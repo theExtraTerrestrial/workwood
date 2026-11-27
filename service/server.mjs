@@ -470,6 +470,15 @@ async function api(req, res, url, who = null) {
     if (url.searchParams.has('open')) { previewDirs(s.id).add(path.dirname(f.path)); knownWork(s.id).add(f.path); }
     return send(res, 200, f);
   }
+  if (req.method === 'POST' && parts[0] === 'sessions' && parts[2] === 'paths') {
+    // Which of the paths a message names are there, so only those become links to VS Code.
+    const s = state.sessions.find(x => x.id === parts[1]);
+    if (!s) return send(res, 404, { error: 'No such session.' });
+    const b = await body(req), list = Array.isArray(b.paths) ? b.paths.slice(0, 300).map(String) : [];
+    const out = {};
+    await Promise.all(list.map(async p => { const f = await namedPath(s, p); out[p] = f && { path: f.path, dir: f.dir }; }));
+    return send(res, 200, out);
+  }
   if (req.method === 'GET' && parts[0] === 'sessions' && parts[2] === 'work') {
     // When each previewable file last changed, so the window can reload one that was edited, by anyone.
     const all = knownWork(parts[1]);
@@ -851,22 +860,30 @@ async function api(req, res, url, who = null) {
     const s = state.sessions.find(x => x.id === b.sessionId);
     if (!s) return send(res, 404, { error: 'No such session.' });
     // Where it is working now: an agent that moved into a worktree is opened there, at the worktree's top.
-    const now = s.file ? await src.lastCwd(s.file, s.cwd) : s.cwd, pl = await src.placeOf(now);
-    const err = await openEditor(pl.worktree ? pl.top : s.cwd);
+    const now = s.file ? await src.lastCwd(s.file, s.cwd) : s.cwd, pl = await src.placeOf(now), top = pl.worktree ? pl.top : s.cwd;
+    // A path a message named: a folder opens as itself; a file opens at its line, in the project's window when it is in it.
+    let args = [top];
+    if (b.path != null) {
+      const f = await namedPath(s, String(b.path));
+      if (!f) return send(res, 404, { error: 'Not found.' });
+      const at = f.path + (f.line ? ':' + f.line + (f.col ? ':' + f.col : '') : '');
+      args = f.dir ? [f.path] : inside(f.path, top) ? [top, '-g', at] : ['-g', at];
+    }
+    const err = await openEditor(args);
     return err ? send(res, 500, { error: err }) : send(res, 200, { ok: true });
   }
   send(res, 404, { error: 'Not found.' });
 }
 
-// VS Code's `code` command hands the folder to VS Code and ends. On Windows it is code.cmd, which only cmd runs:
-// the folder is quoted for cmd, as a space in it (C:\Users\Jane Doe) would split it in two. A `code` that is
+// VS Code's `code` command hands the folder (and file) to VS Code and ends. On Windows it is code.cmd, which only cmd
+// runs: each path is quoted for cmd, as a space in it (C:\Users\Jane Doe) would split it in two. A `code` that is
 // missing or fails says so, instead of the button doing nothing.
-function openEditor(dir) {
+function openEditor(args) {
   const win = process.platform === 'win32';
   return new Promise(resolve => {
     const child = win
-      ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"code "${dir.replace(/"/g, '')}""`], { windowsVerbatimArguments: true, detached: true, stdio: 'ignore', env: src.cleanEnv(), windowsHide: true })
-      : spawn('code', [dir], { detached: true, stdio: 'ignore', env: src.cleanEnv() });
+      ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"code ${args.map(a => a.startsWith('-') ? a : `"${a.replace(/"/g, '')}"`).join(' ')}"`], { windowsVerbatimArguments: true, detached: true, stdio: 'ignore', env: src.cleanEnv(), windowsHide: true })
+      : spawn('code', args, { detached: true, stdio: 'ignore', env: src.cleanEnv() });
     const missing = 'VS Code was not found. In VS Code, run "Shell Command: Install \'code\' command in PATH" (on Windows, reinstall it with "Add to PATH" ticked), then try again.';
     const timer = setTimeout(() => { child.unref(); resolve(null); }, 8000);   // still going: it is opening
     child.on('error', e => { clearTimeout(timer); resolve(e.code === 'ENOENT' ? missing : `VS Code could not be opened (${e.message}).`); });
@@ -891,6 +908,19 @@ async function namedFile(s, raw) {
   for (const b of bases) {
     const f = b ? path.resolve(b, p) : path.resolve(p);
     try { const st = await fs.stat(f); if (st.isFile()) return fileEntry(f, st, new Date().toISOString()); } catch {}
+  }
+  return null;
+}
+// Any file or folder a message names, for VS Code: as namedFile finds it, with a line (and column) after it kept.
+async function namedPath(s, raw) {
+  raw = raw.trim().replace(/^file:\/\//, '');
+  if (!raw || raw.length > 1000 || /[\0\n]/.test(raw)) return null;
+  const m = raw.match(/^(.*?)(?::(\d+)(?::(\d+))?)?$/), p = m[1].replace(/^~(?=$|[\\/])/, os.homedir());
+  if (!p) return null;
+  const bases = path.isAbsolute(p) ? [''] : [...new Set([s.file ? await src.lastCwd(s.file, s.cwd).catch(() => null) : null, s.cwd].filter(Boolean))];
+  for (const b of bases) {
+    const f = b ? path.resolve(b, p) : path.resolve(p);
+    try { const st = await fs.stat(f); if (st.isFile() || st.isDirectory()) return { path: f, dir: st.isDirectory(), line: m[2] ? +m[2] : null, col: m[3] ? +m[3] : null }; } catch {}
   }
   return null;
 }

@@ -141,14 +141,20 @@ function oops(msg){const o=$('oops');o.textContent=msg||'';o.hidden=!msg;if(msg)
 
 // A path to a page, picture, video or PDF, as an answer writes it in code or a link: one you can open in the preview.
 const PVPATH=/^(?:~?\/|\.{1,2}\/)?[^\s:`'"<>|*?]+\.(?:html?|svg|png|jpe?g|gif|webp|avif|mp4|webm|mov|m4v|pdf)$/i;
+// Any other file or folder a message names, perhaps with :line after it: a link to VS Code once it turns out to be there.
+// In a code span or link anything path-shaped counts; in plain text it needs a folder in it and a file's extension.
+const EDPATH=/^(?!-)(?:~?\/|\.{1,2}\/)?[\w@.+-]+(?:\/[\w@.+-]+)*\/?(?::\d+(?::\d+)?)?$/,EDLIKE=p=>EDPATH.test(p)&&!/^\d+([.:]\d+)*$/.test(p)&&(p.includes('/')||/\.[A-Za-z]\w{0,7}(?::\d+(?::\d+)?)?$/.test(p));
+const TXPATH=/(<a\b[\s\S]*?<\/a>|<[^>]+>)|(?<![\w\/.~:@+-])((?:~|\.{1,2})?\/?[\w@.+-]+(?:\/[\w@.+-]+)+\.[A-Za-z]\w{0,7}(?::\d+(?::\d+)?)?)(?![\w\/])/g;
+const pathTag=(tag,p,inner)=>PVPATH.test(p)?`<${tag} class="fl" data-fpath="${esc(p)}">${inner}</${tag}>`:EDLIKE(p)&&!PHONE?`<${tag} class="ep" data-epath="${esc(p)}">${inner}</${tag}>`:null;
 // Just enough Markdown for agent replies. Everything is escaped first.
 function md(src){
   const blocks=[];let s=String(src).replace(/```[^\n]*\n([\s\S]*?)```/g,(_,c)=>{blocks.push(`<div class="cdb"><pre><code>${esc(c.replace(/\n$/,''))}</code></pre><button class="cpy" data-cpcode data-tip="Copy">${svg('copy')}</button></div>`);return `\u0000${blocks.length-1}\u0000`});
   // A code span opens with a run of backticks and closes on a run of the same length, so `` a`b `` holds a backtick;
   // one space either side is padding. Its text is set aside first so bold and links never reach inside it.
   const inline=t=>{const cs=[];
-    t=String(t).replace(/(?<!`)(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g,(_,f,c)=>{if(/^ [\s\S]* $/.test(c)&&c.trim())c=c.slice(1,-1);cs.push(PVPATH.test(c)?`<code class="fl" data-fpath="${esc(c)}">${esc(c)}</code>`:`<code>${esc(c)}</code>`);return `\u0001${cs.length-1}\u0001`});
-    return esc(t).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(_,t,h)=>PVPATH.test(h)?`<a class="fl" data-fpath="${h}">${t}</a>`:t).replace(/\u0001(\d+)\u0001/g,(_,i)=>cs[i])};
+    t=String(t).replace(/(?<!`)(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g,(_,f,c)=>{if(/^ [\s\S]* $/.test(c)&&c.trim())c=c.slice(1,-1);cs.push(pathTag('code',c,esc(c))||`<code>${esc(c)}</code>`);return `\u0001${cs.length-1}\u0001`});
+    return esc(t).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(_,t,h)=>{h=h.replace(/&amp;/g,'&').replace(/^file:\/\//,'');return pathTag('a',h,t)||t})
+      .replace(TXPATH,(m,tag,p)=>tag||pathTag('span',p,p)||p).replace(/\u0001(\d+)\u0001/g,(_,i)=>cs[i])};
   const out=[];let list=null,para=[],table=null;
   // A list keeps each item's indent, so items written under another become a list inside it.
   const listHtml=items=>{let h='';const stack=[];
@@ -516,7 +522,15 @@ function renderThread(){
   patch(t,parts);markGone();tick();fitThumbs();markCards();renderRail();if(V.side==='outline')renderOutline();raPaint();
 }
 const markCards=()=>{document.querySelectorAll('#thread [data-open]').forEach(c=>c.classList.toggle('on',c.dataset.open===V.pv));
-  document.querySelectorAll('#thread [data-fpath]').forEach(c=>{const f=FP.get(V.sel+'|'+c.dataset.fpath);c.classList.toggle('miss',f===null);c.classList.toggle('on',!!f&&f.path===V.pv)})};
+  document.querySelectorAll('#thread [data-fpath]').forEach(c=>{const f=FP.get(V.sel+'|'+c.dataset.fpath);c.classList.toggle('miss',f===null);c.classList.toggle('on',!!f&&f.path===V.pv)});markEditPaths()};
+// Which named paths are there, asked once for all a render shows (a missing one again after a while: it may be made).
+const EP=new Map();let epAsking=false;
+function markEditPaths(){const sid=V.sel,els=[...document.querySelectorAll('#thread [data-epath]')];if(!sid||V.isNew||!els.length)return;
+  const now=performance.now(),want=[...new Set(els.map(e=>e.dataset.epath))].filter(p=>{const f=EP.get(sid+'|'+p);return !f||f.v===null&&now-f.t>15000});
+  els.forEach(e=>e.classList.toggle('ok',!!EP.get(sid+'|'+e.dataset.epath)?.v));
+  if(!want.length||epAsking)return;epAsking=true;
+  api(`sessions/${sid}/paths`,{paths:want}).then(r=>{for(const p of want)EP.set(sid+'|'+p,{v:r[p]||null,t:performance.now()})},()=>{})
+    .finally(()=>{epAsking=false;if(V.sel===sid)document.querySelectorAll('#thread [data-epath]').forEach(e=>e.classList.toggle('ok',!!EP.get(sid+'|'+e.dataset.epath)?.v))})}
 // What a named path turned out to be, per session: the file, null when it is not there. Asked when you point at it,
 // and again when you click it (it may have been made, or gone, since).
 const FP=new Map();
@@ -1261,6 +1275,7 @@ $('thread').onclick=e=>{const st=e.target.closest('[data-astep]');if(st){const c
     const cnt=c.querySelector('.cnt');if(cnt)cnt.textContent=`${k+1} of ${c.querySelectorAll('.apage').length} · Answered`;return}
   const pc=e.target.closest('.mpic');if(pc){const all=[...pc.parentNode.querySelectorAll('.mpic')];lbx={list:all.map(b=>b.querySelector('img').src),i:all.indexOf(pc)};hideTip();showPic();return}
   const o=e.target.closest('[data-open]');if(o){showWork(o.dataset.open,!V.run?.pending);return}
+  const ep=e.target.closest('[data-epath].ok');if(ep){if(getSelection().toString())return;e.preventDefault();hideTip();api('open-editor',{sessionId:V.sel,path:ep.dataset.epath}).catch(err=>oops(err.message));return}
   const fp=e.target.closest('[data-fpath]');if(fp){if(getSelection().toString())return;e.preventDefault();hideTip();const sid=V.sel;
     fpath(fp.dataset.fpath,true).then(f=>{if(!f||V.sel!==sid){if(f===null&&fp.isConnected&&fp.matches(':hover')){tipFor=fp;showTip(fp)}return}
       if(!V.work.some(w=>w.path===f.path))V.work=V.work.concat(f);showWork(f.path)});return}
@@ -1951,7 +1966,7 @@ addEventListener('resize',fitSide);
    data-tip-k    its keys, shown as keys ("Ctrl K")
    data-tip-path a file's path, its folder dimmed
    data-tip-full the element's own text, only while it is cut off */
-const TIPSEL='[data-tip],[data-tip-path],[data-tip-full],[data-fpath]';
+const TIPSEL='[data-tip],[data-tip-path],[data-tip-full],[data-fpath],[data-epath].ok';
 let tipFor=null,tipTimer,tipShown=false,tipWarm=0;
 function hideTip(){clearTimeout(tipTimer);if(tipShown)tipWarm=performance.now()+500;tipShown=false;tipFor=null;const t=$('tip');t.hidden=true;t.classList.remove('on')}
 function tipHtml(el){
@@ -1960,6 +1975,8 @@ function tipHtml(el){
     if(f===undefined)return null;
     if(!f)return['path',`<span class="tipn"><span><b class="nf">Not found</b> · ${p(d.fpath)}</span></span>`];
     return['path',`${f.kind==='image'?`<span class="tthm"><img src="${esc(fileUrl(f))}" alt=""></span>`:''}<span class="tipn"><span class="tipp">${p(f.path)}</span><span class="tiph">Click to preview</span></span>`]}
+  if(d.epath!=null){const f=EP.get(V.sel+'|'+d.epath)?.v;if(!f)return null;const i=f.path.lastIndexOf('/')+1,ln=d.epath.match(/:(\d+)(?::\d+)?$/);
+    return['path',`<span class="tipn"><span class="tipp"><span class="dir">${esc(f.path.slice(0,i)).replace(/\//g,'/<wbr>')}</span>${esc(f.path.slice(i))}</span><span class="tiph">Click to open ${f.dir?'the folder ':ln?'at line '+ln[1]+' ':''}in VS Code</span></span>`]}
   if(d.tipPath){const i=d.tipPath.lastIndexOf('/')+1;return['path',`<span class="dir">${esc(d.tipPath.slice(0,i))}</span>${esc(d.tipPath.slice(i))}`]}
   if(d.tipFull!=null)return el.scrollWidth>el.clientWidth+1&&el.textContent.trim()?['',esc(el.textContent)]:null;
   if(!d.tip)return null;

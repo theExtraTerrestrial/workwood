@@ -276,6 +276,7 @@ $('newBtn').onclick=()=>newSession();
 // The profile last used in a project: the one that ran its most recent session, if that profile is still here.
 const lastProfileIn=cwd=>{const p=A.sessions.filter(s=>(s.root||s.cwd)===cwd&&s.profile).sort((a,b)=>b.mts-a.mts)[0]?.profile;return A.profiles.some(x=>x.name===p)?p:null};
 function newSession(project){
+  if(!V.isNew&&R&&!R.done)stopVoice();   // dictation stays with the session it was started in
   keepDraft();const was=V.isNew;
   resetJump();V.isNew=true;V.sel=null;if(!was)takeDraft('new');V.pend=null;V.qLocal=[];V.qNow=null;V.place=null;V.skOpen=false;V.q.auto=null;V.items=[];V.run=null;V.context=null;V.used={model:'',effort:'',mode:''};V.dismissed=null;V.work=[];V.pv=null;V.full=false;V.ch=null;V.side=null;V.chFile=null;V.chDiff=null;
   V.profile=startProfile()?.name; // every new session starts on your default profile (the global one unless you chose another); the project stays as last chosen
@@ -296,6 +297,8 @@ function letGo(id,seq){const h=held.get(id);held.delete(id);for(const [f,d] of h
 const take=f=>e=>{const d=JSON.parse(e.data),h=held.get(d.sessionId);if(h)h.ev.push([f,d]);else f(d)};
 async function openSession(id,sending){
   const from=sending&&V.isNew?id:draftKey(),move=id!==V.sel||V.isNew;   // a new session's first message just went: what you wrote since goes with it
+  if(from!==draftKey()&&R?.key===draftKey())R.key=from;   // the new session's box moves to it, and so does dictation into it
+  if(move&&R&&!R.done)stopVoice();   // dictation stays with the session it was started in
   keepDraft(from);
   if(!sending)V.pend=null;
   if(V.sel!==id){V.qLocal=[];V.qNow=null}
@@ -1491,7 +1494,13 @@ async function watchModel(r){
 // you are still speaking is shown as a guess and redone. Pieces with no speech in them are dropped.
 const QUIET=.012,PAUSE=5,LONGEST=16000*25;
 const cut=(r,a,b)=>{const out=new Float32Array(b-a);let o=0,at=r.off;for(const c of r.chunks){const lo=Math.max(a,at),hi=Math.min(b,at+c.length);if(hi>lo){out.set(c.subarray(lo-at,hi-at),o);o+=hi-lo}at+=c.length}return out};
-function setField(r,v){const el=$(r.target);if(!el)return;el.value=v;if(r.target==='input')grow();else if(V.q.id===r.qid)V.q.typed[r.qstep]=v}
+// What is said goes where it was said: the box of the session (or New session) it started in, or that card's answer.
+// Once you are somewhere else, the rest is written into that session's draft, or kept for when its card shows again.
+const qKept=new Map();   // card -> {step: text}, dictated into a card that is not showing now
+function setField(r,v){
+  if(r.target==='input'&&r.key!==draftKey()){const d=DRAFTS.get(r.key)||{text:'',att:[]};if(v.trim()||d.att.length)DRAFTS.set(r.key,{text:v,att:d.att});else DRAFTS.delete(r.key);saveDrafts();renderList();return}
+  if(r.target==='qText'&&(r.key!==draftKey()||V.q.id!==r.qid)){qKept.set(r.qid,{...qKept.get(r.qid),[r.qstep]:v});return}
+  const el=$(r.target);if(!el)return;el.value=v;if(r.target==='input')grow();else V.q.typed[r.qstep]=v}
 function showSaid(r,guess){setField(r,[r.base.replace(/\s+$/,''),...r.fixed,guess||''].filter(Boolean).join(' '))}
 function closePiece(r){
   const a=r.from,b=r.n,spoke=r.spoke;r.from=b;r.spoke=false;r.gap=0;r.seen=b;r.guess='';
@@ -1501,7 +1510,7 @@ function closePiece(r){
   r.chain=r.chain.then(async()=>{try{r.fixed[slot]=(await hear(audio)).text||''}catch(e){r.err=e.message}if(R===r)showSaid(r,r.guess)});
 }
 async function startVoice(target='input'){
-  if(R)return;oops('');R={done:true,target,qid:V.q.id,qstep:V.q.step};voiceLook();
+  if(R)return;oops('');R={done:true,target,key:draftKey(),qid:V.q.id,qstep:V.q.step};voiceLook();
   try{
     const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true}});
     R.stream=stream;
@@ -1528,7 +1537,7 @@ function stopVoice(keep=true){
   if(!keep){setField(r,r.base);R=null;voiceLook();return}
   $('vtime').textContent='Writing it down…';voiceLook();
   return r.fin=(async()=>{closePiece(r);await r.chain;showSaid(r,'');if(r.err)oops(r.err);
-    if(R===r)R=null;voiceLook();const el=$(r.target);if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}})();
+    if(R===r)R=null;voiceLook();const el=r.key===draftKey()&&$(r.target);if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}})();
 }
 // Click to start and click to stop, or hold the button while you speak and let go.
 let micDown=0,micHeld=false;
@@ -2035,7 +2044,7 @@ function renderCard(){
   if(!show){c._h=null;return}
   const put=h=>{const k=(p?.id||'')+h;if(c._h===k)return false;c._h=k;if(c.contains($('voice')))$('mic').before($('voice'));c.innerHTML=h;hydrate(c);voiceLook();return true};   // an unchanged card is left alone: its scroll position and typed text survive live updates
   if(st){if(put(stoppedCard(st)))autoTick();return}
-  if(V.q.id!==p.id)V.q={id:p.id,step:0,picks:{},typed:{},show:{},auto:null,at:performance.now()};
+  if(V.q.id!==p.id){V.q={id:p.id,step:0,picks:{},typed:qKept.get(p.id)||{},show:{},auto:null,at:performance.now()};qKept.delete(p.id)}
   if(p.kind==='question'){
     const qs=p.input.questions,i=Math.min(V.q.step,qs.length-1),q=qs[i],picked=V.q.picks[i]||[];
     const set=compareSet();

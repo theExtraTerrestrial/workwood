@@ -2545,6 +2545,27 @@ ui('window: the mic button dictates into the message box, after what was typed; 
   await page.fill('#input', '');
 });
 
+ui('window: dictation stays with the session it was started in: going to another one stops it, and what was said is in the first one\'s draft', async () => {
+  const row = id => page.locator(`.sess[data-id="${id}"]`);
+  await row(sb.sessions.alphaLive).click();
+  await page.waitForSelector('.me:has-text("Tidy the alpha readme")');
+  await page.fill('#input', 'For alpha,');
+  await page.click('#mic');
+  await page.waitForSelector('#box.rec');
+  await page.waitForFunction(() => /dictated words/.test(document.getElementById('input').value));
+  await row(sb.sessions.betaOther).click();
+  await page.waitForSelector('#box:not(.rec)');
+  await page.waitForSelector('#voice', { state: 'hidden' });                 // written down, and done
+  assert.equal(await page.inputValue('#input'), '');
+  await page.waitForTimeout(1200);                                           // nothing arrives here later either
+  assert.equal(await page.inputValue('#input'), '');
+  assert.match(await row(sb.sessions.alphaLive).locator('.l2').innerText(), /For alpha, dictated words/);
+  await row(sb.sessions.alphaLive).click();
+  assert.match(await page.inputValue('#input'), /^For alpha,( dictated words)+$/);
+  await page.fill('#input', '');
+  await page.waitForSelector('.sess .l2 .dft', { state: 'detached' });
+});
+
 ui('window: while the agent works you can write to it; the button stops only when the box is empty', async () => {
   await startNew('please LISTEN while you build');
   await page.waitForSelector('.w1:has-text("Build everything")');

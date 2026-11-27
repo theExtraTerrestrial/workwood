@@ -345,7 +345,15 @@ test('on the phone: tabs, a session full screen with the pill and its drawer, a 
     await page.reload(); await page.waitForSelector('html.ph'); await page.click('[data-pt=sessions]'); await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`); await page.waitForSelector('html[data-pt=session]'); await page.waitForFunction(() => !V.loading && V.items.length);
     await page.evaluate(p => { addWork([{ path: p, name: 'wide.html', kind: 'page', v: 1 }]); showWork(p); }, wide);
     await page.waitForSelector('#pvw:not(.fit) iframe.pvf');
+    // the phone's Back closes the preview and stays in the session; closed by its ×, Back is not spent on it
+    await page.goBack();
+    await page.waitForSelector('#panel[hidden]', { state: 'attached' });
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.pt), 'session', 'Back closed the preview, not the session');
+    await page.evaluate(p => showWork(p), wide);
+    await page.waitForSelector('#pvw:not([hidden]) iframe.pvf');
     await page.click('#bClose');
+    await page.waitForFunction(() => !history.state?.pane);
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.pt), 'session');
     // the drawer: a model picked shows in the pill; the context page
     await page.click('#phPill');
     await page.click('[data-dm="claude-opus-5-5"]');

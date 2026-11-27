@@ -537,6 +537,7 @@ function renderPanel(){
   const pb=$('bPreview');pb.hidden=V.isNew||!A.preview||!W.length;$('pvN').textContent=W.length>1?W.length:'';pb.classList.toggle('on',open);
   const tk=!open&&!V.isNew&&V.side==='tasks'&&bgList().length>0;$('tkw').hidden=!tk;if(tk)renderTasks();else clearTimeout(tkTimer);
   $('panel').hidden=!open&&!ch&&!cm&&!ol&&!tk;$('pvw').hidden=!open;$('cmw').hidden=!cm;renderCompare(cm);$('olw').hidden=!ol;renderOutline();$('chw').hidden=open||!ch;renderChanges();
+  if(PHONE)phPane();
   $('split').classList.toggle('full',!!(open||cm)&&V.full);markCards();fitSide();
   if(!open){if(staged){staged=null;$('stage').innerHTML='';pvGone()}$('menu').hidden=true;raHead();return}
   $('pName').textContent=f.name;$('pCnt').textContent=W.length>1?`${i+1} of ${W.length}`:'';
@@ -3086,13 +3087,22 @@ function phInit(){
   phDrag();phSwipeDone();
   $('list').addEventListener('click',e=>{const b=e.target.closest('.sess[data-id]');if(b&&!e.target.closest('[data-dots]'))PT='session'},true);
   $('dash').addEventListener('click',e=>{if(e.target.closest('[data-sid],[data-made],[data-ch]'))PT='session'},true);
-  addEventListener('popstate',()=>{if(!V.isNew&&PT==='session'){PT='sessions';render()}});
+  // Back closes an open preview (or other panel) first, and only then leaves the session
+  addEventListener('popstate',()=>{if(phSkipPop){phSkipPop=false;return}
+    if(!$('panel').hidden&&!history.state?.pane){V.pv=null;V.full=false;V.side=null;renderPanel();return}
+    if(!V.isNew&&PT==='session'){PT='sessions';render()}});
   addEventListener('beforeinstallprompt',e=>{e.preventDefault();phInstall=e;phSettings()});
   navigator.serviceWorker?.addEventListener('message',e=>{if(e.data?.ww==='open')phFromNote(e.data.session,e.data.act)});
   navigator.serviceWorker?.register('/sw.js').then(()=>phResubscribe()).catch(()=>{});
   api('phone/me').then(m=>{phMe=m;phRender()}).catch(()=>{});
   setInterval(()=>{phViewing();phCache()},30000);document.addEventListener('visibilitychange',phViewing);
 }
+// On the phone the panel covers the screen, so it gets its own step in the history: Back closes it. Closed another
+// way (its ×), that step is taken back so the next Back leaves the session.
+let phSkipPop=false;
+function phPane(){const on=!$('panel').hidden&&phScreen()==='session',st=history.state;
+  if(on&&!st?.pane){if(st?.ph!==V.sel)history.pushState({ph:V.sel},'','#'+V.sel);history.pushState({ph:V.sel,pane:1},'','#'+V.sel)}
+  else if(!on&&st?.pane){phSkipPop=true;history.back()}}
 const PH_FIT=980;
 function phFit(){const st=$('stage'),on=!!V.pvFit;$('pvw').classList.toggle('fit',on);$('bExt').classList.toggle('on',on);
   $('pvw').classList.toggle('many',pvList().length>1);$('pvw').style.setProperty('--st',st.offsetTop+'px');

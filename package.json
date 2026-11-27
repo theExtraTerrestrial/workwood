@@ -12,7 +12,6 @@
     "install-app": "node shell/install-app.mjs",
     "shortcut": "node shell/windows-shortcut.mjs",
     "service": "node service/server.mjs",
-    "pretest": "node -e \"fs.rmSync(path.join(os.tmpdir(), 'workwood-test-failures'), { recursive: true, force: true })\"",
     "test": "node --test tests/app.test.mjs tests/phone.test.mjs tests/copy.test.mjs",
     "test:stress": "node tests/stress.mjs",
     "package": "node shell/windows-package.mjs",

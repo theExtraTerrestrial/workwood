@@ -1576,10 +1576,20 @@ function findChrome() {
 }
 const chrome = findChrome();
 /* ---------- evidence: what a failing window test leaves behind ---------- */
-// In <tmp>/workwood-test-failures/<test>/, from that test alone: trace.zip (npx playwright show-trace trace.zip: the page,
-// its requests and console, step by step), screenshot.png, what the fake agent logged, the service's events and stderr,
-// and any step of this computer's clock. npm test (and npm run test:stress) empty the folder first.
+// In <tmp>/workwood-test-failures/<run>/<test>/, from that test alone: trace.zip (npx playwright show-trace trace.zip: the
+// page, its requests and console, step by step), screenshot.png, what the fake agent logged, the service's events and
+// stderr, and any step of this computer's clock. Each run has its own folder, named for when it started; the newest 5 stay.
 const EVIDENCE = path.join(os.tmpdir(), 'workwood-test-failures');
+const RUN = (d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}_${d.toTimeString().slice(0, 8).replace(/:/g, '-')}_${process.pid}`)(new Date());
+function runDir() {
+  const dir = path.join(EVIDENCE, RUN);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    const runs = fs.readdirSync(EVIDENCE).filter(n => /^\d{4}-/.test(n)).sort();
+    for (const n of runs.slice(0, -5)) fs.rmSync(path.join(EVIDENCE, n), { recursive: true, force: true });
+  }
+  return dir;
+}
 const ev = { events: [], jumps: [], on: false };
 function watch() {
   if (ev.on) return; ev.on = true;
@@ -1592,7 +1602,7 @@ function watch() {
 }
 const hms = at => new Date(at).toISOString().slice(11, 23);
 async function keepEvidence(name, from, logFrom, errFrom) {
-  const base = path.join(EVIDENCE, name.replace(/^window: /, '').replace(/[^\w.-]+/g, '-').slice(0, 80));
+  const base = path.join(runDir(), name.replace(/^window: /, '').replace(/[^\w.-]+/g, '-').slice(0, 80));
   let dir = base; for (let k = 2; fs.existsSync(dir); k++) dir = `${base}-${k}`;   // the same test failing again, in a later run
   fs.mkdirSync(dir, { recursive: true });
   await page.screenshot({ path: path.join(dir, 'screenshot.png') }).catch(() => {});
@@ -1617,9 +1627,25 @@ const ui = (name, fn) => test(name, { skip: chrome ? false : 'no Chromium found;
   const from = Date.now(), logFrom = readLog(sb).length, errFrom = svc.stderr().length;
   ev.events = ev.events.filter(x => x.at >= from - 2000);   // a little before, for what led up to it
   await page.context().tracing.startChunk({ title: name });
-  try { await fn(); } catch (e) { e.message += '\n  evidence: ' + await keepEvidence(name, from - 2000, logFrom, errFrom); throw e; }
+  try { const busy = await busyNow(); await fn(); await settle(busy); }
+  catch (e) { e.message += '\n  evidence: ' + await keepEvidence(name, from - 2000, logFrom, errFrom); throw e; }
   await page.context().tracing.stopChunk();
 });
+// A test is over when the sessions it started are: one still working (or waiting for an answer) would go on changing
+// things in the tests after it, as when a turn that ends mid-test pushes a new state over what that test set up.
+// Sessions busy before it began, and those running outside Workwood or in a terminal, are not its own.
+const busyNow = async () => new Set((await state()).sessions.filter(s => s.status !== 'idle').map(s => s.id));
+async function settle(before) {
+  // one stopped by a limit or a sign-in runs nothing, unless it is set to continue on another profile by itself
+  const left = async () => { const out = [];
+    for (const s of (await state()).sessions) if (s.status !== 'idle' && !before.has(s.id) && !s.outside && !s.term)
+      if (s.auto || s.status === 'work' || (await session(s.id)).run?.status !== 'stopped') out.push(s);
+    return out; };
+  let still = await left();
+  for (const end = Date.now() + 10000; still.length && Date.now() < end; still = await left()) await sleep(150);
+  if (still.length) throw new Error('left running: ' + still.map(s => `"${s.title}" (${s.status === 'wait' ? 'waiting for you' : 'working'}, ${s.id})`).join(', ')
+    + '. End what the test started (answer it, stop it, or wait for its turn to end) before the test does.');
+}
 const send = async text => { await page.fill('#input', text); await page.press('#input', 'Enter'); };
 const startNew = async (text, pick = {}) => {
   await page.click('#newBtn');
@@ -3239,17 +3265,21 @@ ui('window: a warm cache shows as a small clock by the session and in the compos
   const row = `.sess[data-id="${id}"]`;
   await page.click(row); await page.mouse.move(700, 400);
   await page.waitForFunction(id => V.sel === id && V.context && !V.loading, id);
-  // as if its last reply came `min` minutes ago (applied again until it shows: a state pushed in between brings the real time back)
-  const at = (min, sel) => page.waitForFunction(([id, min, sel]) => { const t = Date.now() - min * 60000, s = A.sessions.find(x => x.id === id);
+  // as if its last reply came `min` minutes ago (applied again until it shows: a state pushed in between brings the real time back),
+  // and what shows then, read in the same step, so a state pushed right after cannot change it before it is checked
+  const at = (min, sel) => page.waitForFunction(([id, min, sel, row]) => { const t = Date.now() - min * 60000, s = A.sessions.find(x => x.id === id);
     let set = true;
     if (!s.reply || Math.abs(s.reply.at - t) > 60000) { s.reply = { at: t, ttl: 3600 }; renderList(); set = false; }
     if (Math.abs(V.context.at - t) > 60000) { V.context.at = t; renderStrip(); set = false; }
-    return set && !!document.querySelector(sel); }, [id, min, sel], { polling: 200 });
+    if (!set || !document.querySelector(sel)) return false;
+    const q = x => document.querySelector(x), strip = q('#hstrip');
+    return { tip: q(row + ' .wdial')?.dataset.tip ?? null, dials: document.querySelectorAll(row + ' .wdial').length, strip: strip.hidden ? null : strip.innerText,
+      go: document.querySelectorAll('#hstrip [data-hgo]').length, warm: !q('#cWarm').hidden }; }, [id, min, sel, row], { polling: 200 }).then(h => h.jsonValue());
   // warm: a clock by the session and in the composer, its tooltip saying what it means; no strip
-  await at(22, `${row} .wdial`);
+  let now = await at(22, `${row} .wdial`);
   await page.waitForSelector('#cWarm .wdial');
-  assert.equal(await page.isHidden('#hstrip'), true);
-  assert.match(await page.getAttribute(`${row} .wdial`, 'data-tip'), /^Cache warm · 38 min left$/);
+  assert.equal(now.strip, null);
+  assert.match(now.tip, /^Cache warm · 38 min left$/);
   await page.hover(`${row} .wdial`);
   await page.waitForTimeout(700);
   const list = await page.locator('#list').boundingBox();
@@ -3260,18 +3290,18 @@ ui('window: a warm cache shows as a small clock by the session and in the compos
   await shot('warm-composer', { x: sup.x - 30, y: sup.y - 90, width: sup.width + 60, height: sup.height + 140 });
   await page.mouse.move(700, 400);
   // eight minutes left: the quiet countdown too
-  await at(52, '#hstrip.cache:not(.expired)');
-  assert.match(await page.locator('#hstrip').innerText(), /Cache cools in 8 min/);
-  assert.equal(await page.locator('#hstrip [data-hgo]').count(), 0);
+  now = await at(52, '#hstrip.cache:not(.expired)');
+  assert.match(now.strip, /Cache cools in 8 min/);
+  assert.equal(now.go, 0);
   await page.waitForTimeout(400);
   const box = await page.locator('#hstrip').boundingBox(), clip = { x: box.x - 30, y: box.y - 20, width: box.width + 60, height: box.height + 140 };
   await shot('countdown-strip', clip);
   // two hours: no clock anywhere (cold is the usual state), and the warning with the handoff
-  await at(120, '#hstrip.expired');
-  assert.equal(await page.locator(`${row} .wdial`).count(), 0);
-  assert.equal(await page.isHidden('#cWarm'), true);
-  assert.match(await page.locator('#hstrip').innerText(), /Cache likely expired\s*· idle 2 h · your next message re-reads \d+k tokens/);
-  assert.equal(await page.locator('#hstrip [data-hgo]').count(), 1);
+  now = await at(120, '#hstrip.expired');
+  assert.equal(now.dials, 0);
+  assert.equal(now.warm, false);
+  assert.match(now.strip, /Cache likely expired\s*· idle 2 h · your next message re-reads \d+k tokens/);
+  assert.equal(now.go, 1);
   await page.waitForTimeout(400);
   await shot('expired-strip', clip);
   // × hides it until the next reply

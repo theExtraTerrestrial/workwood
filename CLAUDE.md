@@ -25,8 +25,9 @@ own git worktree, never in the main checkout:
 
 ## A test that fails now and then
 
-- A failing window test leaves its evidence in `<tmp>/workwood-test-failures/<run>/<test>/` (a Playwright trace, a
-  screenshot, the fake agent's log, the service's events and stderr, and any step of the clock). Read that first.
+- A failing test in `tests/app.test.mjs` leaves its evidence in `<tmp>/workwood-test-failures/<run>/<test>/` (the fake
+  agent's log, the service's events and stderr, and any step of the clock; a window test adds a Playwright trace and a
+  screenshot). Read that first.
 - This computer's clock steps back up to a second now and then (WSL). Code that decides by how long something took, or
   which of two things came first, uses `performance.now()` or a counter, never two `Date.now()` readings. Dates that are
   shown or saved stay on `Date.now()`.

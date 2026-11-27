@@ -1,7 +1,7 @@
 // End-to-end tests. Everything runs in a throwaway HOME (see sandbox.mjs): the real
 // Workwood service, with a scripted stand-in for `claude`.
 // No real account is used and nothing is sent to Anthropic.
-import { test, before, after } from 'node:test';
+import { test as nodeTest, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -1605,8 +1605,10 @@ async function keepEvidence(name, from, logFrom, errFrom) {
   const base = path.join(runDir(), name.replace(/^window: /, '').replace(/[^\w.-]+/g, '-').slice(0, 80));
   let dir = base; for (let k = 2; fs.existsSync(dir); k++) dir = `${base}-${k}`;   // the same test failing again, in a later run
   fs.mkdirSync(dir, { recursive: true });
-  await page.screenshot({ path: path.join(dir, 'screenshot.png') }).catch(() => {});
-  await page.context().tracing.stopChunk({ path: path.join(dir, 'trace.zip') }).catch(() => {});
+  if (page) {   // a window test
+    await page.screenshot({ path: path.join(dir, 'screenshot.png') }).catch(() => {});
+    await page.context().tracing.stopChunk({ path: path.join(dir, 'trace.zip') }).catch(() => {});
+  }
   const lines = (list, f) => list.filter(x => x.at >= from).map(f).join('\n') + '\n';
   fs.writeFileSync(path.join(dir, 'fake-agent.log'), readLog(sb).slice(logFrom).join('\n') + '\n');
   fs.writeFileSync(path.join(dir, 'events.txt'), lines(ev.events, x => hms(x.at) + '  ' + x.text.replace(/\n/g, '  ')));
@@ -1614,7 +1616,17 @@ async function keepEvidence(name, from, logFrom, errFrom) {
   fs.writeFileSync(path.join(dir, 'clock.txt'), `test ran ${hms(from)} to ${hms(Date.now())}\n` + lines(ev.jumps, x => `${hms(x.at)}  clock stepped ${x.ms > 0 ? '+' : ''}${x.ms} ms`));
   return dir;
 }
-const ui = (name, fn) => test(name, { skip: chrome ? false : 'no Chromium found; set WORKWOOD_CHROME or run: npx playwright install chromium-headless-shell' }, async () => {
+// A service test leaves the same, without the page: the fake agent's log, the service's events and stderr, the clock.
+function test(name, fn) {
+  return nodeTest(name, async t => {
+    if (!svc) return fn(t);   // before the service is up (a test of the files alone)
+    watch();
+    const from = Date.now(), logFrom = readLog(sb).length, errFrom = svc.stderr().length;
+    try { await fn(t); }
+    catch (e) { const p = page; page = null; try { e.message += '\n  evidence: ' + await keepEvidence(name, from - 2000, logFrom, errFrom); } finally { page = p; } throw e; }
+  });
+}
+const ui = (name, fn) => nodeTest(name, { skip: chrome ? false : 'no Chromium found; set WORKWOOD_CHROME or run: npx playwright install chromium-headless-shell' }, async () => {
   if (!page) {
     const { chromium } = await import('playwright-core');
     browser = await chromium.launch({ executablePath: chrome, args: ['--no-sandbox', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });

@@ -30,6 +30,8 @@ const P={
   'chev-r':'<path d="m9 6 6 6-6 6"/>',
   'chev-l':'<path d="m15 6-6 6 6 6"/>',
   play:'<path d="M6 4l14 8-14 8z"/>',
+  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  server:'<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
   folder:'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
   'folder-plus':'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2zM12 11v6M9 14h6"/>',
   user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
@@ -189,7 +191,10 @@ function md(src){
 const shown=s=>!s.done||(!V.isNew&&s.id===V.sel);
 const needsYou=s=>s.status==='wait'?2:s.unread?1:0;
 const askLabel=l=>{const m=/^(\d+) question/.exec(l);return m?m[1]+' question'+(m[1]>1?'s':''):/plan/i.test(l)?'Plan':/^Wants/.test(l)?'Approve':/sign-in/.test(l)?'Sign in':/^Stopped|^Paused/.test(l)?'Stopped':'Waiting'};
-const stateOf=s=>(s.bg&&s.status==='idle'?`<span class="bgc" data-tip="${plural(s.bg,'task')} running in the background"><i></i>${s.bg}</span>`:'')+stateOf1(s);
+// Background work: a count, and a network icon in place of the dot when the session's servers are among it.
+const stateOf=s=>{const n=(s.bg||0)+(s.srv||0),k=s.nets?.length||0;if(!n||s.status!=='idle')return stateOf1(s);
+  const tip=k?`${s.nets.join(', ')} running${n>k?` · ${plural(n-k,'more task')}`:''}`:`${plural(n,'task')} running in the background`;
+  return `<span class="bgc${k?' sv':''}" data-tip="${esc(tip)}">${k?svg('globe','nw'):'<i></i>'}${n}</span>`+stateOf1(s)};
 const stateOf1=s=>s.status==='work'?'<i class="spin"></i>':s.status==='wait'?`<span class="askl">${esc(askLabel(s.line))}</span>`:`${s.unread?'<i class="dot"></i>':''}<time>${ago(s.mts)}</time>`;
 // The prompt cache: kept for a while after each reply (an hour on a subscription), then the next message reads the
 // whole conversation again, at full price against your limits. Settings sets how long; a reply that wrote a shorter
@@ -202,6 +207,13 @@ function warmDial(end,total){const l=warmLeft(end);if(!l)return'';
   return `<span class="wdial" style="--left:${Math.min(1,l/total).toFixed(3)}" data-tip="Cache warm · ${hm(l)} left" data-tip-d="A reply sent within this time reads the conversation from Claude's cache, which costs far less of your limits. After it, the next message reads it all again."></span>`}
 const coldAt=c=>!c?.at||!cacheMin()?null:c.at+Math.min(cacheMin()*60,c.ttl||Infinity)*1000;
 const listWarm=s=>{const end=s.done||s.status!=='idle'?null:coldAt(s.reply);return end?warmDial(end,end-s.reply.at):''};
+// Everything running in a project's folders (its checkout and its worktrees), whoever started it: a mark on its heading.
+function grpServers(root){
+  const l=Object.entries(A.servers||{}).filter(([,h])=>h.root===root).flatMap(([top,h])=>h.list.filter(x=>x.state!=='exited').map(x=>({...x,wt:top!==root?top.split(/[\\/]/).pop():''})));
+  if(!l.length)return '';
+  const tip=l.map(x=>`${x.name}${x.ports.length?' :'+x.ports.join(' :'):''}${x.wt?' in '+x.wt:''}`).join(' · ');
+  return `<span class="gsv" data-tip="${esc(tip)}">${svg('globe','nw')}${l.length}</span>`;
+}
 let drawing=false;
 function renderList(){drawing=true;try{drawList()}finally{drawing=false}renderBgs()
   const r=$('renIn');if(r){r.value=V.renameText;r.focus();r.setSelectionRange(V.caret,V.caret)}}
@@ -214,7 +226,7 @@ function drawList(){
   for(const s of A.sessions.filter(shown).sort((a,b)=>b.mts-a.mts)){const k=s.root||s.cwd;if(!groups.has(k))groups.set(k,{name:s.project,list:[]});groups.get(k).list.push(s)}
   $('list').innerHTML=[...groups].map(([k,g])=>{
     const shut=!!V.shut[k],n=g.list.filter(needsYou).length;
-    return `<div class="grp ${shut?'shut':''}" data-grp="${esc(k)}" data-tip-path="${esc(short(k))}">${tile(g.name,'s')}</span><b>${esc(g.name)}</b>${shut?`<small>${n?`<i class="dot"></i>`:''}${g.list.length}</small>`:''}<span class="gnew" data-gnew data-tip="New session in ${esc(g.name)}">${svg('plus')}</span></div>`+(shut?'':
+    return `<div class="grp ${shut?'shut':''}" data-grp="${esc(k)}" data-tip-path="${esc(short(k))}">${tile(g.name,'s')}</span><b>${esc(g.name)}</b>${grpServers(k)}${shut?`<small>${n?`<i class="dot"></i>`:''}${g.list.length}</small>`:''}<span class="gnew" data-gnew data-tip="New session in ${esc(g.name)}">${svg('plus')}</span></div>`+(shut?'':
       g.list.map(s=>{const sel=!V.isNew&&s.id===V.sel,tip=V.compact||s.line?` data-tip="${esc(s.title+' — '+s.project+(s.line?' · '+s.line:''))}"`:'';
         return s.id===V.renaming?`<div class="sess ren ${sel?'sel':''}" data-id="${s.id}">${tile(s.project)}</span><input id="renIn" maxlength="120" autocomplete="off" spellcheck="false" aria-label="Session name"></div>`
         :`<button class="sess ${s.status} ${sel?'sel':''} ${s.unread?'unread':''} ${s.done?'isdone':''} ${s.id===V.menuFor?'mopen':''}" data-id="${s.id}"${tip}>${listWarm(s)}${tile(s.project,s.thread?'stack':'')}${s.status==='work'?'<u class="go"></u>':needsYou(s)?`<u class="${s.status==='wait'?'warn':'new'}"></u>`:''}</span><span class="txt"><span class="l1"><b>${esc(s.title)}</b>${s.thread?`<span class="thr" data-tip="${s.thread} sessions, one thread">${s.thread<=4?'<i></i>'.repeat(s.thread):s.thread}</span>`:''}${s.outside||s.term?`<em class="xb">${svg('term')}</em>`:''}<span class="st">${stateOf(s)}</span><span class="sact"><span data-done data-tip="${s.done?'Back to the inbox':'Mark done'}"${s.done?'':' data-tip-k="Ctrl D"'}>${svg(s.done?'refresh':'check')}</span><span data-dots>${svg('dots')}</span></span></span>${!sel&&DRAFTS.has(s.id)?`<span class="l2"><em class="dft">Draft</em><span>${esc(draftLine(DRAFTS.get(s.id)))}</span></span>`:s.status==='work'&&!s.outside&&!s.term&&s.line?`<span class="l2">${esc(s.line)}</span>`:''}</span></button>`}).join(''));
@@ -238,7 +250,7 @@ function openMenu(id,x,y){
   const s=A.sessions.find(z=>z.id===id);if(!s)return;
   closePops();V.menuFor=id;
   const m=$('smenu');
-  m.innerHTML=`<button data-do="rename">${svg('pencil')}Rename</button><button data-do="code">${svg('code')}Open in VS Code</button><button data-do="term">${svg('term')}Open in terminal</button><hr><button data-do="done">${svg(s.done?'refresh':'check')}${s.done?'Back to the inbox':'Mark done'}</button><button class="hot" data-do="delete">${svg('trash')}Delete</button>`;
+  m.innerHTML=`<button data-do="rename">${svg('pencil')}Rename</button><button data-do="code">${svg('code')}Open in VS Code</button><button data-do="term">${svg('term')}Open in terminal</button>${s.id===V.sel&&srvHere()?.conf?.names?.length?`<button data-do="serve">${svg('server')}Start servers</button>`:''}<hr><button data-do="done">${svg(s.done?'refresh':'check')}${s.done?'Back to the inbox':'Mark done'}</button><button class="hot" data-do="delete">${svg('trash')}Delete</button>`;
   m.hidden=false;m.style.left=Math.max(4,Math.min(x,innerWidth-210))+'px';m.style.top=Math.max(4,Math.min(y,innerHeight-m.offsetHeight-8))+'px';
   document.querySelector(`.sess[data-id="${id}"]`)?.classList.add('mopen');
 }
@@ -250,6 +262,7 @@ $('smenu').onclick=e=>{
   else if(d==='code')api('open-editor',{sessionId:s.id}).catch(fail);
   else if(d==='term')api(`sessions/${s.id}/terminal`,{}).catch(fail);
   else if(d==='done')setDone(s,!s.done);
+  else if(d==='serve')srvMenu($('tray').hidden?null:$('tray'));
   else askDelete(s);
 };
 // When the session you are looking at goes away, show the next one that needs you, so you can work down the list.
@@ -550,7 +563,7 @@ function pvList(){const out=[...V.work],has=new Set(out.map(f=>f.path));
 function renderPanel(){
   const W=pvList(),i=W.findIndex(f=>f.path===V.pv),f=W[i],open=!V.isNew&&!!f&&!!A.preview,ch=!V.isNew&&V.side==='changes'&&!!V.ch?.repo,ol=!open&&!V.isNew&&V.side==='outline',cm=!open&&V.side==='compare'?compareSet():null;
   const pb=$('bPreview');pb.hidden=V.isNew||!A.preview||!W.length;$('pvN').textContent=W.length>1?W.length:'';pb.classList.toggle('on',open);
-  const tk=!open&&!V.isNew&&V.side==='tasks'&&bgList().length>0;$('tkw').hidden=!tk;if(tk)renderTasks();else clearTimeout(tkTimer);
+  const tk=!open&&!V.isNew&&V.side==='tasks'&&(bgList().length+srvRows().length)>0;$('tkw').hidden=!tk;if(tk)renderTasks();else clearTimeout(tkTimer);
   $('panel').hidden=!open&&!ch&&!cm&&!ol&&!tk;$('pvw').hidden=!open;$('cmw').hidden=!cm;renderCompare(cm);$('olw').hidden=!ol;renderOutline();$('chw').hidden=open||!ch;renderChanges();
   if(PHONE)phPane();
   $('split').classList.toggle('full',!!(open||cm)&&V.full);markCards();fitSide();
@@ -1396,7 +1409,7 @@ function renderSlash(){
   $('bSkills').classList.toggle('on',!!V.skOpen);
   if(!m){el.hidden=true;slHits=[];return}
   needSkills();const got=skillList(),q=m[1].toLowerCase();el.hidden=false;
-  const all=got&&!V.isNew?[{name:'handoff',about:'Continue in a new session; nothing is lost. Words after it become its first message.',from:'Workwood'},{name:'rewind',about:'Take back a message of yours and all after it.',from:'Workwood'},...got.filter(x=>x.name!=='handoff'&&x.name!=='rewind')]:got;
+  const all=got&&!V.isNew?[{name:'handoff',about:'Continue in a new session; nothing is lost. Words after it become its first message.',from:'Workwood'},{name:'rewind',about:'Take back a message of yours and all after it.',from:'Workwood'},...(srvHere()?.conf?.names?.length?[{name:'serve',about:'Start this folder\'s servers: all of them, or the ones named after it.',from:'Workwood'}]:[]),...got.filter(x=>x.name!=='handoff'&&x.name!=='rewind'&&x.name!=='serve')]:got;
   if(!all){slHits=[];el.innerHTML='<div class="note">Loading skills…</div>';return}
   slHits=all.filter(s=>s.name.toLowerCase().startsWith(q)).concat(q?all.filter(s=>{const n=s.name.toLowerCase();return !n.startsWith(q)&&n.includes(q)}):[]);
   slSel=Math.min(slSel,Math.max(slHits.length-1,0));
@@ -1405,7 +1418,8 @@ function renderSlash(){
     :`<div class="skr none">${V.sk.err?esc(V.sk.err):q?`No skill matches "${esc(q)}"`:'No skills here'}</div>`);
   el.querySelector('.skr.on')?.scrollIntoView({block:'nearest'});
 }
-function useSkill(n){if(n==='rewind'&&!V.isNew){$('input').value='';V.skOpen=false;renderSlash();grow();fitSend();return openPick()}const i=$('input'),rest=/^\/[\w:-]*$/.test(i.value)?'':i.value;V.skOpen=false;i.value='/'+n+' '+rest;renderSlash();grow();fitSend();i.focus();i.setSelectionRange(i.value.length,i.value.length)}
+function useSkill(n){if(n==='rewind'&&!V.isNew){$('input').value='';V.skOpen=false;renderSlash();grow();fitSend();return openPick()}
+  if(n==='serve'&&srvHere()?.conf){$('input').value='';V.skOpen=false;renderSlash();grow();fitSend();return srvMenu($('tray').hidden?null:$('tray'))}const i=$('input'),rest=/^\/[\w:-]*$/.test(i.value)?'':i.value;V.skOpen=false;i.value='/'+n+' '+rest;renderSlash();grow();fitSend();i.focus();i.setSelectionRange(i.value.length,i.value.length)}
 function slashKey(e){
   if($('slash').hidden)return false;
   if(e.key==='Escape'){e.preventDefault();if(V.skOpen)V.skOpen=false;else{$('input').value='';keepDraft()}renderSlash();return true}
@@ -1627,7 +1641,8 @@ function renderSettings(){
     <div class="lgrp">Limits</div>${A.profiles.length>1?`<div class="srow"><span>Continue on another profile at a limit<small>At a limit, it goes on with the profile that has the most room after 5 minutes. You can cancel.</small></span><i class="stog ${pf.autoContinue?'on':''}" data-set="auto"></i></div>`:''}
     <div class="srow"><span>Cache lasts<small>How long Claude keeps a conversation cached after a reply. A countdown shows in its last ten minutes.</small></span><select class="sval" id="sCache">${[[0,'No warning'],[5,'5 minutes'],[30,'30 minutes'],[60,'1 hour'],[120,'2 hours']].map(([v,n])=>`<option value="${v}" ${cacheMin()===v?'selected':''}>${n}</option>`).join('')}</select></div>
     <div class="lgrp">Handoff</div><div class="srow"><span>Offer a handoff at<small>A strip above the message box offers it from here, or at ¾ of a smaller window.</small></span><select class="sval" id="sHOffer">${[100000,200000,300000,400000,600000].map(v=>`<option value="${v}" ${(pf.handoff?.offer||400000)===v?'selected':''}>${v/1000}k tokens</option>`).join('')}</select></div>
-    <div class="srow"><span>Handoff written by<small>Auto picks Haiku, Sonnet or Opus by how much went on.</small></span><select class="sval" id="sHModel">${[['auto','Auto'],['haiku','Haiku'],['sonnet','Sonnet'],['opus','Opus']].map(([v,n])=>`<option value="${v}" ${(pf.handoff?.model||'auto')===v?'selected':''}>${n}</option>`).join('')}</select><select class="sval" id="sHEffort">${['low','medium','high'].map(v=>`<option value="${v}" ${(pf.handoff?.effort||'medium')===v?'selected':''}>${cap(v)}</option>`).join('')}</select></div>`;
+    <div class="srow"><span>Handoff written by<small>Auto picks Haiku, Sonnet or Opus by how much went on.</small></span><select class="sval" id="sHModel">${[['auto','Auto'],['haiku','Haiku'],['sonnet','Sonnet'],['opus','Opus']].map(([v,n])=>`<option value="${v}" ${(pf.handoff?.model||'auto')===v?'selected':''}>${n}</option>`).join('')}</select><select class="sval" id="sHEffort">${['low','medium','high'].map(v=>`<option value="${v}" ${(pf.handoff?.effort||'medium')===v?'selected':''}>${cap(v)}</option>`).join('')}</select></div>
+    <div class="lgrp">Servers</div><div class="srow"><span>A line to start them<small>When a project lists its servers and none are running, a line above the message box starts them. Off: only ⋮ and /serve do.</small></span><i class="stog ${pf.serveLine!==false?'on':''}" data-set="serve"></i></div>`;
   else if(stab===6)pg.innerHTML=`<div class="pgh">Speech</div>
     <div class="lgrp">Dictation</div><div class="srow"><span>Language<small>What the mic expects to hear.</small></span><select class="sval" id="sLang">${LANGS.map(l=>`<option value="${l}" ${(pf.language||'english')===l?'selected':''}>${cap(l)}</option>`).join('')}</select></div>${speechRow()}${readRows(pf)}`;
   else if(stab===1)renderProfilePage(pg);
@@ -1971,6 +1986,7 @@ $('spage').onclick=async e=>{
   if(s?.dataset.set==='phone'){try{PH=await api('phone/on',{on:!PH?.on});renderSettings()}catch(err){oops(err.message)}return}
   {const pr=e.target.closest('[data-phrep]');if(pr){try{phRep=phRep?.id===pr.dataset.phrep?null:{...await api('phone/repair',{id:pr.dataset.phrep}),at:Date.now()};renderSettings()}catch(err){oops(err.message)}return}}
   {const pr=e.target.closest('[data-phrev]');if(pr){try{PH=await api('phone/revoke',{id:pr.dataset.phrev});renderSettings()}catch(err){oops(err.message)}return}}
+  if(s?.dataset.set==='serve'){try{A.prefs=await api('settings',{serveLine:A.prefs?.serveLine===false});renderSettings();renderTray()}catch(err){oops(err.message)}}
   if(s?.dataset.set==='auto'){try{A.prefs=await api('settings',{autoContinue:!A.prefs?.autoContinue});renderSettings()}catch(err){oops(err.message)}}
   if(s?.dataset.set==='bypass'){try{A.prefs=await api('settings',{bypass:!A.prefs?.bypass});renderSettings();renderComposer()}catch(err){oops(err.message)}}
   if(s?.dataset.set==='updcheck'){U.err='';U.later=null;localStorage.removeItem('ww.updLater');api('update/check',{}).catch(err=>oops(err.message));setTimeout(renderSettings,50)}
@@ -2339,7 +2355,7 @@ function renderMenus(){
     +'<div class="sep"></div><div class="lab">Effort</div><div class="eseg">'+EFFORTS.filter(x=>x[0]||!de).map(([v,n,d])=>`<button class="${v===shownEffort()?'on':''}" data-e="${esc(v)}" data-tip="${esc(d+(v&&v===de?'. Your default.':''))}">${n}</button>`).join('')+'</div>'
     +`<div class="cap2" style="padding-top:6px">${de?`${esc(EFFORTS.find(x=>x[0]===de)?.[1]||de)} is your default effort. `:''}Applies from your next message.</div>`;
 }
-function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('rwm').hidden=true;$('olm').hidden=true;if(V.rw||V.rp){V.rw=null;V.rp=null;renderThread()}$('mHand').hidden=true;$('pCtx').classList.remove('open');$('gmenu').hidden=true;$('emenu').hidden=true;$('smenu').hidden=true;V.menuFor=null;document.querySelectorAll('.sess.mopen').forEach(b=>b.classList.remove('mopen'));$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
+function closePops(){document.querySelectorAll('.pop').forEach(p=>p.hidden=true);$('rwm').hidden=true;$('olm').hidden=true;if(V.rw||V.rp){V.rw=null;V.rp=null;renderThread()}$('mHand').hidden=true;$('pCtx').classList.remove('open');$('gmenu').hidden=true;$('emenu').hidden=true;$('smenu').hidden=true;$('srvm').hidden=true;V.menuFor=null;document.querySelectorAll('.sess.mopen').forEach(b=>b.classList.remove('mopen'));$('menu').hidden=true;document.querySelectorAll('.pick.open').forEach(b=>b.classList.remove('open'));$('bGear').classList.remove('on')}
 const toggle=(btn,pop,then)=>e=>{e.stopPropagation();const was=$(pop).hidden;closePops();if(was){V.mk=false;V.find='';renderMenus();$(pop).hidden=false;$(btn).classList.add('open');then?.()}};
 $('pProject').onclick=toggle('pProject','mProject',()=>$('pFind').focus());
 $('pProfile').onclick=toggle('pProfile','mProfile');
@@ -2401,32 +2417,108 @@ const queued=()=>V.isNew?[]:[...(V.run?.queued||[]).filter(q=>!V.qGone.has(q.id)
 /* ---------- background work: a tray above the message box, a header button, and a side panel with each task's output ---------- */
 const bgList=()=>V.isNew?[]:V.run?.bg||[];
 const BGI={shell:'term',monitor:'eye',agent:'user'};
-window.wwBackground=()=>A.sessions.filter(s=>s.bg).map(s=>({title:s.title,n:s.bg}));   // asked by the window before it quits
+window.wwBackground=()=>[...A.sessions.filter(s=>s.bg).map(s=>({title:s.title,n:s.bg})),
+  ...Object.entries(A.servers||{}).map(([top,h])=>[top,h.list.filter(s=>s.who==='workwood'&&s.state!=='exited').length]).filter(([,n])=>n).map(([top,n])=>({title:'Servers in '+top.split(/[\\/]/).pop(),n}))];   // asked by the window before it quits
 function bgRow(t,sel){
+  const sv=srvByTask().get(t.id);
   const [a,l]=t.kind==='agent'?['steps','Steps']:t.kind==='monitor'?['out','Events']:['out','Output'];
   const fresh=t.kind==='monitor'&&t.events>(V.seenEv[t.id]||0);
   const sub=t.kind==='agent'?[t.last,t.steps!=null&&plural(t.steps,'step'),t.tokens&&Math.round(t.tokens/1000)+'k tokens'].filter(Boolean).join(' · ')
     :t.last||(t.kind==='monitor'?'No events yet':t.cmd||'');
-  return `<div class="tk ${sel?'on':''}" data-task="${esc(t.id)}"><span class="tki ${t.kind}">${svg(BGI[t.kind]||'term')}</span>
-    <div class="tk1"><b>${esc(t.name)}</b>${t.sub?`<span class="stt n">${esc(t.sub)}</span>`:''}${fresh?'<span class="stt mo">new event</span>':''}</div>
+  return `<div class="tk ${sel?'on':''}" data-task="${esc(t.id)}"><span class="tki ${sv?'server':t.kind}">${svg(sv?'server':BGI[t.kind]||'term')}</span>
+    <div class="tk1"><b>${esc(t.name)}</b>${sv?`<span class="who">agent</span>${sv.ports.map(p=>portEl(p)).join('')}`:''}${t.sub?`<span class="stt n">${esc(t.sub)}</span>`:''}${fresh?'<span class="stt mo">new event</span>':''}</div>
     <div class="tka">${clockEl(t.start,'go')}<button class="mini" data-bg${a}="${esc(t.id)}">${l}</button><button class="mini stop" data-bgstop="${esc(t.tool||t.id)}" data-tip="Stop it">${svg('stop')}Stop</button></div>
     <div class="tk2 ${t.kind==='agent'?'':'mono'}">${esc(sub)}</div></div>`;
 }
 function renderTray(){
-  const l=bgList(),tr=$('tray'),b=$('bTasks');
-  tr.hidden=b.hidden=!l.length;$('tkN').textContent=l.length||'';b.classList.toggle('on',V.side==='tasks'&&!V.pv);
-  if(V.side==='tasks'&&!l.length){V.side=null;renderPanel()}
-  if(!l.length){tr.innerHTML='';return}
-  const names=l.slice(0,3).map(t=>`<span class="tkk ${t.kind}">${esc(t.name)}</span>`).join('')+(l.length>3?`<span class="tkk">+${l.length-3}</span>`:'');
+  const l=bgList(),sv=srvRows(),link=srvByTask(),tr=$('tray'),b=$('bTasks'),h=srvHere(),can=srvCanStart(),any=l.length+sv.length;
+  const ghost=!any&&can.length>0&&A.prefs?.serveLine!==false;
+  tr.hidden=!any&&!ghost;b.hidden=!any;$('tkN').textContent=any||'';b.classList.toggle('on',V.side==='tasks'&&!V.pv);
+  if(V.side==='tasks'&&!any){V.side=null;renderPanel()}
+  tr.classList.toggle('ghost',ghost);
+  if(tr.hidden){tr.innerHTML='';return}
+  // nothing runs, and the folder lists servers: a quiet line to start them
+  if(ghost){tr.classList.remove('open');tr.innerHTML=`<div class="tl" data-srvmenu role="button" tabindex="0"><span class="pl">${svg('play')}</span><b>Start servers</b><span class="gn">${esc(can.join(' · '))}</span><span class="gap"></span><i>${esc(h.conf.file)}</i>${svg('chev-d')}</div>`;return}
+  const it=[...sv.map(s=>['server',s.name]),...l.map(t=>[link.has(t.id)?'server':t.kind,t.name])],up=sv.filter(s=>s.state!=='exited').length+l.length;
+  const names=it.slice(0,3).map(([k,n])=>`<span class="tkk ${k}">${esc(n)}</span>`).join('')+(it.length>3?`<span class="tkk">+${it.length-3}</span>`:'');
+  const ports=[...new Set([...sv.filter(s=>s.state!=='exited'),...link.values()].flatMap(s=>s.ports))].slice(0,3);
   tr.classList.toggle('open',V.trayOpen);
-  tr.innerHTML=`<button class="tl" data-tray><b>${l.length} running</b>${names}<span class="gap"></span>${svg('chev-d')}</button>${V.trayOpen?`<div class="tasks">${l.map(t=>bgRow(t)).join('')}</div>`:''}`;
+  tr.innerHTML=`<div class="tl" data-tray role="button" tabindex="0"><b>${up?up+' running':plural(it.length,'server')+' stopped'}</b>${names}<span class="gap"></span>${ports.map(p=>portEl(p)).join('')}${can.length?`<span class="st" data-srvmenu data-tip="Start this folder's servers">${svg('play')}Start</span>`:''}${svg('chev-d')}</div>${V.trayOpen?`<div class="tasks">${sv.map(s=>srvRow(s)).join('')}${l.map(t=>bgRow(t)).join('')}</div>`:''}`;
+  hydrate(tr);
   if(V.side==='tasks'&&!V.pv)renderTasks();
+}
+/* ---------- servers: a dev server and its companions running in the session's folder, whoever started them ---------- */
+// Found by the service in the folder the session works in (a worktree is its own); a repo that lists its servers
+// (.workwood/servers.json or a Procfile) can also have Workwood start them.
+const srvHere=()=>V.isNew||!V.place?.top?null:A.servers?.[V.place.top]||null;
+const srvList=()=>srvHere()?.list||[];
+const srvByTask=()=>{const m=new Map();for(const s of srvList())if(s.task?.sessionId===V.sel)m.set(s.task.id,s);return m};   // started by this session's agent: shown on its command's row
+const srvRows=()=>{const mine=new Set(bgList().map(t=>t.id));return srvList().filter(s=>!(s.task?.sessionId===V.sel&&mine.has(s.task.id)))};
+const srvCanStart=()=>{const h=srvHere();if(!h?.conf?.names?.length)return [];const on=new Set(srvList().filter(s=>s.state!=='exited').flatMap(s=>s.lines||[]));return h.conf.names.filter(n=>!on.has(n))};
+const portEl=(p,live=true)=>PHONE?`<span class="prt${live?' live':''}">:${p}</span>`:`<a class="prt${live?' live':''}" href="http://localhost:${p}/" target="_blank" rel="noopener" data-tip="Open localhost:${p}">:${p}${svg('ext')}</a>`;
+const WHO={workwood:'Workwood',agent:'agent',you:'yours'};
+function srvRow(s,sel){
+  const gone=s.state==='exited';
+  const sub=s.setup?(gone?`Setup failed · code ${s.code}`:'Setting up this worktree…'):gone?`Exited${s.code!=null?' · code '+s.code:''}`:s.cmd;
+  return `<div class="tk ${sel?'on':''} ${gone?'gone':''}" data-srv="${esc(s.id)}"><span class="tki server">${svg('server')}</span>
+    <div class="tk1"><b>${esc(s.name)}</b><span class="who">${WHO[s.who]}</span>${gone?'':s.ports.map(p=>portEl(p)).join('')}</div>
+    <div class="tka">${gone?'':clockEl(s.start,'go')}${s.who==='workwood'?`<button class="mini" data-srvout="${esc(s.id)}">Output</button>`:''}<button class="mini stop" data-srvstop="${esc(s.id)}" data-tip="${gone?'Clear it':'Stop it'}">${gone?'Clear':svg('stop')+'Stop'}</button></div>
+    <div class="tk2 mono">${esc(sub)}</div>${s.kids?.length?`<div class="kids">${s.kids.map(k=>`<div class="kid"><b>${esc(k.name)}</b>${k.ports.length?k.ports.map(p=>portEl(p,false)).join(''):'<span class="q">no port</span>'}<code>${esc(k.cmd)}</code></div>`).join('')}</div>`:''}</div>`;
+}
+function srvPlace(m,el){
+  m.hidden=false;const r=(el||$('input')).getBoundingClientRect();
+  m.style.left=Math.max(6,Math.min(r.right-m.offsetWidth,innerWidth-m.offsetWidth-6))+'px';m.style.top=Math.max(6,r.top-m.offsetHeight-6)+'px';
+}
+// Start: all the folder's servers that are not running, or one of them.
+function srvMenu(el){
+  const h=srvHere(),can=srvCanStart(),m=$('srvm');if(!h?.conf)return;closePops();
+  if(!can.length){m.innerHTML=`<div class="sfoot">All of them are running.</div>`;return srvPlace(m,el)}
+  m.innerHTML=(can.length>1?`<button data-srvgo="">${svg('server')}All<span>${esc(can.join(' · '))}</span></button>`:'')+can.map(n=>`<button data-srvgo="${esc(n)}">${svg('server')}${esc(n)}</button>`).join('')
+    +`<hr><div class="sfoot">${h.conf.setup&&!h.conf.done?'Setup runs first, once for this worktree':'From '+esc(h.conf.file)}</div>`;
+  srvPlace(m,el);
+}
+async function srvGo(names){
+  const top=V.place?.top;if(!top)return;$('srvm').hidden=true;
+  try{await api('servers/start',{top,names:names?.length?names:null,sessionId:V.sel})}catch(e){oops(e.message)}
+}
+async function srvStop(s,el,sure){
+  if(!sure&&s.who!=='workwood'&&s.state!=='exited'){   // not one Workwood started: ask first
+    const m=$('srvm');closePops();
+    m.innerHTML=`<div class="sq"><b>Stop ${esc(s.name)}?</b><p>It was started ${s.who==='agent'?'by an agent':'in a terminal, outside Workwood'}.${s.kids?.length?` ${esc(s.kids.map(k=>k.name).join(' and '))} stop with it.`:''}</p><div class="qb"><button data-srvno>Cancel</button><button class="y" data-srvyes="${esc(s.id)}">Stop</button></div></div>`;
+    return srvPlace(m,el);
+  }
+  $('srvm').hidden=true;
+  try{await api('servers/stop',{top:s.top,id:s.id})}catch(e){oops(e.message)}
+}
+$('srvm').onclick=e=>{const b=e.target.closest('[data-srvgo],[data-srvyes],[data-srvno]');if(!b)return;const d=b.dataset;
+  if('srvgo' in d)srvGo(d.srvgo?[d.srvgo]:null);
+  else if(d.srvyes){const s=srvList().find(x=>x.id===d.srvyes);if(s)srvStop(s,null,true)}
+  else $('srvm').hidden=true};
+// The side panel for a server: what it is, Open and Restart, and its output when Workwood holds it.
+function srvInfo(s){
+  const by={workwood:'by Workwood',agent:'by an agent',you:'outside Workwood'}[s.who],gone=s.state==='exited';
+  $('tkInfo').innerHTML=[`<span>Command</span><code>${esc(s.cmd)}</code>`,`<span>Folder</span><code>${esc(s.top)}</code>`,
+    `<span>Started</span><div>${by} · ${clock(new Date(s.start))}${gone?' · ended':' · running '+clockEl(s.start)}</div>`].join('');
+  const open=s.ports[0];
+  $('tkAct').innerHTML=(open&&!gone&&!PHONE?`<a class="mini" href="http://localhost:${open}/" target="_blank" rel="noopener">${svg('ext')}Open :${open}</a>`:'')+(s.restart?`<button class="mini" data-srvre="${esc(s.id)}">${svg('refresh')}${gone?'Start again':'Restart'}</button>`:'');
+  $('tkAct').hidden=!$('tkAct').innerHTML;
+  const out=$('tkOut');out.hidden=false;clearTimeout(tkTimer);
+  if(s.who!=='workwood'){out.classList.add('none');out.textContent=s.who==='agent'?'Its output goes to the agent\'s command that started it.':'Its output goes to the terminal it was started in.';return}
+  out.classList.remove('none');
+  const id='s:'+s.id,sid=V.sel;
+  const pull=async()=>{if(V.sel!==sid||V.task!==id||V.side!=='tasks')return;
+    try{const d=await api(`servers/output?top=${encodeURIComponent(s.top)}&id=${encodeURIComponent(s.id)}`);const end=out.scrollTop+out.clientHeight>=out.scrollHeight-8;
+      if(out.textContent!==d.text){out.textContent=d.text||'Nothing printed yet.';if(end)out.scrollTop=out.scrollHeight}}catch{}
+    tkTimer=setTimeout(pull,1500)};
+  pull();
 }
 let tkTimer=null;
 function renderTasks(){
-  const l=bgList();if(!l.some(t=>t.id===V.task))V.task=l[0]?.id||null;
+  const l=bgList(),sv=srvRows(),ids=[...sv.map(s=>'s:'+s.id),...l.map(t=>t.id)];if(!ids.includes(V.task))V.task=ids[0]||null;
   const t=l.find(x=>x.id===V.task);
-  $('tkList').innerHTML=l.map(x=>bgRow(x,x.id===V.task)).join('');
+  $('tkList').innerHTML=sv.map(s=>srvRow(s,'s:'+s.id===V.task)).join('')+l.map(x=>bgRow(x,x.id===V.task)).join('');hydrate($('tkList'));
+  const srv=sv.find(s=>'s:'+s.id===V.task);if(srv)return srvInfo(srv);
+  $('tkAct').hidden=true;$('tkOut').classList.remove('none');
   if(t?.kind==='monitor')V.seenEv[t.id]=t.events;
   $('tkInfo').innerHTML=!t?'':[t.cmd&&`<span>Command</span><code>${esc(t.cmd)}</code>`,`<span>Started</span><div>${clock(new Date(t.start))} · running ${clockEl(t.start)}</div>`,
     t.limit&&`<span>Limit</span><div>stops by itself after ${sdur(t.limit)}</div>`,t.kind==='monitor'&&`<span>Events</span><div>${t.events||0}</div>`,
@@ -2443,15 +2535,22 @@ function renderTasks(){
 }
 const openTask=id=>{V.side='tasks';V.task=id;V.pv=null;V.full=false;renderPanel();renderTray()};
 function bgClick(e){
-  const b=e.target.closest('[data-tray],[data-bgout],[data-bgsteps],[data-bgstop],[data-task]');if(!b)return;const d=b.dataset;
-  if('tray' in d){V.trayOpen=!V.trayOpen;renderTray()}
+  if(e.target.closest('a.prt'))return;   // a port: opens the page
+  const b=e.target.closest('[data-srvmenu],[data-srvout],[data-srvstop],[data-srvre],[data-srv],[data-tray],[data-bgout],[data-bgsteps],[data-bgstop],[data-task]');if(!b)return;const d=b.dataset;
+  if('srvmenu' in d){e.stopPropagation();srvMenu(b)}
+  else if(d.srvout)openTask('s:'+d.srvout);
+  else if(d.srvstop){const s=srvList().find(x=>x.id===d.srvstop);if(s)srvStop(s,b)}
+  else if(d.srvre){b.disabled=true;api('servers/restart',{top:V.place?.top,id:d.srvre,sessionId:V.sel}).catch(err=>oops(err.message)).finally(()=>{b.disabled=false})}
+  else if(d.srv){if(e.currentTarget.id==='tkList'){V.task='s:'+d.srv;renderTasks()}}
+  else if('tray' in d){V.trayOpen=!V.trayOpen;renderTray()}
   else if(d.bgout)openTask(d.bgout);
   else if(d.bgsteps){const t=bgList().find(x=>x.id===d.bgsteps),it=t&&V.items.find(i=>i.kind==='tools'&&i.tools.some(s=>s.id===t.tool));
     if(it){V.openTools.add(it.n);V.shutTools.delete(it.n);renderThread();document.querySelector(`#thread [data-step="${CSS.escape(t.tool)}"]`)?.scrollIntoView({block:'center',behavior:'smooth'})}}
   else if(d.bgstop){b.disabled=true;api(`sessions/${V.sel}/stop-step`,{id:d.bgstop}).catch(err=>{b.disabled=false;oops(err.message)})}
   else if(d.task&&e.currentTarget.id==='tkList'){V.task=d.task;renderTasks()}
 }
-$('tray').onclick=bgClick;$('tkList').onclick=bgClick;
+$('tray').onclick=bgClick;$('tkList').onclick=bgClick;$('tkAct').onclick=bgClick;
+$('tray').onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.tl')){e.preventDefault();e.target.click()}};
 $('bTasks').onclick=()=>{if(V.side==='tasks'&&!V.pv)V.side=null;else{V.side='tasks';V.pv=null;V.full=false}renderPanel();renderTray()};
 $('tkClose').onclick=()=>{V.side=null;renderPanel();renderTray()};
 function renderQueue(){renderTray();
@@ -2496,6 +2595,7 @@ async function sendText(text,asProfile,attachments){
     return handOff(text.trim().slice(8).trim());
   }
   if(!V.isNew&&text.trim()==='/rewind'&&!attachments?.length){openPick();return true}
+  {const m=/^\/serve(?:\s+(.+))?$/.exec(text.trim());if(!V.isNew&&m&&srvHere()?.conf&&!attachments?.length){srvGo(m[1]?m[1].split(/[\s,]+/):null);return true}}
   if(V.handing&&!V.isNew){oops('The handoff is being written; the conversation goes on in the new session.');return false}
   if(V.focus)V.focus=null;
   if(V.busy)return false;V.busy=true;oops('');

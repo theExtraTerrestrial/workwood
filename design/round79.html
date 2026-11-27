@@ -1,0 +1,67 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 79 — A server in the sidebar</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<link rel="stylesheet" href="../ui/app.css">
+<style>
+html,body{height:auto}
+body{overflow:auto;background:var(--bg);padding:36px 24px 80px}
+.top{max-width:1240px;margin:0 auto 8px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top>span{color:var(--faint);font-size:12.5px}
+.tg{margin-left:auto;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:8px;box-shadow:0 0 0 1px var(--line2)}
+.lede{max-width:1240px;margin:0 auto 30px;color:var(--faint);font-size:12.5px}.lede b{color:var(--dim);font-weight:650}
+.grid{max-width:1240px;margin:0 auto;display:flex;flex-wrap:wrap;gap:30px;align-items:flex-start}
+.cap{width:284px}
+.cap h2{font-size:14px;margin:0 0 2px;font-weight:700}.cap h2 em{font-style:normal;font-size:11px;font-weight:650;color:var(--k-sv);margin-left:6px}
+.cap p{margin:0 0 12px;color:var(--faint);font-size:12.5px;min-height:54px}
+.app.fr{height:auto;border-radius:14px;box-shadow:0 0 0 1px var(--line2);overflow:visible;background:var(--side,var(--surface))}
+.app.fr .side{height:auto;width:284px}
+.app.fr .list{overflow:visible;padding-top:4px}
+:root{--k-sv:hsl(152 55% 58%)}[data-theme=light]{--k-sv:hsl(152 60% 30%)}
+.nw{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+/* A: the background chip, with the icon in place of its dot */
+.bgc.sv{color:var(--k-sv);background:color-mix(in srgb,var(--k-sv) 14%,transparent);padding:0 6px 0 4px}
+.bgc.sv .nw{width:11px;height:11px}
+/* B: the icon where the time is */
+.tm-sv{color:var(--k-sv);display:inline-flex}
+/* C: beside the title, where the terminal mark goes */
+.xsv{display:inline-flex;color:var(--k-sv);flex:none;margin-left:-2px}.xsv .nw{width:12px;height:12px}
+/* D: on the project's heading */
+.gsv{margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:650;color:var(--k-sv)}
+.gsv .nw{width:12px;height:12px}
+/* a tooltip, drawn */
+.ftip{position:absolute;z-index:5;left:96px;top:30px;width:170px;padding:8px 10px;border-radius:9px;background:var(--pop);box-shadow:0 0 0 1px var(--line2),var(--shadow);font-size:11.5px;line-height:1.5;color:var(--dim)}
+.ftip b{color:var(--text);font-weight:650}.ftip code{font:11px "Cascadia Code",ui-monospace,monospace;color:var(--k-sv)}
+.rel{position:relative}
+.oq{max-width:1240px;margin:38px auto 0;font-size:12.5px;color:var(--dim)}
+.oq h3{font-size:14px;margin:0 0 6px;color:var(--text)}.oq li{margin:5px 0;line-height:1.55;max-width:880px}
+</style></head><body>
+<div class="top"><h1>A server in the sidebar</h1><span>round 79 · mockup · round 78 left it out</span><button class="tg" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<div class="lede">The same five sessions in each. <b>Site redesign</b> has a server running and is idle; <b>Invoice PDF</b> has one and is working; <b>Fix login</b> has only a background task, as today. Nothing is added to a row without a server.</div>
+<div class="grid" id="grid"></div>
+<div class="oq"><h3>Open questions</h3><ol>
+  <li>Which one? A uses the spot that already appears for background work; B puts the icon where the time is; C is a mark of its own that stays while the session works; D marks the project instead of the session.</li>
+  <li>While the session works (Invoice PDF), A and B have no room: the spinner wins, as it does for background tasks today. Fine, or should the icon stay beside the spinner?</li>
+</ol></div>
+<script>
+const NW='<svg class="nw" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>';
+const hue=n=>{let h=0;for(const c of n)h=(h*31+c.charCodeAt(0))>>>0;return h%360};
+const tile=p=>`<span class="tile" style="--h:${hue(p)}">${p.slice(0,2).toUpperCase()}</span>`;
+// [title, status, time, background tasks, server]
+const ROWS={beta:[['Site redesign','idle','5m',1,'web :3104',1],['Invoice PDF','work','',1,'web :3107'],['Fix login','idle','2h',2,null]],alpha:[['Tidy the readme','idle','1d',0,null,1],['Parser refactor','wait','',0,null]]};
+const V=[
+  ['A','Background chip, with a network icon','The chip that counts background work today. With a server among them, its dot becomes the icon, in the servers\' green.',true],
+  ['B','In place of the time','The time ("5m") gives way to the icon while a server runs. The time comes back on hover, with the row\'s actions.'],
+  ['C','A mark of its own','A green icon on its own, before the chip and the time. Unlike A and B it stays while the session works.'],
+  ['D','On the project, not the session','One mark per project heading, with a count. Rows are untouched; the tooltip names the sessions and ports.'],
+];
+const row=(k,p,[t,st,tm,bg,sv,warm],tip)=>{
+  let right=st==='work'?'<i class="spin"></i>':st==='wait'?'<span class="askl">Wants to run a command</span>':`<time>${tm}</time>`;
+  let chip=bg&&st==='idle'?`<span class="bgc"><i></i>${bg}</span>`:'';
+  if(k==='A'&&sv&&st==='idle')chip=`<span class="bgc sv">${NW}${bg}</span>`;
+  if(k==='B'&&sv&&st==='idle'){right=`<span class="tm-sv">${NW}</span>`;chip=''}
+  if(k==='B'&&!sv&&bg&&st==='idle')chip=`<span class="bgc"><i></i>${bg}</span>`;
+  return `<div class="rel">${tip&&sv&&st==='idle'?`<div class="ftip"><b>${t}</b><br><code>${sv}</code> running${bg>1?` · ${bg-1} more task`:''}</div>`:''}<button class="sess ${st}">${warm?'<span class="wdial" style="--left:.55"></span>':''}${tile(p)}${st==='work'?'<u class="go"></u>':''}</span><span class="txt"><span class="l1"><b>${t}</b>${k==='C'&&sv?`<span class="xsv">${NW}</span>`:''}<span class="st">${chip}${right}</span></span>${st==='work'?'<span class="l2"><span>Running the tests</span></span>':''}</span></button></div>`;
+};
+document.getElementById('grid').innerHTML=V.map(([k,h,p,rec],i)=>`<div class="cap"><h2>${k} · ${h}${rec?'<em>Recommended</em>':''}</h2><p>${p}</p>
+  <div class="app fr"><aside class="side"><div class="list">${Object.entries(ROWS).map(([proj,rows])=>`<div class="grp">${tile(proj)}</span><span>${proj}</span>${k==='D'&&rows.some(r=>r[4])?`<span class="gsv" data-n>${NW}${rows.filter(r=>r[4]).length}</span>`:''}</div>${rows.map(r=>row(k,proj,r,i===0)).join('')}`).join('')}</div></aside></div></div>`).join('');
+</script>
+</body></html>

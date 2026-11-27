@@ -1080,8 +1080,8 @@ test('worktrees: a session in a worktree belongs to its project, and reports the
   await idle(await newSession('nudge a refresh'));
   const s = await until(() => listed(id), 'the worktree session', 15000);
   assert.deepEqual([s.project, s.root], ['beta', sb.projects.beta]);
-  assert.deepEqual((await session(id)).place, { cwd: wt, project: 'beta', worktree: 'beta-login-fix', branch: 'login-fix' });
-  assert.deepEqual((await session(sb.sessions.betaOther)).place, { cwd: sb.projects.beta, project: 'beta', worktree: null, branch: 'main' });
+  assert.deepEqual((await session(id)).place, { cwd: wt, top: wt, project: 'beta', worktree: 'beta-login-fix', branch: 'login-fix' });
+  assert.deepEqual((await session(sb.sessions.betaOther)).place, { cwd: sb.projects.beta, top: sb.projects.beta, project: 'beta', worktree: null, branch: 'main' });
 
   // VS Code opens where the work is: the worktree's own folder, not the project it was made from
   assert.equal((await svc.call('open-editor', { sessionId: id })).status, 200);
@@ -1096,6 +1096,76 @@ test('worktrees: a session in a worktree belongs to its project, and reports the
     assert.equal(r.status, 500);
     assert.match(r.body.error, /VS Code could not be opened/);
   } finally { fs.writeFileSync(stub, kept); }
+});
+
+test('servers: found in a worktree whoever started them, started from its Procfile on ports of its own, by the window or the agent', async () => {
+  // where Claude Code makes them: inside the checkout, which is a server's folder too but not this one's
+  const wt = path.join(sb.projects.beta, '.claude', 'worktrees', 'beta-serve'), genv = { ...process.env, HOME: sb.home, GIT_CONFIG_NOSYSTEM: '1' };
+  fs.appendFileSync(path.join(sb.projects.beta, '.git', 'info', 'exclude'), '.claude/\n');
+  execFileSync('git', ['-C', sb.projects.beta, 'worktree', 'add', '-q', '-b', 'serve-test', wt], { env: genv, stdio: 'ignore' });
+  fs.writeFileSync(path.join(wt, 'Procfile.dev'), 'web: python3 -m http.server $PORT --bind 127.0.0.1\nworker: sleep 600\n');
+  fs.mkdirSync(path.join(wt, '.workwood'));
+  fs.writeFileSync(path.join(wt, '.workwood', 'servers.json'), '{\n  // made for each worktree\n  "setup": "echo $WORKWOOD_WORKTREE $WORKWOOD_BRANCH $PORT > .setup-ran",\n  "teardown": "echo $WORKWOOD_WORKTREE > ../teardown-ran"\n}\n');
+  sb.projects.betaServe = wt;
+  const id = addSession(sb, 'betaServe', 'live', 'Serve the site', 'ok', 5);
+  await idle(await newSession('nudge a refresh'));
+  await until(() => listed(id), 'the worktree session', 15000);
+  assert.equal((await session(id)).place.top, wt);   // a window shows it: Workwood looks there
+  const here = async () => (await state()).servers?.[wt];
+  const conf = (await until(here, 'the folder looked at')).conf;
+  assert.deepEqual([conf.file, conf.names, conf.open, conf.setup, conf.done], ['Procfile.dev', ['web', 'worker'], 'web', true, false]);
+  const pids = [];
+  try {
+    // Start: the setup first, once, then each line on the worktree's own ports
+    assert.equal((await svc.call('servers/start', { top: wt })).status, 200);
+    assert.equal(fs.readFileSync(path.join(wt, '.setup-ran'), 'utf8').trim(), 'beta-serve serve-test 4700');
+    let web = await until(async () => (await here()).list.find(x => x.name === 'web' && x.ports.includes(4700)), 'web on its port', 15000);
+    assert.equal(web.who, 'workwood');
+    await until(async () => (await here()).list.find(x => x.name === 'worker'), 'the worker');
+    assert.equal((await here()).conf.done, true);
+    assert.equal((await fetch('http://127.0.0.1:4700/')).status, 200);
+    await until(async () => /GET \/ HTTP/.test((await svc.call(`servers/output?top=${encodeURIComponent(wt)}&id=${web.id}`)).body.text), 'what it printed');
+    // started again, on the same port; the setup is not run twice
+    fs.rmSync(path.join(wt, '.setup-ran'));
+    assert.equal((await svc.call('servers/restart', { top: wt, id: web.id })).status, 200);
+    web = await until(async () => (await here()).list.find(x => x.name === 'web' && x.ports.includes(4700)), 'web again', 15000);
+    assert.equal(fs.existsSync(path.join(wt, '.setup-ran')), false);
+    assert.equal((await svc.call('servers/start', { top: wt, names: ['db'] })).status, 409);
+
+    // one started outside Workwood, in the worktree, is found too, and stopped as a group
+    const { spawn } = await import('node:child_process');
+    const mine = spawn('/bin/sh', ['-c', 'python3 -m http.server 4709 --bind 127.0.0.1; true'], { cwd: wt, detached: true, stdio: 'ignore' }); mine.unref(); pids.push(mine.pid);
+    const yours = await until(async () => (await here()).list.find(x => x.who === 'you' && x.ports.includes(4709)), 'the one started outside', 15000);
+    assert.equal(yours.pid, mine.pid);
+    assert.equal((await svc.call('servers/stop', { top: wt, id: yours.id })).status, 200);
+    await until(async () => !(await here()).list.some(x => x.who === 'you'), 'it to stop');
+    assert.throws(() => process.kill(mine.pid, 0));
+
+    // the agent is told how, and `workwood serve` answers it from the folder it runs in
+    const turn = async text => { assert.equal((await svc.call(`sessions/${id}/send`, { text })).status, 200); return lastText(await idle(id)); };
+    assert.match(await turn('SERVE serve --status'), /^Served \(0\): web: http:\/\/localhost:4700 \(started by Workwood/m);
+    assert.match(readLog(sb).join('\n'), /^This project lists its servers for Workwood \(web, worker, in Procfile\.dev\)\. .*start them with `workwood serve`/m);
+    assert.match(await turn('SERVE serve --stop worker'), /Stopped worker\./);
+    await until(async () => !(await here()).list.some(x => x.name === 'worker'), 'the worker to stop');
+    assert.match(await turn('SERVE serve worker'), /^Served \(0\): worker: running/m);
+    assert.deepEqual([(await listed(id)).srv, (await listed(id)).nets], [1, ['worker']], 'the agent started it: its session shows it');
+    assert.match(await turn('SERVE serve --logs web 5'), /Serving HTTP on 127\.0\.0\.1 port 4700/);
+    assert.match(await turn('SERVE serve db'), /^Served \(1\): No server named db here\. It lists web, worker\./m);
+
+    // a server the agent started with a background command shows on that command's row
+    await turn('AGENTSERVER 4711');
+    const ag = await until(async () => (await here()).list.find(x => x.ports.includes(4711)), 'the agent\'s server', 15000);
+    assert.deepEqual([ag.who, ag.task?.id, ag.task?.sessionId], ['agent', 'task_web', id]);
+    assert.equal((await svc.call(`sessions/${id}/stop-step`, { id: 'toolu_web' })).status, 200);
+    await until(async () => !(await here()).list.some(x => x.ports.includes(4711)), 'the agent\'s server to stop', 15000);
+
+    for (const x of (await here()).list) assert.equal((await svc.call('servers/stop', { top: wt, id: x.id })).status, 200);
+    await until(async () => !(await here()).list.length, 'all of them to stop');
+    // the worktree removed: its teardown runs from the checkout it was made from
+    execFileSync('git', ['-C', sb.projects.beta, 'worktree', 'remove', '--force', wt], { env: genv, stdio: 'ignore' });
+    await until(() => fs.existsSync(path.join(sb.home, 'workspace', 'teardown-ran')), 'the teardown', 15000);
+    assert.equal(fs.readFileSync(path.join(sb.home, 'workspace', 'teardown-ran'), 'utf8').trim(), 'beta-serve');
+  } finally { for (const p of pids) try { process.kill(-p); } catch {} }
 });
 
 test('a file or folder a message names opens in VS Code: a file at its line, in the project\'s window; only what is there', async () => {
@@ -1403,11 +1473,11 @@ test('read aloud: on a computer without Kokoro it is got from Settings, then rea
 
 test('settings: default profile and dictation language are kept; sign-in again runs Claudius in a terminal', async () => {
   const handoff = { model: 'auto', effort: 'medium', offer: 400000 };
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, pcHold: 'wait', awayMin: 5, handoff });
-  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, pcHold: 'wait', awayMin: 5, handoff });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'other', language: 'latvian' })).body, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, serveLine: true, pcHold: 'wait', awayMin: 5, handoff });
+  assert.deepEqual((await state()).prefs, { defaultProfile: 'other', language: 'latvian', folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, serveLine: true, pcHold: 'wait', awayMin: 5, handoff });
   const kept = JSON.parse(fs.readFileSync(path.join(sb.home, '.config', 'workwood', 'state.json'), 'utf8'));
   assert.deepEqual([kept.defaultProfile, kept.language, typeof kept.done], ['other', 'latvian', 'object']);
-  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, pcHold: 'wait', awayMin: 5, handoff });
+  assert.deepEqual((await svc.call('settings', { defaultProfile: 'nobody', language: 'x;rm' })).body, { defaultProfile: null, language: null, folders: [], doneDays: 7, bypass: false, autoContinue: false, speech: 'small', readVoice: 'af_bella', readPlace: 'strip', readSpeed: 1, readAuto: false, cacheMinutes: 60, serveLine: true, pcHold: 'wait', awayMin: 5, handoff });
   const a = (await svc.call('about')).body;
   assert.deepEqual([a.version, a.claude, typeof a.speech.model], [JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version, '2.1.322', 'string']);
   assert.equal((await svc.call('profiles/nobody/login', {})).status, 404);
@@ -1783,6 +1853,93 @@ ui('window: steps expand when the activity line is clicked', async () => {
   assert.match((await page.locator('.steps').innerText()).replace(/\s+/g, ' '), /Read README\.md/);
   await page.click('.act');
   assert.equal(await page.locator('.steps').count(), 0);
+});
+
+ui('window: servers in the tray: a line to start them, their ports one click away, one started outside asked about before it stops, and a setting for the line', async () => {
+  const wt = path.join(sb.projects.beta, '.claude', 'worktrees', 'beta-site'), genv = { ...process.env, HOME: sb.home, GIT_CONFIG_NOSYSTEM: '1' };
+  fs.appendFileSync(path.join(sb.projects.beta, '.git', 'info', 'exclude'), '.claude/\n');
+  execFileSync('git', ['-C', sb.projects.beta, 'worktree', 'add', '-q', '-b', 'site', wt], { env: genv, stdio: 'ignore' });
+  fs.writeFileSync(path.join(wt, 'Procfile'), 'web: python3 -m http.server $PORT --bind 127.0.0.1\nworker: sleep 600\n');
+  sb.projects.betaSite = wt;
+  const id = addSession(sb, 'betaSite', 'live', 'Work on the site', 'ok', 4), row = `.sess[data-id="${id}"]`;
+  await idle(await newSession('nudge a refresh'));
+  await until(() => listed(id), 'the worktree session', 15000);
+  assert.equal((await svc.call(`sessions/${id}/send`, { text: 'hello' })).status, 200); await idle(id);   // worked on here: in the inbox
+  await page.waitForSelector(row, { timeout: 15000 }); await page.click(row);
+  const here = async () => (await state()).servers?.[wt];
+  const pids = [];
+  try {
+    // nothing runs: a quiet line offers them
+    await page.waitForSelector('#tray.ghost .tl:has-text("Start servers")');
+    assert.equal(await page.locator('#tray.ghost .gn').innerText(), 'web · worker');
+    assert.equal(await page.locator('#bTasks').isHidden(), true);
+    await page.click('#tray.ghost .tl');
+    assert.deepEqual((await page.locator('#srvm button').allInnerTexts()).map(x => x.replace(/\s+/g, ' ').trim()), ['All web · worker', 'web', 'worker']);
+    await page.click('#srvm button:has-text("All")');
+    const web = await until(async () => (await here())?.list.find(x => x.name === 'web' && x.ports.length), 'web up', 15000), port = web.ports[0];
+    await page.waitForSelector('#tray .tl:has-text("2 running")');
+    assert.deepEqual(await page.locator('#tray .tkk.server').allInnerTexts(), ['web', 'worker']);
+    assert.equal(await page.locator(`#tray .tl a.prt[href="http://localhost:${port}/"]`).count(), 1, 'the port opens the page');
+    assert.equal(await page.locator('#tray .tl [data-srvmenu]').count(), 0, 'all of them run: no Start');
+    assert.deepEqual(await page.evaluate(() => window.wwBackground()), [{ title: 'Servers in beta-site', n: 2 }], 'quitting asks about them');
+    // the sidebar: on the session they were started from, the background chip with a network icon; on the project, all of them
+    await page.waitForSelector(`${row} .bgc.sv:has-text("2")`);
+    assert.equal(await page.locator(`${row} .bgc.sv`).getAttribute('data-tip'), `web :${port}, worker running`);
+    const grp = `.grp[data-grp="${sb.projects.beta}"] .gsv`;
+    await page.waitForSelector(`${grp}:has-text("2")`);
+    assert.equal(await page.locator(grp).getAttribute('data-tip'), `web :${port} in beta-site · worker in beta-site`);
+    // open: a row each, who started it, Output in the side panel
+    await page.click('#tray .tl');
+    await page.waitForSelector('#tray .tk:has-text("web") .who:has-text("Workwood")');
+    await page.waitForSelector('#tray .tk:has-text("worker") .tk2:has-text("sleep 600")');
+    await page.click('#tray .tk:has-text("web") [data-srvout]');
+    await page.waitForFunction(p => (document.querySelector('#tkOut')?.textContent || '').includes('port ' + p), port);
+    assert.match(await page.locator('#tkInfo').innerText(), /by Workwood/);
+    await page.waitForSelector('#tkAct [data-srvre]:has-text("Restart")');
+    await page.click('#tkClose');
+    // stopped one by one: Start comes back for what is not running
+    await page.click('#tray .tk:has-text("worker") [data-srvstop]');
+    await page.waitForSelector('#tray .tl:has-text("1 running")');
+    await page.waitForSelector('#tray .tl [data-srvmenu]:has-text("Start")');
+
+    // one started outside Workwood: shown as yours, and Stop asks first
+    const { spawn } = await import('node:child_process');
+    const mine = spawn('/bin/sh', ['-c', 'python3 -m http.server 4729 --bind 127.0.0.1; true'], { cwd: wt, detached: true, stdio: 'ignore' }); mine.unref(); pids.push(mine.pid);
+    await page.waitForSelector('#tray .tk:has-text("yours") .prt:has-text(":4729")', { timeout: 15000 });
+    await page.waitForSelector(`${grp}:has-text("2")`);   // web and this one: the project counts it, the session does not
+    await page.waitForSelector(`${row} .bgc.sv:has-text("1")`);
+    await page.click('#tray .tk:has-text("yours") [data-srvstop]');
+    await page.waitForSelector('#srvm .sq:has-text("started in a terminal, outside Workwood")');
+    await page.click('#srvm [data-srvno]');
+    assert.equal(await page.locator('#srvm').isHidden(), true);
+    await page.click('#tray .tk:has-text("yours") [data-srvstop]');
+    await page.click('#srvm [data-srvyes]');
+    await page.waitForFunction(() => ![...document.querySelectorAll('#tray .who')].some(x => x.textContent === 'yours'), null, { timeout: 15000 });
+
+    await page.click('#tray .tk:has-text("web") [data-srvstop]');
+    await page.waitForSelector('#tray.ghost .tl:has-text("Start servers")');
+    // the setting: no line, and Start is still in ⋮ and /serve
+    await page.click('#bGear'); await page.click('#gAll'); await page.click('#stabs >> text=Sessions');
+    await page.click('[data-set="serve"]');
+    await page.waitForSelector('#tray', { state: 'hidden' });
+    await page.click('#stabs >> text=General'); await page.click('#dClose');
+    await page.fill('#input', '/ser');
+    await page.waitForSelector('#slash .skr:has-text("/serve")');
+    await page.fill('#input', '');
+    await page.click(row, { button: 'right' });
+    await page.click('#smenu [data-do="serve"]');
+    await page.waitForSelector('#srvm button:has-text("worker")');
+    await page.keyboard.press('Escape'); await page.mouse.click(5, 5);
+    await send('/serve worker');
+    await until(async () => (await here())?.list.find(x => x.name === 'worker'), 'the worker from /serve', 15000);
+    await page.waitForSelector('#tray .tl:has-text("1 running")');
+    assert.equal((await svc.call('settings', { serveLine: true })).status, 200);
+    if (await page.locator('#tray.open').count()) await page.click('#tray .tl');   // as the next test expects it: closed
+  } finally {
+    for (const p of pids) try { process.kill(-p); } catch {}
+    for (const x of (await here())?.list || []) await svc.call('servers/stop', { top: wt, id: x.id });
+    execFileSync('git', ['-C', sb.projects.beta, 'worktree', 'remove', '--force', wt], { env: genv, stdio: 'ignore' });
+  }
 });
 
 ui('window: a reply with a list inside a list shows it nested', async () => {
@@ -3222,7 +3379,7 @@ ui('window: the settings dialog: tabs, default profile for new sessions, sign in
   await page.click('#stabs [data-st="6"]'); await page.waitForSelector('#spage .lgrp:has-text("Dictation")');
   await page.selectOption('#sLang', 'german');
   await page.click('#stabs [data-st="5"]'); await page.waitForSelector('#spage [data-set="bypass"]');
-  assert.deepEqual(await page.locator('#spage .lgrp').allInnerTexts(), ['LIMITS', 'HANDOFF']);
+  assert.deepEqual(await page.locator('#spage .lgrp').allInnerTexts(), ['LIMITS', 'HANDOFF', 'SERVERS']);
   await page.selectOption('#sDays', '14'); await until(async () => (await state()).prefs.doneDays === 14, 'the clearing time to be saved'); await page.selectOption('#sDays', '7');
   await until(async () => { const p = (await state()).prefs; return p.defaultProfile === 'other' && p.language === 'german'; }, 'the settings to be saved');
   await page.click('#stabs [data-st="0"]');

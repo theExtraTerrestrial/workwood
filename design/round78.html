@@ -1,0 +1,175 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 78 — Servers in the background tray</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<link rel="stylesheet" href="../ui/app.css">
+<style>
+html,body{height:auto}
+body{overflow:auto;background:var(--bg);padding:36px 24px 80px}
+.top{max-width:1240px;margin:0 auto 8px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top>span{color:var(--faint);font-size:12.5px}
+.tg{margin-left:auto;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:8px;box-shadow:0 0 0 1px var(--line2)}
+.lede{max-width:1240px;margin:0 auto 30px;color:var(--faint);font-size:12.5px}.lede b{color:var(--dim);font-weight:650}
+.grid{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(560px,1fr));gap:34px 40px;align-items:start}
+.cap h2{font-size:14px;margin:0 0 2px;font-weight:700}
+.cap p{margin:0 0 12px;color:var(--faint);font-size:12.5px;max-width:520px}
+
+/* a cropped session: the end of the thread, the tray, the message box */
+.fr{border-radius:14px;box-shadow:0 0 0 1px var(--line2);background:var(--bg);padding:18px 18px 14px;position:relative}
+.xln{height:8px;border-radius:4px;background:var(--surface2,rgba(128,128,128,.14));margin:0 0 8px}.xln.s{width:62%}.xln.m{width:84%}
+.xth{padding:4px 8px 14px}
+.cbx{border-radius:16px;background:var(--surface);box-shadow:0 0 0 1px var(--line2);padding:11px 14px 8px;font-size:13px;color:var(--faint)}
+.cbx .ft{display:flex;gap:12px;margin-top:14px;font-size:11px}.cbx .ft .gap{flex:1}
+.fr .tray{max-width:none}
+
+/* new: servers */
+:root{--k-sv:hsl(152 55% 58%)}[data-theme=light]{--k-sv:hsl(152 60% 30%)}
+.tkk.server::before{background:var(--k-sv)}
+.tki.server{color:var(--k-sv);background:color-mix(in srgb,var(--k-sv) 15%,transparent)}
+.tki svg,.mini svg,.prt svg,.st svg,.mn svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.prt{display:inline-flex;align-items:center;gap:3px;height:20px;padding:0 7px;border-radius:6px;font:600 11px "Cascadia Code",ui-monospace,Consolas,monospace;color:var(--k-sv);background:color-mix(in srgb,var(--k-sv) 13%,transparent);flex:none}
+.prt svg{width:10px;height:10px}
+.prt.live::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--k-sv);margin-right:2px;animation:bgblink 1.6s ease-in-out infinite}
+.who{font-size:10.5px;font-weight:600;color:var(--faint);flex:none}
+.kids{grid-column:2/4;display:flex;flex-direction:column;gap:3px;margin:6px 0 2px;padding-left:10px;border-left:1.5px solid var(--line2)}
+.kid{display:flex;align-items:center;gap:8px;font-size:11.5px;min-width:0}
+.kid b{font-weight:600;width:54px;flex:none}.kid code{color:var(--faint);font:11px "Cascadia Code",ui-monospace,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.kid .q{color:var(--faint);font-size:11px}
+.tl .st{height:22px;padding:0 8px;border-radius:6px;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--dim);box-shadow:inset 0 0 0 1px var(--line2)}
+.st svg{width:9px;height:9px;fill:currentColor;stroke:none}
+
+/* the quiet start line when nothing runs */
+.ghost{max-width:none;margin:0 0 6px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--line2);border:0;background:none;display:flex;align-items:center;gap:10px;height:32px;padding:0 10px 0 12px;font-size:12px;color:var(--faint);position:relative}
+.ghost .pl{width:16px;height:16px;border-radius:5px;display:grid;place-items:center;color:var(--k-sv);background:color-mix(in srgb,var(--k-sv) 13%,transparent)}
+.ghost .pl svg{width:8px;height:8px;fill:currentColor}
+.ghost b{color:var(--dim);font-weight:600}.ghost .gap{flex:1}.ghost i{font-style:normal;font-size:11px}
+
+/* menus and popovers */
+.mn{position:absolute;z-index:3;width:250px;border-radius:12px;background:var(--surface);box-shadow:0 0 0 1px var(--line2),0 14px 40px rgba(0,0,0,.35);padding:5px;font-size:12.5px}
+.mn .it{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px}.mn .it.on{background:var(--sel,rgba(128,128,128,.12))}
+.mn .it small{margin-left:auto;color:var(--faint);font-size:11px;font-family:"Cascadia Code",ui-monospace,monospace}
+.mn .it svg{width:13px;height:13px;color:var(--k-sv)}
+.mn hr{border:0;border-top:1px solid var(--line);margin:4px 6px}
+.mn .foot{padding:5px 9px 4px;font-size:11px;color:var(--faint)}
+.cf{position:absolute;z-index:3;width:270px;border-radius:12px;background:var(--surface);box-shadow:0 0 0 1px var(--line2),0 14px 40px rgba(0,0,0,.35);padding:13px 14px 12px;font-size:12.5px}
+.cf b{display:block;font-weight:650;margin-bottom:4px}.cf p{margin:0 0 12px;color:var(--faint);font-size:12px;line-height:1.5}
+.cf .bb{display:flex;gap:8px;justify-content:flex-end}.cf button{font-size:12px;font-weight:650;padding:5px 12px;border-radius:8px;box-shadow:inset 0 0 0 1px var(--line2);color:var(--dim)}
+.cf button.y{background:var(--text);color:var(--bg);box-shadow:none}
+.fade{opacity:.4}
+
+/* the side panel */
+.pn{border-radius:14px;box-shadow:0 0 0 1px var(--line2);background:var(--bg);overflow:hidden;display:flex;flex-direction:column;height:430px}
+.pnh{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:650}.pnh .gap{flex:1}
+.pnh .x{color:var(--faint);font-weight:500}
+.pn .tkl{max-height:none}
+.pn .tkinfo code{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.pnb{display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid var(--line)}
+.lg{flex:1;margin:0;padding:10px 14px;font:11px/1.65 "Cascadia Code",ui-monospace,Consolas,monospace;color:var(--dim);overflow:hidden;white-space:pre}
+.lg .w{color:var(--k-sv)}.lg .n{color:var(--k-ag)}.lg .f{color:var(--faint)}
+.none{flex:1;display:grid;place-items:center;text-align:center;color:var(--faint);font-size:12px;padding:0 40px;line-height:1.6}
+
+.uh,.oq{max-width:1240px;margin:38px auto 0;font-size:12.5px;color:var(--dim)}.uh summary{cursor:pointer;color:var(--faint);font-weight:650}
+.oq h3{font-size:14px;margin:0 0 6px;color:var(--text)}.uh li,.oq li{margin:5px 0;line-height:1.55;max-width:880px}
+.uh code,.oq code{font-size:11.5px}
+.uh pre{font-size:11.5px;background:var(--surface);border-radius:10px;padding:10px 14px;max-width:560px;line-height:1.6}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="srv" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol>
+  <symbol id="term" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6M12 19h8"/></symbol>
+  <symbol id="ext" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="play" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></symbol>
+  <symbol id="rs" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></symbol>
+</defs></svg>
+<script>const I=(n,c='')=>`<svg class="${c}" viewBox="0 0 24 24"><use href="#${n}"/></svg>`;</script>
+
+<div class="top"><h1>Servers in the background tray</h1><span>round 78 · mockup</span><button class="tg" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<div class="lede">A server running in the session's worktree joins the tray above the message box, <b>whoever started it</b>: you in a terminal, the agent, or Workwood. Its port opens in one click. A repo that lists its servers also gets <b>Start</b>.</div>
+
+<div class="grid">
+
+  <div class="cap"><h2>1 · Folded</h2><p>Servers come first, in green, with their ports. A click on a port opens the page.</p>
+    <div class="fr"><div class="xth"><div class="xln m"></div><div class="xln s"></div></div>
+      <div class="tray"><button class="tl"><b>3 running</b><span class="tkk server">bin/dev</span><span class="tkk server">Rails server</span><span class="tkk shell">npm test</span><span class="gap"></span>
+        <span class="prt live">:3104</span><span class="prt live">:3107</span><svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2"><use href="#chev"/></svg></button></div>
+      <div class="cbx">Message…<div class="ft"><span>Opus</span><span>auto</span><span class="gap"></span><span>32%</span></div></div></div></div>
+
+  <div class="cap"><h2>2 · Open</h2><p>A group shows what it started. Whoever started it is named beside it, and the agent's own server gets its port too.</p>
+    <div class="fr"><div class="tray open" id="t2"></div>
+      <div class="cbx">Message…<div class="ft"><span>Opus</span><span>auto</span><span class="gap"></span><span>32%</span></div></div></div></div>
+
+  <div class="cap"><h2>3 · Nothing running, the repo lists servers</h2><p>A quiet line takes the tray's place. Start offers all of them or one. It's also in the session's ⋮ menu and in <code>/serve</code>.</p>
+    <div class="fr" style="padding-top:150px"><div class="xth" style="position:absolute;top:18px;left:18px;right:18px"><div class="xln m"></div><div class="xln s"></div><div class="xln m"></div></div>
+      <div class="mn" style="right:22px;bottom:104px">
+        <div class="it on"><svg viewBox="0 0 24 24"><use href="#srv"/></svg>All<small>web · worker</small></div>
+        <div class="it"><svg viewBox="0 0 24 24"><use href="#srv"/></svg>web<small>:3104</small></div>
+        <div class="it"><svg viewBox="0 0 24 24"><use href="#srv"/></svg>worker</div>
+        <hr><div class="foot">Setup runs first, once per worktree</div></div>
+      <div class="ghost"><span class="pl"><svg viewBox="0 0 24 24"><use href="#play"/></svg></span><b>Start servers</b><span>web · worker</span><span class="gap"></span><i>Procfile.dev</i><svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2"><use href="#chev"/></svg></div>
+      <div class="cbx">Message…<div class="ft"><span>Opus</span><span>auto</span><span class="gap"></span><span>32%</span></div></div></div></div>
+
+  <div class="cap"><h2>4 · Stopping one you started</h2><p>Workwood asks first when it didn't start the process. A group stops as a whole.</p>
+    <div class="fr"><div class="tray open" id="t4"></div>
+      <div class="cf" style="right:26px;top:66px"><b>Stop bin/dev?</b><p>It was started in a terminal, outside Workwood. web and worker stop with it.</p><div class="bb"><button>Cancel</button><button class="y">Stop</button></div></div>
+      <div class="cbx">Message…<div class="ft"><span>Opus</span><span>auto</span><span class="gap"></span><span>32%</span></div></div></div></div>
+
+  <div class="cap"><h2>5 · Started by Workwood: its log</h2><p>The side panel for background work. Workwood holds the output, so it can restart the server.</p>
+    <div class="pn"><div class="pnh">Background<span class="gap"></span><span class="x">✕</span></div>
+      <div class="tkl" id="p5"></div>
+      <div class="tkinfo"><span>Command</span><code>bundle exec rails server -p 3104</code><span>Folder</span><code>realizacija/.claude/worktrees/invoice-pdf</code><span>Started</span><div>by Workwood · 14:02 · running 0:41:12</div></div>
+      <div class="pnb"><button class="mini"><svg viewBox="0 0 24 24"><use href="#ext"/></svg>Open :3104</button><button class="mini"><svg viewBox="0 0 24 24"><use href="#rs"/></svg>Restart</button></div>
+      <pre class="lg"><span class="f">=&gt; Booting Puma</span>
+<span class="f">=&gt; Rails 8.0.2 application starting in development</span>
+* Listening on http://127.0.0.1:3104
+<span class="w">Started GET "/invoices/482/pdf" for 127.0.0.1</span>
+  Processing by InvoicesController#pdf as PDF
+  Invoice Load (0.6ms)  SELECT "invoices".* …
+<span class="n">  Rendered invoices/pdf.html.erb (Duration: 38.2ms)</span>
+Completed 200 OK in 212ms</pre></div></div>
+
+  <div class="cap"><h2>6 · Started in your terminal: no log here</h2><p>Its output goes to the terminal you started it in. The panel says so and still offers Open and Stop.</p>
+    <div class="pn"><div class="pnh">Background<span class="gap"></span><span class="x">✕</span></div>
+      <div class="tkl" id="p6"></div>
+      <div class="tkinfo"><span>Command</span><code>foreman start -f Procfile.dev</code><span>Folder</span><code>realizacija/.claude/worktrees/invoice-pdf</code><span>Started</span><div>outside Workwood · 13:55 · running 0:48:03</div></div>
+      <div class="pnb"><button class="mini"><svg viewBox="0 0 24 24"><use href="#ext"/></svg>Open :3104</button></div>
+      <div class="none">Its output goes to the terminal it was started in.</div></div></div>
+
+</div>
+
+<details class="uh"><summary>Under the hood</summary><ul>
+  <li><b>Finding them.</b> Every few seconds, while a session is open, the service lists the ports being listened on and their processes (<code>/proc</code> on Linux and WSL, <code>lsof</code> on macOS). It reads each process's folder and command line and matches the most specific worktree, so <code>.claude/worktrees/x</code> is never listed under main as well. Parents and children are grouped.</li>
+  <li><b>What counts as a server.</b> A process counts if it listens on a port, belongs to the same group as one that does, or matches a line in the repo's Procfile. That is how Sidekiq is found. Editors, language servers, the agent's <code>claude</code> and idle shells stay out.</li>
+  <li><b>The agent's own servers.</b> A listening process that descends from the session's <code>claude</code> process adds its port to the agent's existing task row. It does not get a row of its own. It still ends with the session, because Claude Code stops its shells.</li>
+  <li><b>Who started it.</b> The row says <i>Workwood</i>, <i>agent</i> or <i>yours</i>. Logs and Restart need the output or the command, so a process started outside Workwood gets Open and Stop only. Restart also works when its command matches a Procfile line.</li>
+  <li><b>Stop.</b> SIGTERM to the process group, then SIGKILL after 5 s. Before stopping a process Workwood didn't start, it asks.</li>
+  <li><b>The repo's list.</b> If <code>.workwood/servers.json</code> is missing, Workwood falls back to <code>Procfile.dev</code>, then <code>Procfile</code>:
+<pre>{
+  "procfile": "Procfile.dev",
+  "setup": "bin/worktree-setup",       // once per worktree, before the first start
+  "teardown": "bin/worktree-teardown", // when the worktree is removed
+  "open": "web"
+}</pre>
+  Each process gets <code>PORT</code> (different in each worktree), <code>WORKWOOD_WORKTREE</code> and <code>WORKWOOD_BRANCH</code>. The repo's scripts copy the database and pick the Redis namespace. Workwood knows nothing about Foreman or Rails.</li>
+  <li><b>Servers started by Workwood</b> run in the service like terminals (node-pty). They keep running after the session goes idle and stop when the worktree is removed. The agent can start them too, with <code>workwood serve web</code>.</li>
+</ul></details>
+
+<div class="oq"><h3>Open questions</h3><ol>
+  <li>Should the quiet <b>Start servers</b> line (3) always show when nothing runs? Or only through the ⋮ menu and <code>/serve</code>?</li>
+  <li>When the repo lists servers, should Workwood tell the agent to start them with <code>workwood serve</code>, so they outlive the session and you see the logs? Or leave the agent to start them its own way?</li>
+  <li>When Workwood quits, should the servers it started stop with it, or be listed in the quit dialog next to background tasks?</li>
+  <li>Should a session's row in the sidebar show a small green port badge while it has a server running?</li>
+</ol></div>
+
+<script>
+const row=(o)=>`<div class="tk ${o.on?'on':''}"><span class="tki ${o.k}">${I(o.k==='server'?'srv':'term')}</span>
+  <div class="tk1"><b>${o.n}</b>${o.who?`<span class="who">${o.who}</span>`:''}${(o.ports||[]).map(p=>`<span class="prt live">:${p}${I('ext')}</span>`).join('')}</div>
+  <div class="tka"><span class="el">${o.t}</span>${o.out?'<button class="mini">Output</button>':''}<button class="mini stop"><svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>Stop</button></div>
+  <div class="tk2 mono">${o.c}</div>${o.kids?`<div class="kids">${o.kids.map(k=>`<div class="kid"><b>${k[0]}</b>${k[1]?`<span class="prt">:${k[1]}</span>`:'<span class="q">no port</span>'}<code>${k[2]}</code></div>`).join('')}</div>`:''}</div>`;
+const dev={k:'server',n:'bin/dev',who:'yours',ports:[3104],t:'48:03',c:'foreman start -f Procfile.dev',kids:[['web',3104,'rails server -p 3104'],['worker',0,'sidekiq -C config/sidekiq.yml']]};
+const ags={k:'server',n:'Rails server',who:'agent',ports:[3107],t:'6:20',out:1,c:'bin/rails s -p 3107'};
+const tst={k:'shell',n:'npm test',t:'1:12',out:1,c:'npm test -- --watch'};
+const line=(n,start)=>`<button class="tl"><b>${n} running</b><span class="gap"></span>${start?`<span class="st">${I('play')}Start</span>`:''}<svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2"><use href="#chev"/></svg></button>`;
+document.getElementById('t2').innerHTML=line(3)+`<div class="tasks">${row(dev)+row(ags)+row(tst)}</div>`;
+document.getElementById('t4').innerHTML=line(3)+`<div class="tasks">${row({...dev,on:1})+`<div class="fade">${row(ags)+row(tst)}</div>`}</div>`;
+document.getElementById('p5').innerHTML=row({k:'server',n:'web',who:'Workwood',ports:[3104],t:'41:12',c:'rails server -p 3104',on:1})+row({k:'server',n:'worker',who:'Workwood',t:'41:12',c:'sidekiq -C config/sidekiq.yml'});
+document.getElementById('p6').innerHTML=row({...dev,on:1,kids:null});
+</script>
+</body></html>

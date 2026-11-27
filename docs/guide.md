@@ -140,6 +140,38 @@ Everything Workwood does, one feature at a time. The [README](../README.md) has 
   - Delete: after a confirmation, removes the session's transcript and its
     subagents' transcripts from `~/.claude/projects`. This cannot be undone.
     A session that is working, or open in a terminal, cannot be deleted.
+- Servers: a dev server and its companions (a worker, a queue) running in the
+  session's folder show in the tray above the message box, in green, whoever
+  started them: Workwood, the agent, or you in a terminal (a worktree is its own
+  folder). Their ports are on the tray's line; a click opens the page. A group
+  (Foreman, `bin/dev`) shows what it started under it. Stop asks first for one
+  Workwood did not start, and stops the whole group. Workwood finds them by the
+  ports they listen on and the folder they run in; a process with no port (a
+  worker) counts when it runs beside one that listens or matches a Procfile line.
+  In the sidebar, a session's background chip shows a network icon when its
+  servers (started by its agent, or from it in Workwood) are among what runs, and
+  a project's heading shows how many servers run in its folders and worktrees,
+  whoever started them; the tooltips name them and their ports.
+  - A project lists its servers in a `Procfile.dev` or `Procfile` (one
+    `name: command` a line), and may add `.workwood/servers.json`:
+    `{ "procfile": "Procfile.dev", "setup": "bin/worktree-setup",
+    "teardown": "bin/worktree-teardown", "open": "web" }` (all optional; //
+    comments allowed). Then Start (on the tray, in ⋮, or `/serve [name…]`)
+    runs them, each on a port of its own: a block of ten for each folder, the
+    same every time, from 3100, given as `PORT` (use `$PORT` in the Procfile).
+    They also get `WORKWOOD_WORKTREE`, `WORKWOOD_BRANCH` and
+    `WORKWOOD_CHECKOUT`. The setup runs once per worktree before the first
+    start (copy the shared dev database, pick a Redis namespace); when the
+    worktree is removed, its servers stop and the teardown runs from the
+    checkout it was made from. Workwood holds their output (Output, in the side
+    panel) and can restart them. With none running, a line above the message box
+    offers Start (Settings, Sessions: "A line to start them").
+  - The agent in such a project is told to use `workwood serve` instead of
+    starting servers itself: `workwood serve [name…]` starts them and waits
+    until they are up, printing their addresses; `--status`, `--logs <name>
+    [lines]`, `--restart [name…]` and `--stop [name…]` do the rest. Servers
+    Workwood started keep running after the session; quitting Workwood asks
+    first, then stops them.
 - Terminal view: the switch in the header (chat / terminal) shows the session's
   real Claude Code terminal inside the window. It keeps running while you look
   at other sessions. A session has one owner at a time: the terminal waits for

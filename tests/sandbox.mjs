@@ -81,7 +81,7 @@ export function makeSandbox() {
   sb.env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^CLAUDE|^ANTHROPIC|^WORKWOOD|^NODE_|^npm_/.test(k))),
     HOME: home, PATH: `${bin}:${process.env.PATH}`, ASDF_DATA_DIR: process.env.ASDF_DATA_DIR || path.join(REAL_HOME, '.asdf'),
     FAKE_CLAUDE_LOG: sb.log, FAKE_CLAUDE_AGENTS: sb.agents, WORKWOOD_TOKEN: 'test-token', WORKWOOD_BG_GRACE: '400', WORKWOOD_STT: path.join(HERE, 'fake-stt.mjs'), WORKWOOD_TTS: path.join(HERE, 'fake-tts.mjs'), WORKWOOD_GPU: 'Test GPU', WORKWOOD_TERMINAL: path.join(bin, 'terminal'),
-    WORKWOOD_UPDATE_DIR: app, WORKWOOD_UPDATE_DELAY: '100', WORKWOOD_AUTO_WAIT: '2500' };
+    WORKWOOD_UPDATE_DIR: app, WORKWOOD_UPDATE_DELAY: '100', WORKWOOD_AUTO_WAIT: '2500', WORKWOOD_PORT_FROM: '4700' };
   return sb;
 }
 

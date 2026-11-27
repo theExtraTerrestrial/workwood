@@ -25,10 +25,12 @@ import * as ho from './handoff.mjs';
 import * as rw from './rewind.mjs';
 import * as phone from './phone.mjs';
 import * as pc from './presence.mjs';
+import * as sv from './servers.mjs';
 import { createRequire } from 'node:module';
 
 const UI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui');
 const TOKEN = process.env.WORKWOOD_TOKEN || randomBytes(24).toString('hex');
+const SERVE_TOKEN = randomBytes(24).toString('hex');   // for `workwood serve` in sessions: the servers and nothing else
 const PREVIEW_KEY = process.env.WORKWOOD_PREVIEW_KEY || randomBytes(24).toString('hex');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.map': 'application/json', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8',
@@ -64,6 +66,8 @@ const prefs = { defaultProfile: kept.defaultProfile || null, language: kept.lang
   cacheMinutes: CACHE_MINUTES.includes(kept.cacheMinutes) ? kept.cacheMinutes : 60,
   // the phone's notifications while you are at this PC (wait a minute, don't send, send at once), and after how many
   // minutes without input you are away
+  // a folder that lists servers, with none running: a line above the message box to start them, or only the menus
+  serveLine: kept.serveLine !== false,
   pcHold: pc.HOLDS.includes(kept.pcHold) ? kept.pcHold : 'wait', awayMin: pc.AWAY_MINS.includes(kept.awayMin) ? kept.awayMin : 5,
   // handing off: who writes the handoff (Auto picks by how much went on), and from how many tokens of context it is offered
   handoff: { model: ho.MODELS.includes(kept.handoff?.model) ? kept.handoff.model : 'auto', effort: ho.EFFORTS.includes(kept.handoff?.effort) ? kept.handoff.effort : 'medium',
@@ -157,7 +161,7 @@ async function goAuto(id, run) {
   try {
     const env = await src.envForProfile(to, state.profiles);
     touch(id); keep();
-    await startTurn({ sessionId: id, cwd: s.cwd, profile: to, env, text: run.stopped?.redo || CONTINUE, readable: [src.ATTACH_ROOT], model: run.model, effort: run.effort, mode: modeOf(run.mode) || undefined, claude: state.claude, emit, transcript: fileOf(s.cwd), thread: threadFor(id) });
+    await startTurn({ sessionId: id, cwd: s.cwd, profile: to, env, text: run.stopped?.redo || CONTINUE, readable: [src.ATTACH_ROOT], model: run.model, effort: run.effort, mode: modeOf(run.mode) || undefined, claude: state.claude, emit, transcript: fileOf(s.cwd), thread: threadFor(id), note: await serveNote(s.cwd) });
   } catch (e) { console.error('[workwood] continuing on another profile:', e.message); }
   pushState();
 }
@@ -222,14 +226,27 @@ function decorate(s) {
   if (handing.has(s.id)) { status = 'work'; line = 'Writing the handoff'; }
   return { id: s.id, title: s.title, project: s.project, cwd: s.cwd, branch: s.branch, mts: s.mts, reply: s.reply || null,
     root: s.root || s.cwd, profile: run?.profile || s.profile, status, line, outside, term, locked: (outside || term) && !!live && live.status !== 'idle',
-    unread: status === 'idle' && unread.has(s.id), done: isDone(s, status), bg: run?.bg?.size || 0,
+    unread: status === 'idle' && unread.has(s.id), done: isDone(s, status), bg: run?.bg?.size || 0, ...serversOf(s.id),
     auto: autos.has(s.id) ? { to: autos.get(s.id).to, at: autos.get(s.id).at, wait: AUTO_WAIT } : null, ...(prevOf.has(s.id) ? { thread: chainOf(s.id).length } : {}),
     ...(mine && run.status === 'waiting' && run.pending ? { ask: askOf(run.pending) } : {}) };
+}
+// The servers that are this session's: started by its agent, or started from it in Workwood. `srv`: how many are not
+// already counted among its background tasks; `nets`: what they are, for the sidebar's tooltip.
+function serversOf(id) {
+  let srv = 0; const nets = [];
+  for (const h of Object.values(srvState)) for (const x of h.list) {
+    if (x.state === 'exited') continue;
+    const linked = x.task?.sessionId === id;
+    if (!linked && x.by !== id) continue;
+    if (!linked) srv++;
+    nets.push(x.name + (x.ports.length ? ' :' + x.ports.join(' :') : ''));
+  }
+  return nets.length ? { srv, nets } : {};
 }
 // Out of the inbox: marked done with nothing new since, never worked on here and not running anywhere, or left
 // untouched for longer than the setting allows. Anything working, waiting or unread is always in.
 function isDone(s, status) {
-  if (status !== 'idle' || runs.get(s.id)?.status === 'stopped' || runs.get(s.id)?.bg?.size) return false;
+  if (status !== 'idle' || runs.get(s.id)?.status === 'stopped' || runs.get(s.id)?.bg?.size || serversOf(s.id).nets) return false;
   const at = done.get(s.id);
   if (at != null && s.mts <= at + 2) return true;
   if (unread.has(s.id)) return false;
@@ -256,9 +273,24 @@ const transcriptFile = (cwd, id) => path.join(src.PROJECTS_ROOT, cwd.replace(/[^
 // A running session's transcript, for the notes Claude Code saves there: where the list found it, or where it will be.
 const fileOf = cwd => id => state.sessions.find(x => x.id === id)?.file || transcriptFile(cwd, id);
 
+// Servers running in the folders the window shows (servers.mjs), as of the last look.
+let srvState = {};
+async function srvChanged() { srvState = await sv.serversNow(); pushState(); }
+sv.linkTasks(() => [...runs].flatMap(([sid, r]) => [...(r.bg?.values() || [])].filter(t => t.kind === 'shell' && t.cmd).map(t => ({ id: t.id, cmd: t.cmd, name: t.name, sessionId: sid }))));
+// Told to a session whose project lists its servers, with Claude Code's own instructions.
+async function serveNote(cwd) {
+  const pl = await src.placeOf(cwd), c = (await sv.confOf(pl.top)) || (await sv.confOf(pl.root));
+  if (!c?.lines.length) return null;
+  return `This project lists its servers for Workwood (${c.lines.map(l => l.name).join(', ')}, in ${c.file}). When you need them running, to check your `
+    + 'changes in a browser or with curl or because the user asks, start them with `workwood serve` from the worktree or folder you are working in, '
+    + 'instead of starting them yourself: Workwood gives each worktree its own ports, runs the project\'s setup once per worktree (its own database, for one), '
+    + 'shows the servers to the user and keeps them running after this session. It waits until they are up and prints their addresses. '
+    + '`workwood serve <name>` starts one; `workwood serve --status`, `--logs <name> [lines]`, `--restart [name]` and `--stop [name]` do the rest.';
+}
+
 const snapshot = () => ({
   profiles: state.profiles.filter(p => !adding.has(p.name)).map(({ account, ...p }) => ({ ...p, reading: reading.has(p.name), failed: failed.get(p.name) || null, stop: stops.get(p.name) || null })), next: state.next, projects: state.projects,
-  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, prefs, tts: speech.available(), plain: src.PLAIN, folders: folders(), home: src.HOME, preview: previewBase, update: update.status(), pc: pcState(),
+  sessions: state.sessions.map(decorate), ready: state.ready, fresh: state.fresh, prefs, tts: speech.available(), plain: src.PLAIN, folders: folders(), home: src.HOME, preview: previewBase, servers: srvState, update: update.status(), pc: pcState(),
 });
 let lastSent = '';
 function pushState() { const s = JSON.stringify(snapshot()); if (s !== lastSent) { lastSent = s; emit('state', JSON.parse(s)); } }
@@ -387,7 +419,7 @@ async function handOff(s, b) {
     const first = String(b.text || '').trim() || ho.FIRST;
     const h = { from: s.id, model, effort, auto: pref === 'auto', at: Date.now(), sections, facts: ho.factsText(c.facts), first, own: !!String(b.text || '').trim() };
     const id = await startTurn({ cwd: s.cwd, profile, env, text: first, readable: [src.ATTACH_ROOT], model: use.model || run?.model || undefined, effort: use.effort || run?.effort || undefined,
-      mode: modeOf(use.mode) || undefined, claude: state.claude, emit, transcript: fileOf(s.cwd), thread: threadFor(null, h, s.id) });
+      mode: modeOf(use.mode) || undefined, claude: state.claude, emit, transcript: fileOf(s.cwd), thread: threadFor(null, h, s.id), note: await serveNote(s.cwd) });
     prevOf.set(id, s.id); await ho.saveHandoff(id, h);
     titleLater.set(id, s.title);
     await listNew(id, s.cwd, s.title, profile);
@@ -531,6 +563,10 @@ async function api(req, res, url, who = null) {
     const out = await taskOutput(parts[1], url.searchParams.get('task') || '');
     return out ? send(res, 200, out) : send(res, 404, { error: 'That task is no longer running.' });
   }
+  if (req.method === 'GET' && parts[0] === 'servers' && parts[1] === 'output') {   // what a server Workwood started has printed
+    const text = sv.output(url.searchParams.get('top') || '', url.searchParams.get('id') || '');
+    return text == null ? send(res, 404, { error: 'Workwood does not hold that one\'s output.' }) : send(res, 200, { text });
+  }
   if (req.method === 'GET' && parts[0] === 'sessions' && parts[2] === 'output') {
     // the whole of what one command printed, for "Show all output"
     const s = state.sessions.find(x => x.id === parts[1]), id = url.searchParams.get('tool') || '';
@@ -543,7 +579,8 @@ async function api(req, res, url, who = null) {
     if (!s) return send(res, 404, { error: 'No such session.' });
     // Where it is working, read first: nothing may wait between taking the turn's items and reporting its state.
     const cwd = s.file ? await src.lastCwd(s.file, s.cwd) : s.cwd, pl = await src.placeOf(cwd), home = await src.placeOf(s.cwd);
-    const place = { cwd, project: path.basename(home.root), worktree: pl.worktree || (pl.root !== home.root ? path.basename(pl.root) : null), branch: pl.branch };
+    const place = { cwd, top: pl.top, project: path.basename(home.root), worktree: pl.worktree || (pl.root !== home.root ? path.basename(pl.root) : null), branch: pl.branch };
+    sv.watch(pl.top);
     const t = s.file ? await readTranscript(s.file, 400, s.cwd) : { items: [], context: null, total: 0, work: [], model: null, effort: null };
     const run = runs.get(s.id), seq = evSeq;   // what has been sent so far; the items and state below are as of then
     if (run && (run.status !== 'idle' || run.q || (run.endedAt != null && performance.now() - run.endedAt < 5000))) {
@@ -597,7 +634,20 @@ async function api(req, res, url, who = null) {
     try { return send(res, 200, await update.apply()); } catch (e) { return send(res, 409, { error: e.message }); }
   }
 
+  if (parts[0] === 'servers') {   // start a folder's servers (all, or the ones named), or stop or restart one
+    const top = String(b.top || '');
+    if (!srvState[top]) return send(res, 404, { error: 'Workwood is not looking at that folder.' });
+    try {
+      const by = state.sessions.some(x => x.id === b.sessionId) ? b.sessionId : null;   // started from this session's window
+      if (parts[1] === 'start') await sv.start(top, Array.isArray(b.names) ? b.names.map(String) : null, by);
+      else if (parts[1] === 'stop') await sv.stop(top, String(b.id || ''));
+      else if (parts[1] === 'restart') await sv.restart(top, String(b.id || ''), by);
+      else return send(res, 404, { error: 'Not found.' });
+    } catch (e) { await srvChanged(); return send(res, 409, { error: e.message }); }
+    await srvChanged(); return send(res, 200, { ok: true });
+  }
   if (parts[0] === 'settings') {
+    if ('serveLine' in b) prefs.serveLine = b.serveLine !== false;
     if ('defaultProfile' in b) prefs.defaultProfile = state.profiles.some(p => p.name === b.defaultProfile) ? b.defaultProfile : null;
     if ('doneDays' in b) prefs.doneDays = [0, 1, 3, 7, 14, 30].includes(+b.doneDays) ? +b.doneDays : 7;
     if ('bypass' in b) prefs.bypass = b.bypass === true;
@@ -710,7 +760,7 @@ async function api(req, res, url, who = null) {
     const profile = state.profiles.find(p => p.name === b.profile)?.name || state.profiles.find(p => p.global)?.name;
     const env = await src.envForProfile(profile, state.profiles);
     let content; try { content = await src.takeAttachments(b.text, b.attachments); } catch (e) { return send(res, 400, { error: e.message }); }
-    const id = await startTurn({ cwd: proj.cwd, profile, env, text: b.text || '', content, readable: [src.ATTACH_ROOT], model: b.model, effort: b.effort, mode: modeOf(b.mode), claude: state.claude, emit, transcript: fileOf(proj.cwd) });
+    const id = await startTurn({ cwd: proj.cwd, profile, env, text: b.text || '', content, readable: [src.ATTACH_ROOT], model: b.model, effort: b.effort, mode: modeOf(b.mode), claude: state.claude, emit, transcript: fileOf(proj.cwd), note: await serveNote(proj.cwd) });
     await listNew(id, proj.cwd, (b.text || '').trim().split('\n')[0].slice(0, 80) || 'Attached files', profile);
     return send(res, 200, { sessionId: id });
   }
@@ -736,7 +786,7 @@ async function api(req, res, url, who = null) {
     const env = await src.envForProfile(profile, state.profiles);
     let content; try { content = await src.takeAttachments(b.text, b.attachments); } catch (e) { return send(res, 400, { error: e.message }); }
     touch(s.id); unread.delete(s.id); keep(); rw.forget(s.id);   // the session goes on: a rewind before stays
-    await startTurn({ sessionId: s.id, cwd: s.cwd, profile, env, text: b.text || '', content, readable: [src.ATTACH_ROOT], model: b.model, effort: b.effort, mode: modeOf(b.mode), claude: state.claude, emit, transcript: fileOf(s.cwd), thread: threadFor(s.id) });
+    await startTurn({ sessionId: s.id, cwd: s.cwd, profile, env, text: b.text || '', content, readable: [src.ATTACH_ROOT], model: b.model, effort: b.effort, mode: modeOf(b.mode), claude: state.claude, emit, transcript: fileOf(s.cwd), thread: threadFor(s.id), note: await serveNote(s.cwd) });
     pushState();
     return send(res, 200, { ok: true });
   }
@@ -1255,6 +1305,10 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const host = (req.headers.host || '').split(':')[0];
     if (host !== '127.0.0.1' && host !== 'localhost') { res.writeHead(403); return res.end(); }
+    if (url.pathname === '/serve' && req.method === 'POST') {   // `workwood serve`, from a session
+      if (req.headers['x-workwood-serve'] !== SERVE_TOKEN) return send(res, 403, { error: 'Missing or wrong token.' });
+      return send(res, 200, await serveCli(await body(req)));
+    }
     if (url.pathname.startsWith('/api/')) {
       const given = req.headers['x-workwood-token'] || url.searchParams.get('token');
       if (given !== TOKEN) return send(res, 403, { error: 'Missing or wrong token.' });
@@ -1272,6 +1326,42 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// `workwood serve`: what it does in the folder it was run from, as text for the agent.
+async function serveCli(b) {
+  const cwd = typeof b.cwd === 'string' && path.isAbsolute(b.cwd) ? b.cwd : null;
+  if (!cwd) return { ok: false, text: 'No folder given.' };
+  const top = (await src.placeOf(cwd)).top, names = Array.isArray(b.names) ? b.names.map(String) : [];
+  sv.watch(top); await srvChanged();
+  // the agent that ran it: a turn working now in that folder
+  let by = null;
+  for (const [sid, r] of runs) if (r.status === 'working' && !by) { const s = state.sessions.find(x => x.id === sid), at = r.builder?.shellDir || s?.cwd; if (at && (await src.placeOf(at)).top === top) by = sid; }
+  const where = s => s.ports.length ? s.ports.map(p => `http://localhost:${p}`).join(' ') : 'no port';
+  const who = { workwood: 'started by Workwood', agent: 'started by an agent', you: 'started outside Workwood' };
+  const list = () => (srvState[top]?.list || []).map(s => `${s.name}: ${s.state === 'exited' ? `exited (code ${s.code})` : where(s)} (${who[s.who]}${s.cmd ? ', ' + s.cmd : ''})`
+    + s.kids.map(k => `\n  ${k.name}: ${k.ports.length ? k.ports.map(p => `http://localhost:${p}`).join(' ') : 'no port'}`).join(''));
+  try {
+    if (b.op === 'status') { const l = list(); return { text: l.length ? l.join('\n') : 'Nothing runs in ' + top + '.' }; }
+    if (b.op === 'logs') {
+      const s = srvState[top]?.list.find(x => x.name === names[0] && x.who === 'workwood');
+      if (!s) return { ok: false, text: `Workwood did not start a server named ${names[0]} here, so it does not have its output.` };
+      return { text: (sv.output(top, s.id) || '').split('\n').slice(-Math.max(1, Math.min(+b.lines || 100, 5000))).join('\n') || '(nothing printed yet)' };
+    }
+    if (b.op === 'stop') { const n = await sv.stopNamed(top, names.length ? names : null); await srvChanged(); return { text: n.length ? 'Stopped ' + n.join(', ') + '.' : 'Nothing to stop.' }; }
+    if (b.op === 'restart') {
+      const l = (srvState[top]?.list || []).filter(s => !names.length || names.includes(s.name) || s.lines?.some(n => names.includes(n)));
+      for (const s of l) await sv.restart(top, s.id, by);
+      if (!l.length) await sv.start(top, names.length ? names : null, by);
+    } else if (b.op === 'start') await sv.start(top, names.length ? names : null, by);
+    else return { ok: false, text: 'Unknown operation.' };
+    const conf = await sv.confOf(top), want = names.length ? names : conf.lines.map(l => l.name);
+    const up = await sv.ready(top, want);
+    await srvChanged();
+    const bad = up.filter(u => !u.ok);
+    return { ok: !bad.length, text: up.map(u => `${u.name}: ${u.ok === true ? `up at http://localhost:${u.port}` : u.ok ? 'running' : u.code != null ? `exited with code ${u.code}` : `not listening on ${u.port} yet`}`).join('\n')
+      + (bad.length ? `\n\nSee its output: workwood serve --logs ${bad[0].name}` : '') };
+  } catch (e) { await srvChanged(); return { ok: false, text: e.message }; }
+}
+
 /** Starts the service and resolves with the address to open. */
 export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
   src.clearOldAttachments(); src.clearOldAttachments(30, PICTURE_ROOT); voice.prefer(prefs.speech);
@@ -1287,7 +1377,12 @@ export async function start(port = Number(process.env.WORKWOOD_PORT) || 0) {
   update.watch(pushState);
   if (phone.isOn()) phoneUp();
   setInterval(watchLimits, 60000).unref();
-  process.on('exit', closeAll); process.on('exit', speech.stop);
+  process.on('exit', closeAll); process.on('exit', speech.stop); process.on('exit', sv.stopAll);
+  // Stopped by a signal (not the window, which quits through 'exit'): the servers Workwood started stop with it.
+  if (!process.versions.electron) for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.once(sig, () => process.exit(0));
+  sv.watchServers(srvChanged);
+  src.addTurnEnv({ WORKWOOD_SERVE: `http://127.0.0.1:${server.address().port}/serve`, WORKWOOD_SERVE_TOKEN: SERVE_TOKEN,
+    WORKWOOD_NODE: process.execPath, PATH: path.join(path.dirname(fileURLToPath(import.meta.url)), 'bin') + path.delimiter + (process.env.PATH || '') });
   return { address };
 }
 

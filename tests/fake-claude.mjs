@@ -404,6 +404,39 @@ async function turn(prompt, said = prompt, uuid) {
     } else text('Both directions are ready.');
     return finish('ok');
   }
+  if (/\bSERVE\b/.test(prompt)) {   // runs `workwood serve …` (the words after SERVE) in its folder, as the agent would, and says what it printed
+    record({ type: 'user', uuid: turnUuid || randomUUID(), message: { role: 'user', content: said } });
+    const words = prompt.split(/\s+/).slice(prompt.split(/\s+/).indexOf('SERVE') + 1);
+    say([{ type: 'tool_use', id: 'toolu_serve', name: 'Bash', input: { command: 'workwood ' + words.join(' '), description: 'Start the servers' } }]);
+    const { execFile } = await import('node:child_process');
+    const got = await new Promise(r => execFile('workwood', words, { cwd, env: process.env }, (e, so, se) => r({ code: e ? e.code : 0, text: so + se })));
+    result('toolu_serve', got.text, { stdout: got.text, stderr: '', interrupted: false });
+    text(`Served (${got.code}): ${got.text}`);
+    return finish('ok');
+  }
+  if (/\bAGENTSERVER\b/.test(prompt)) {   // a server started with a background command, as Claude Code's shell runs it: AGENTSERVER <port>
+    record({ type: 'user', uuid: turnUuid || randomUUID(), message: { role: 'user', content: said } });
+    const port = /AGENTSERVER (\d+)/.exec(prompt)[1], command = `python3 -m http.server ${port}`;
+    const dir = path.join(home, '.tasks', sessionId); fs.mkdirSync(dir, { recursive: true });
+    const { spawn } = await import('node:child_process');
+    const sh = spawn('/bin/bash', ['-c', `source /dev/null && eval '${command}' < /dev/null`], { cwd, stdio: 'ignore', detached: true });   // stopped as a tree, as Claude Code does
+    bgAlive = true;
+    say([{ type: 'tool_use', id: 'toolu_web', name: 'Bash', input: { command, description: 'Run the site', run_in_background: true } }]);
+    sys('task_started', { task_id: 'task_web', tool_use_id: 'toolu_web', description: 'Run the site', task_type: 'local_bash', is_backgrounded: true });
+    sys('background_tasks_changed', { tasks: [{ task_id: 'task_web', task_type: 'local_bash', description: 'Run the site' }] });
+    fs.writeFileSync(path.join(dir, 'task_web.output'), '');
+    result('toolu_web', `Command running in background with ID: task_web. Output is being written to: ${path.join(dir, 'task_web.output')}.`, { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'task_web' });
+    text('Running.');
+    finish('ok');
+    stopTask = id => {
+      if (id !== 'task_web') return;
+      bgAlive = false; try { process.kill(-sh.pid); } catch {}
+      sys('task_notification', { task_id: 'task_web', tool_use_id: 'toolu_web', status: 'stopped', output_file: path.join(dir, 'task_web.output'), summary: 'Stopped' });
+      sys('background_tasks_changed', { tasks: [] });
+    };
+    process.on('exit', () => { try { process.kill(-sh.pid); } catch {} });
+    return;
+  }
   if (/\bSLOW\b/.test(prompt)) {
     say([{ type: 'tool_use', id: 'toolu_slow', name: 'Bash', input: { command: 'sleep 600', description: 'Wait a long time' } }]);
     return; // stays busy until interrupted

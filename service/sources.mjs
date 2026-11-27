@@ -393,16 +393,19 @@ export async function createProject(name, folder = WORKSPACE) {
 
 let version;   // Claude Code's, read once
 /** Environment for a session on a given profile. The global profile is simply ~/.claude. */
+// What every session Workwood runs gets on top: how to reach `workwood serve`.
+const turnEnv = {};
+export const addTurnEnv = v => Object.assign(turnEnv, v);
 export async function envForProfile(profile, profiles) {
   const p = profiles.find(x => x.name === profile);
-  if (!p || p.global) return cleanEnv();
+  if (!p || p.global) return cleanEnv(turnEnv);
   const dir = path.join(PROFILE_ROOT, profile);
   if (!(await readCreds(dir))?.claudeAiOauth) throw new Error(`Profile ${profile} has no saved sign-in.`);
   // Wire the shared history, as `claudius run` would, and bring a copy of the live sign-in up to date. A lapsed
   // token is left for Claude Code to renew when it starts: it takes the same renewal lock as Workwood and Claudius.
   try { await prof.link(profile, version ??= await claudeVersion(CLAUDE)); } catch (e) { console.error('[workwood] link:', String(e.message).split('\n')[0]); }
   await prof.adoptLive(p);
-  return cleanEnv({ CLAUDE_CONFIG_DIR: dir });
+  return cleanEnv({ ...turnEnv, CLAUDE_CONFIG_DIR: dir });
 }
 
 // What a session gets when you choose nothing: the model, effort and permission mode from Claude Code's own settings,

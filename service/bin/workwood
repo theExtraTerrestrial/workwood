@@ -1,0 +1,4 @@
+#!/bin/sh
+# `workwood serve`: starts this folder's servers in Workwood (see service/serve-cli.mjs). Put on the PATH of the
+# sessions Workwood runs.
+ELECTRON_RUN_AS_NODE=1 exec "${WORKWOOD_NODE:-node}" "$(dirname "$0")/../serve-cli.mjs" "$@"

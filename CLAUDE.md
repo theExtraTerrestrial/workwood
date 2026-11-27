@@ -27,5 +27,8 @@ own git worktree, never in the main checkout:
 
 - A failing window test leaves its evidence in `<tmp>/workwood-test-failures/<run>/<test>/` (a Playwright trace, a
   screenshot, the fake agent's log, the service's events and stderr, and any step of the clock). Read that first.
+- This computer's clock steps back up to a second now and then (WSL). Code that decides by how long something took, or
+  which of two things came first, uses `performance.now()` or a counter, never two `Date.now()` readings. Dates that are
+  shown or saved stay on `Date.now()`.
 - Use `npm run test:stress -- "<part of a test's name>" [runs] [--before N]` only when the evidence is missing or does
   not explain the failure, and to confirm a fix. It is never part of `npm test`.

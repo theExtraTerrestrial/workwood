@@ -317,7 +317,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
             if (more > 0) { follows = true; run.activity = 'Reading your message'; sayState(); continue; }
             if (!run.bg.size) break;
             // work left running in the background keeps the session open; the turn itself is over
-            run.lingering = true; run.status = 'idle'; run.activity = null; run.endedAt = Date.now();
+            run.lingering = true; run.status = 'idle'; run.activity = null; run.endedAt = performance.now();
             sayState(); turnOver();
           }
         }
@@ -328,7 +328,7 @@ export function startTurn({ sessionId, cwd, profile, env, text, content = text, 
         endTurn(); clearInterval(run.timer); await readNotes().catch(() => {});
         // Nothing reads what Claude Code says from here on, so it must not go on working: it is closed, with what it still ran.
         try { run.q?.close(); } catch {}
-        run.pending = null; run.q = null; run.endedAt = Date.now(); run.lingering = false; run.bg.clear();
+        run.pending = null; run.q = null; run.endedAt = performance.now(); run.lingering = false; run.bg.clear();
         // Only a limit or a lost sign-in holds the session for you to act on; any other error ends the turn, with a note saying what went wrong.
         run.status = run.stopped && run.stopped.reason !== 'error' ? 'stopped' : 'idle';
         run.activity = null;

@@ -2535,8 +2535,12 @@ ui('window: the mic button dictates into the message box, after what was typed; 
   await page.mouse.down();
   await page.waitForSelector('#box.rec');
   await page.waitForFunction(() => /dictated words/.test(document.getElementById('input').value));
-  await page.mouse.up();
-  await page.waitForSelector('#voice', { state: 'hidden' });
+  // the clock steps back while the button is held (WSL sets it back up to a second at a time): letting go still stops
+  await page.evaluate(() => { const real = Date.now; window.__realNow = real; Date.now = () => real() - 5000; });
+  try {
+    await page.mouse.up();
+    await page.waitForSelector('#voice', { state: 'hidden' });
+  } finally { await page.evaluate(() => { if (window.__realNow) Date.now = window.__realNow; }); }
   assert.match(await page.inputValue('#input'), /^dictated words/);
   await page.fill('#input', '');
 });

@@ -708,14 +708,14 @@ function renderCtx(){const c=V.context,m=$('mCtx');if(!c||V.isNew){m.hidden=true
 $('pCtx').onclick=e=>{e.stopPropagation();const was=$('mCtx').hidden;closePops();hideTip();if(!was)return;
   $('mCtx').hidden=false;$('pCtx').classList.add('open');
   const id=V.sel;
-  if(V.ctx?.id!==id||Date.now()-V.ctx.at>30000)countCtx(id);
+  if(V.ctx?.id!==id||performance.now()-V.ctx.at>30000)countCtx(id);
   renderCtx()};
 // Claude Code's own count, asked only when the breakdown is opened: it starts Claude Code on the session for a moment
 // (about a second and a few hundred MB), too much for every session clicked in passing. Until then the meter shows the
 // last reply's size, which a turn here brings up to date when it ends, /compact included.
-function countCtx(id){V.ctx={id,at:Date.now()};
-  api(`sessions/${id}/context`).then(r=>{V.ctx={id,at:Date.now(),rows:r.rows};if(V.sel===id&&r.window&&!isWorking()){V.context={...V.context,used:r.used,window:r.window};renderComposer()}},
-    err=>{V.ctx={id,at:0,err:'The breakdown is not available ('+err.message+')'}}).then(()=>{if(V.sel===id&&!$('mCtx').hidden)renderCtx()})}
+function countCtx(id){V.ctx={id,at:performance.now()};
+  api(`sessions/${id}/context`).then(r=>{V.ctx={id,at:performance.now(),rows:r.rows};if(V.sel===id&&r.window&&!isWorking()){V.context={...V.context,used:r.used,window:r.window};renderComposer()}},
+    err=>{V.ctx={id,at:-Infinity,err:'The breakdown is not available ('+err.message+')'}}).then(()=>{if(V.sel===id&&!$('mCtx').hidden)renderCtx()})}
 $('mCtx').onclick=e=>{e.stopPropagation();
   if(e.target.closest('[data-hpick]'))return openHPick(e.target.closest('[data-hpick]'));
   if(e.target.closest('[data-compact]')&&!isWorking()){closePops();sendText('/compact')}
@@ -826,10 +826,10 @@ function rwPickKey(e){
   return false;
 }
 // Esc twice within half a second: as in Claude Code, it first clears what you typed; in an empty box it opens the list.
-let lastEsc=0;
+let lastEsc=-Infinity;
 function escEsc(e){
   if(e.key!=='Escape'||e.repeat||V.isNew)return false;
-  const now=Date.now(),twice=now-lastEsc<500;lastEsc=twice?0:now;if(!twice)return false;
+  const now=performance.now(),twice=now-lastEsc<500;lastEsc=twice?-Infinity:now;if(!twice)return false;
   if(input.value){input.value='';V.att=[];renderAtt();grow();fitSend();renderSlash();return true}
   if(!busy()){e.stopPropagation();setTimeout(openPick);return true}
   return false;
@@ -1284,7 +1284,7 @@ function toBottom(force){const s=$('scroll');if(force||!awayNow())s.scrollTop=s.
 // arrow brings it: its first line at the top of the view, or the end if all of it fits. Anything else follows the end.
 function follow(end,reply){
   if(landing)land();   // already bringing a reply in: it stays where it is going, whatever arrives under it
-  else if(end&&reply!=null){landing={n:reply,until:Date.now()+4000};land()}
+  else if(end&&reply!=null){landing={n:reply,until:performance.now()+4000};land()}
   else if(end){const s=$('scroll');s.scrollTop=s.scrollHeight}
   paintJump()}
 
@@ -1310,13 +1310,13 @@ function paintJump(){
 // reply does not end up low in the view with the rest of it out of sight. Scrolling yourself ends that.
 let landing=null;
 function land(){
-  if(!landing)return;if(Date.now()>landing.until){landing=null;return}
+  if(!landing)return;if(performance.now()>landing.until){landing=null;return}
   const s=$('scroll'),el=landing.n!=null&&$('thread').querySelector(`[data-k="i${landing.n}"]`),max=s.scrollHeight-s.clientHeight;
   const head=el&&el.previousElementSibling?.dataset.k==='newline'?el.previousElementSibling:el;
   const to=Math.max(0,Math.min(max,head?head.offsetTop-16:max));
   if(Math.abs(to-s.scrollTop)>2)s.scrollTo({top:to,behavior:landing.smooth?'smooth':'auto'})}
 $('jump').onclick=()=>{const s=$('scroll'),line=J.unseen.size&&$('thread').querySelector('[data-k="newline"]');
-  landing={n:line&&line.offsetTop-16>s.scrollTop+4?J.at:null,until:Date.now()+4000,smooth:true};land()};
+  landing={n:line&&line.offsetTop-16>s.scrollTop+4?J.at:null,until:performance.now()+4000,smooth:true};land()};
 new ResizeObserver(land).observe($('thread'));new ResizeObserver(land).observe($('scroll'));
 for(const ev of ['wheel','touchstart','pointerdown','keydown'])$('scroll').addEventListener(ev,()=>{landing=null},{passive:true});
 
@@ -1506,14 +1506,14 @@ async function startVoice(target='input'){
     const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true}});
     R.stream=stream;
     const ctx=new AudioContext({sampleRate:16000}),node=ctx.createScriptProcessor(4096,1,1),bars=[...$('wave').children];
-    Object.assign(R,{done:false,note:'',ctx,chunks:[],off:0,n:0,from:0,seen:0,spoke:false,gap:0,fixed:[],guess:'',chain:Promise.resolve(),t0:Date.now(),base:$(target)?.value||''});
+    Object.assign(R,{done:false,note:'',ctx,chunks:[],off:0,n:0,from:0,seen:0,spoke:false,gap:0,fixed:[],guess:'',chain:Promise.resolve(),t0:performance.now(),base:$(target)?.value||''});
     node.onaudioprocess=e=>{const r=R;if(!r||r.done)return;const d=new Float32Array(e.inputBuffer.getChannelData(0));r.chunks.push(d);r.n+=d.length;
       let p=0,sq=0;for(const v of d){p=Math.max(p,Math.abs(v));sq+=v*v}
       bars.forEach((b,i)=>{b.style.transform=`scaleY(${Math.max(.15,Math.min(1,p*3*(.55+.45*Math.sin(i*1.7+r.n/3000))))})`});
       if(Math.sqrt(sq/d.length)>QUIET){r.spoke=true;r.gap=0}else r.gap++;
       if((r.spoke&&r.gap>=PAUSE)||r.n-r.from>=LONGEST||(!r.spoke&&r.n-r.from>16000*4))closePiece(r)};
     ctx.createMediaStreamSource(stream).connect(node);node.connect(ctx.destination);
-    R.timer=setInterval(async()=>{const r=R;if(!r||r.done)return;const s=Math.floor((Date.now()-r.t0)/1000);$('vtime').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}${r.note}`;
+    R.timer=setInterval(async()=>{const r=R;if(!r||r.done)return;const s=Math.floor((performance.now()-r.t0)/1000);$('vtime').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}${r.note}`;
       if(r.asking||!r.spoke||r.n-r.seen<16000)return;r.asking=true;r.seen=r.n;const from=r.from;
       try{const j=await hear(cut(r,from,r.n),true);if(R===r&&!r.done&&r.from===from&&j.text!=null){r.guess=j.text;showSaid(r,r.guess)}}catch{}r.asking=false},500);
     $('vtime').textContent='0:00';voiceLook();watchModel(R);if(R.letGo)stopVoice();
@@ -1532,10 +1532,10 @@ function stopVoice(keep=true){
 }
 // Click to start and click to stop, or hold the button while you speak and let go.
 let micDown=0,micHeld=false;
-function micPress(e,target){if(e.button)return;hideTip();if(R){micHeld=false;stopVoice()}else{micHeld=true;micDown=Date.now();startVoice(target)}}
+function micPress(e,target){if(e.button)return;hideTip();if(R){micHeld=false;stopVoice()}else{micHeld=true;micDown=performance.now();startVoice(target)}}
 $('mic').addEventListener('pointerdown',e=>micPress(e,'input'));
 $('qcard').addEventListener('pointerdown',e=>{if(e.target.closest('[data-mic]')){e.preventDefault();micPress(e,'qText')}});   // the answer field keeps the focus
-addEventListener('pointerup',()=>{if(!micHeld)return;micHeld=false;if(Date.now()-micDown<450||!R)return;R.done&&!R.ctx?R.letGo=true:stopVoice()});
+addEventListener('pointerup',()=>{if(!micHeld)return;micHeld=false;if(performance.now()-micDown<450||!R)return;R.done&&!R.ctx?R.letGo=true:stopVoice()});
 $('mic').onclick=e=>{if(e.detail===0)R?stopVoice():startVoice()};   // from the keyboard
 $('vCancel').onclick=()=>stopVoice(false);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&R&&!R.done){e.stopPropagation();stopVoice(false)}},true);
@@ -1938,7 +1938,7 @@ addEventListener('resize',fitSide);
    data-tip-full the element's own text, only while it is cut off */
 const TIPSEL='[data-tip],[data-tip-path],[data-tip-full],[data-fpath]';
 let tipFor=null,tipTimer,tipShown=false,tipWarm=0;
-function hideTip(){clearTimeout(tipTimer);if(tipShown)tipWarm=Date.now()+500;tipShown=false;tipFor=null;const t=$('tip');t.hidden=true;t.classList.remove('on')}
+function hideTip(){clearTimeout(tipTimer);if(tipShown)tipWarm=performance.now()+500;tipShown=false;tipFor=null;const t=$('tip');t.hidden=true;t.classList.remove('on')}
 function tipHtml(el){
   const d=el.dataset;
   if(d.fpath!=null){const f=FP.get(V.sel+'|'+d.fpath),p=x=>{const i=x.lastIndexOf('/')+1;return `<span class="dir">${esc(x.slice(0,i)).replace(/\//g,'/<wbr>')}</span>${esc(x.slice(i))}`};
@@ -1964,7 +1964,7 @@ function showTip(el){
 document.addEventListener('mouseover',e=>{
   const el=e.target.closest?.(TIPSEL);if(el===tipFor)return;
   hideTip();if(!el)return;tipFor=el;const ready=el.dataset.fpath!=null&&fpath(el.dataset.fpath);   // a named path is looked up while the note waits
-  tipTimer=setTimeout(()=>{if(tipFor!==el)return;if(ready)ready.then(()=>{if(tipFor===el)showTip(el)});else showTip(el)},Date.now()<tipWarm?0:450);
+  tipTimer=setTimeout(()=>{if(tipFor!==el)return;if(ready)ready.then(()=>{if(tipFor===el)showTip(el)});else showTip(el)},performance.now()<tipWarm?0:450);
 });
 for(const ev of ['pointerdown','keydown','wheel','blur'])addEventListener(ev,()=>{hideTip();tipWarm=0},true);
 
@@ -2035,7 +2035,7 @@ function renderCard(){
   if(!show){c._h=null;return}
   const put=h=>{const k=(p?.id||'')+h;if(c._h===k)return false;c._h=k;if(c.contains($('voice')))$('mic').before($('voice'));c.innerHTML=h;hydrate(c);voiceLook();return true};   // an unchanged card is left alone: its scroll position and typed text survive live updates
   if(st){if(put(stoppedCard(st)))autoTick();return}
-  if(V.q.id!==p.id)V.q={id:p.id,step:0,picks:{},typed:{},show:{},auto:null,at:Date.now()};
+  if(V.q.id!==p.id)V.q={id:p.id,step:0,picks:{},typed:{},show:{},auto:null,at:performance.now()};
   if(p.kind==='question'){
     const qs=p.input.questions,i=Math.min(V.q.step,qs.length-1),q=qs[i],picked=V.q.picks[i]||[];
     const set=compareSet();
@@ -2110,7 +2110,7 @@ function cardKey(e){
   if(e.key!=='Enter'&&e.key!=='Escape')return;
   if(e.shiftKey||e.repeat)return;
   const p=V.run?.pending;
-  if(p&&!inBox&&Date.now()-(V.q.at||0)<500)return;
+  if(p&&!inBox&&performance.now()-(V.q.at||0)<500)return;
   let b;
   if(e.key==='Enter'){
     if(!p||(p.kind==='unknown'&&!$('qText')?.value.trim()))return;
@@ -2905,7 +2905,7 @@ function phCache(){
   el.className='phcache '+(s.status!=='idle'?'go':left>600000?'go':left>0?'mid':'');
   el.innerHTML=s.status==='work'?'<i></i>Working':s.status==='wait'?'<i></i>Waiting for you':left>600000?`<i></i>Warm · ${hm(left)}`:left>0?`<i></i>Cools in ${hm(left)}`:'<i></i>Cache cold';
 }
-function phViewing(){const id=!document.hidden&&!V.isNew&&V.sel?V.sel:null;if(id===phLastV.id&&Date.now()-phLastV.at<25000)return;phLastV={id,at:Date.now()};api('phone/viewing',{sessionId:id}).catch(()=>{})}
+function phViewing(){const id=!document.hidden&&!V.isNew&&V.sel?V.sel:null;if(id===phLastV.id&&performance.now()-phLastV.at<25000)return;phLastV={id,at:performance.now()};api('phone/viewing',{sessionId:id}).catch(()=>{})}
 
 /* the drawer: "Start in" for a new session, "This session" for one open; the context page behind it */
 function phOpen(k){if(phScreen()==='home')return;phDr=k;$('phDim').hidden=false;phDrawer();if(k==='main')loadDefaults()}
@@ -2940,8 +2940,8 @@ async function phDrawerClick(e){
   else if('dm' in d){choose('model',d.dm);renderComposer()}
   else if('de' in d){choose('effort',d.de);renderComposer()}
   else if(d.dmode){await pickMode(d.dmode)}
-  else if('dctx' in d){phDr='ctx';const id=V.sel;V.ctx={id,at:Date.now()};
-    api(`sessions/${id}/context`).then(r=>{V.ctx={id,at:Date.now(),rows:r.rows}},err=>{V.ctx={id,at:0,err:'The breakdown is not available ('+err.message+')'}}).then(()=>{if(phDr==='ctx'&&V.sel===id)phDrawer()})}
+  else if('dctx' in d){phDr='ctx';const id=V.sel;V.ctx={id,at:performance.now()};
+    api(`sessions/${id}/context`).then(r=>{V.ctx={id,at:performance.now(),rows:r.rows}},err=>{V.ctx={id,at:-Infinity,err:'The breakdown is not available ('+err.message+')'}}).then(()=>{if(phDr==='ctx'&&V.sel===id)phDrawer()})}
   else if('dho' in d){if(isWorking()||V.handing)return;phClose();handOff();return}
   else if('dcompact' in d){if(isWorking())return;phClose();sendText('/compact');return}
   phRender();phDrawer();

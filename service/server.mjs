@@ -85,7 +85,9 @@ function threadFor(id, h = ho.readHandoff(id), upTo = prevOf.get(id)) {
   return { note: h ? ho.noteFor(h, earlier.length + 1) : null, mcp: ho.recallServer(sessionsOf), tool: ho.RECALL };
 }
 const touch = id => { (own ||= new Set()).add(id); done.delete(id); };   // new work here brings a session back into the inbox
-const renamed = new Map();   // session -> [when, name], for a list that was being read while you renamed
+const renamed = new Map();   // session -> [order, name], for a list that was being read while you renamed
+// Which came first is told by a count, not the clock: this computer's clock can step back (WSL sets it back up to a second).
+let order = 0;
 const deleted = new Set();   // gone, but a list read a moment earlier may still name them
 const clients = new Set();
 const workPaths = new Map(); // session -> every previewable file it is known to have made
@@ -159,7 +161,7 @@ async function goAuto(id, run) {
 async function nameLater(id) {
   const title = titleLater.get(id), s = state.sessions.find(x => x.id === id);
   if (!title || !s?.file) return;
-  try { await src.renameSession(s.file, id, title); titleLater.delete(id); s.title = title; renamed.set(id, [Date.now(), title]); pushState(); } catch {}
+  try { await src.renameSession(s.file, id, title); titleLater.delete(id); s.title = title; renamed.set(id, [++order, title]); pushState(); } catch {}
 }
 const readings = usage.makeQueue((name, ev) => {
   if (ev.queued || ev.reading) reading.add(name); else reading.delete(name);
@@ -255,7 +257,7 @@ function refreshAll() {
   return following ||= refreshing.catch(() => {}).then(() => { following = null; return refreshAll(); });
 }
 async function doRefresh() {
-  const began = Date.now();
+  const began = ++order;
   // Profiles first: the sessions are tagged with the account that ran them.
   const profiles = await src.loadProfiles();
   const nextP = src.loadNext();
@@ -264,7 +266,7 @@ async function doRefresh() {
   const sessions = await src.tagSessions(list, state.profiles);
   if (sessions) {
     for (let i = sessions.length - 1; i >= 0; i--) if (deleted.has(sessions[i].id)) sessions.splice(i, 1);
-    for (const s of sessions) { const r = renamed.get(s.id); if (r && r[0] >= began) s.title = r[1]; else if (r) renamed.delete(s.id); }
+    for (const s of sessions) { const r = renamed.get(s.id); if (r && r[0] > began) s.title = r[1]; else if (r) renamed.delete(s.id); }
     // A session started here appears in the pool a moment later; keep it listed meanwhile.
     for (const [id, run] of runs) if (!deleted.has(id) && !sessions.some(s => s.id === id)) {
       const old = state.sessions.find(s => s.id === id);
@@ -347,7 +349,7 @@ async function listNew(id, cwd, title, profile) {
 function rewound(s) {
   forgetEarly(s.file); counted.delete(s.id);
   const run = runs.get(s.id);
-  if (run) { run.context = null; run.endedAt = 0; }   // the last turn in memory may be one that was taken out
+  if (run) { run.context = null; run.endedAt = null; }   // the last turn in memory may be one that was taken out
   setTimeout(() => { refreshAll(); }, 100); pushState();
 }
 const rewoundOf = id => { const k = rw.kept(id); return k ? { turns: k.turns, undone: k.undone, text: k.text, filesError: k.filesError || null } : null; };
@@ -514,7 +516,7 @@ async function api(req, res, url, who = null) {
     const place = { cwd, project: path.basename(home.root), worktree: pl.worktree || (pl.root !== home.root ? path.basename(pl.root) : null), branch: pl.branch };
     const t = s.file ? await readTranscript(s.file, 400, s.cwd) : { items: [], context: null, total: 0, work: [], model: null, effort: null };
     const run = runs.get(s.id), seq = evSeq;   // what has been sent so far; the items and state below are as of then
-    if (run && (run.status !== 'idle' || run.q || Date.now() - (run.endedAt || 0) < 5000)) {
+    if (run && (run.status !== 'idle' || run.q || (run.endedAt != null && performance.now() - run.endedAt < 5000))) {
       // The current turn (or one that ended a moment ago, before the window had opened it) is still in memory:
       // show it from there, not from what has reached the file so far.
       const live = run.builder.items.map(({ open, ...it }) => it), firstUser = live.find(i => i.kind === 'user');
@@ -793,7 +795,7 @@ async function api(req, res, url, who = null) {
       const title = String(b.title || '').replace(/\s+/g, ' ').trim().slice(0, 120);
       if (!title) return send(res, 400, { error: 'Type a name first.' });
       try { await src.renameSession(s.file, s.id, title); } catch { return send(res, 409, { error: 'This session has no saved history yet. Try again in a moment.' }); }
-      s.title = title; if (run) run.title = title; renamed.set(s.id, [Date.now(), title]);
+      s.title = title; if (run) run.title = title; renamed.set(s.id, [++order, title]);
       if (done.has(s.id)) { done.set(s.id, nowS() + 5); await keep(); }   // a new name is not new work
     } else if (parts[2] === 'terminal') {
       if (busy) return send(res, 409, { error: 'This session is working here. Stop it or let it finish, then open it in a terminal.' });

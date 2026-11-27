@@ -3182,7 +3182,10 @@ function phInit(){
   addEventListener('popstate',()=>{if(phSkipPop){phSkipPop=false;return}
     if(!$('panel').hidden&&!history.state?.pane){V.pv=null;V.full=false;V.side=null;renderPanel();return}
     if(!V.isNew&&PT==='session'){PT='sessions';render()}});
-  addEventListener('beforeinstallprompt',e=>{e.preventDefault();phInstall=e;phSettings()});
+  addEventListener('beforeinstallprompt',e=>{e.preventDefault();phInstall=e;phSettings();phAddUi()});
+  addEventListener('appinstalled',()=>{phAdded=true;phAsk=false;phSettings();phAddUi()});
+  const strip=document.createElement('div');strip.id='phStrip';strip.className='phstrip';strip.hidden=true;$('dash').before(strip);strip.onclick=phAddClick;
+  phAsk=!phStandalone()&&!sessionStorage.getItem('ww.addAsked');phAddUi();
   navigator.serviceWorker?.addEventListener('message',e=>{if(e.data?.ww==='open')phFromNote(e.data.session,e.data.act)});
   navigator.serviceWorker?.register('/sw.js').then(()=>phResubscribe()).catch(()=>{});
   api('phone/me').then(m=>{phMe=m;phRender()}).catch(()=>{});
@@ -3201,7 +3204,7 @@ function phFit(){const st=$('stage'),on=!!V.pvFit;$('pvw').classList.toggle('fit
 function phGo(k){phClose();if(k==='home'||k==='new'){PT=k;newSession();if(k==='home')$('input').blur()}else{PT=k;render()}if(k==='settings')phSettings();$('scroll').scrollTop=0}
 function phFromNote(sid,act){if(!sid)return;phAfter={s:sid,act};PT='session';openSession(sid)}
 function phRender(){
-  const sc=phScreen();document.documentElement.dataset.pt=sc;
+  const sc=phScreen();document.documentElement.dataset.pt=sc;phAddUi();
   $('ptabs').querySelectorAll('[data-pt]').forEach(b=>b.classList.toggle('on',b.dataset.pt===sc));
   $('ptabs').querySelector('[data-pt=sessions] u').textContent=A.sessions.filter(s=>s.status==='wait').length||'';
   if(sc==='session'&&history.state?.ph!==V.sel)history.pushState({ph:V.sel},'','#'+V.sel);
@@ -3316,6 +3319,39 @@ async function phDrawerClick(e){
   phRender();phDrawer();
 }
 
+/* Not on the Home Screen yet: in a browser tab, each visit asks right where the phone lands (Chrome's own install box
+   once it offers one, until then where its menu has it), then a strip on Home stays until it is added or put off for a
+   week. Chrome leaves the tab open after adding it, so the tab then says where Workwood is now. */
+let phAsk=false,phAdded=false;
+const PH_LATER='ww.addLater';
+function phAddUi(){
+  const el=$('phAdd')||Object.assign(document.createElement('div'),{id:'phAdd',onclick:phAddClick}),sa=phStandalone(),icon='<img src="/icon-192.png" alt="">';
+  if(!el.isConnected)document.body.appendChild(el);
+  if(phAdded&&phAdded!=='kept'&&!sa){el.className='phok';el.hidden=false;
+    if(!el.querySelector('[data-padd-keep]'))el.innerHTML=`${icon}<h2>Workwood is on your Home Screen</h2><p>Open it from there. You can close this tab.</p><button data-padd-keep>Keep using the browser</button>`}
+  else if(phAsk&&!phAdded&&!sa){el.className='phdim';el.hidden=false;const k=phInstall?'go':phIos()?'ios':'menu';
+    if(el.dataset.k!==k){el.dataset.k=k;el.innerHTML=`<div class="phdr phadd"><div class="pdg"></div><div class="pah">${icon}<span><b>Add Workwood</b><small>to your Home Screen</small></span></div>${
+      k==='go'?'<p>Opens full screen like an app, and can tell you when a session needs you.</p>'
+      :k==='ios'?'<div class="pahow">Tap <b>Share</b> › <b>Add to Home Screen</b>, then open Workwood from there. Notifications need it.</div>'
+      :'<div class="pahow">Tap <b>⋮</b> at the top › <b>Add to Home screen</b> or <b>Install app</b></div>'
+    }<div class="pabt"><button data-padd-no>Not now</button>${k==='go'?'<button class="y" data-padd-go>Add</button>':''}</div></div>`}}
+  else{el.hidden=true;el.dataset.k=''}
+  const st=$('phStrip');if(!st)return;
+  const show=!sa&&!phAdded&&!phAsk&&!(Number(localStorage.getItem(PH_LATER))>Date.now());
+  st.hidden=!show;if(show&&!st.innerHTML)st.innerHTML=`${icon}<span>Add to Home Screen<small>Full screen, with notifications</small></span><button class="y" data-padd-strip>Add</button><button class="ib" data-padd-later aria-label="Not this week">${svg('x')}</button>`;
+}
+async function phAddNow(){
+  const e=phInstall;if(!e){phAsk=true;phAddUi();return}
+  phInstall=null;e.prompt();const c=await e.userChoice.catch(()=>null);
+  if(c?.outcome==='accepted')phAdded=true;phAskDone();phSettings();
+}
+function phAskDone(){phAsk=false;sessionStorage.setItem('ww.addAsked','1');phAddUi()}
+function phAddClick(e){const t=e.target;
+  if(t.closest('[data-padd-go],[data-padd-strip]'))return phAddNow();
+  if(t.closest('[data-padd-no]')||t.id==='phAdd'&&t.classList.contains('phdim'))return phAskDone();
+  if(t.closest('[data-padd-keep]')){phAdded='kept';phAddUi();return}
+  if(t.closest('[data-padd-later]')){localStorage.setItem(PH_LATER,String(Date.now()+7*864e5));phAddUi()}}
+
 /* this phone's settings: its name, what it is told, and unpairing. Until it is set up, how to finish. */
 function phSettings(){
   const el=$('phSet');if(!el||PT!=='settings')return;const me=phMe;
@@ -3323,7 +3359,7 @@ function phSettings(){
   const sa=phStandalone(),perm=typeof Notification==='undefined'?'none':Notification.permission,pushOk=me.push&&perm==='granted';
   const sw=(on,attr)=>`<i class="stog ${on?'on':''}" ${attr}></i>`;
   const setup=sa&&pushOk?'':`<div class="pgl">Finish setting up</div><div class="pgrp">
-    <div class="pitm"><span class="pn2 ${sa?'ok':''}">${sa?svg('check'):'1'}</span><span class="tx">Add to Home Screen<small>${sa?'Done':phInstall?'Opens like an app.':phIos()?'Share › Add to Home Screen, then open it from there.':'Browser menu › Add to Home screen.'}</small></span>${!sa&&phInstall?'<button class="sval pri" data-pinstall>Add</button>':''}</div>
+    <div class="pitm"><span class="pn2 ${sa?'ok':''}">${sa?svg('check'):'1'}</span><span class="tx">Add to Home Screen<small>${sa?'Done':phAdded?'Added. Open it from your Home Screen.':phInstall?'Opens like an app.':phIos()?'Share › Add to Home Screen, then open it from there.':'Browser menu › Add to Home screen.'}</small></span>${!sa&&!phAdded&&phInstall?'<button class="sval pri" data-pinstall>Add</button>':''}</div>
     <div class="pitm"><span class="pn2 ${pushOk?'ok':''}">${pushOk?svg('check'):'2'}</span><span class="tx">Allow notifications<small>${pushOk?'Done':perm==='denied'?'Blocked. Allow them for Workwood in the phone\'s settings.':phIos()&&!sa?'Open Workwood from your Home Screen first.':'When a session needs you or a turn ends.'}</small></span>${!pushOk&&perm!=='denied'&&!(phIos()&&!sa)?'<button class="sval pri" data-ppush>Allow</button>':''}</div></div>`;
   el.innerHTML=setup+`<div class="pgl">This phone</div><div class="pgrp"><div class="pitm"><span class="tx">Name</span>${phEdit?`<input class="sval sin" id="phName" value="${esc(me.name)}" maxlength="40">`:`<button class="pval" data-pname>${esc(me.name)}</button>`}</div>
     <div class="pitm"><span class="tx">Connected to</span><span class="pval">${esc(me.pc||'')}</span></div></div>
@@ -3342,7 +3378,7 @@ async function phResubscribe(){try{if(typeof Notification!=='undefined'&&Notific
 async function phSetClick(e){
   const t=e.target;
   try{
-    if(t.closest('[data-pinstall]')&&phInstall){phInstall.prompt();await phInstall.userChoice.catch(()=>{});phInstall=null;phSettings();return}
+    if(t.closest('[data-pinstall]')){await phAddNow();return}
     if(t.closest('[data-ppush]')){const p=await Notification.requestPermission();if(p==='granted')await phSubscribe();phSettings();return}
     const k=t.closest('[data-pkind]');if(k){const kinds={...phMe.kinds,[k.dataset.pkind]:!phMe.kinds[k.dataset.pkind]};phMe={...phMe,kinds};phSettings();phMe=await api('phone/me',{kinds});return}
     if(t.closest('[data-pname]')){phEdit=true;phSettings();const i=$('phName');i.focus();i.select();return}

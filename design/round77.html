@@ -1,0 +1,284 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Round 77 — Phone: add to Home Screen where you land</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..800&display=swap">
+<link rel="stylesheet" href="../ui/app.css">
+<style>
+html,body{height:auto}
+body{overflow:auto;background:var(--bg);padding:36px 24px 80px}
+.top{max-width:1400px;margin:0 auto 8px;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:17px;margin:0;font-weight:750}.top>span{color:var(--faint);font-size:12.5px}
+.tg{margin-left:auto;font-size:12px;color:var(--faint);padding:4px 10px;border-radius:8px;box-shadow:0 0 0 1px var(--line2)}
+.lede{max-width:1400px;margin:0 auto 30px;color:var(--faint);font-size:12.5px}.lede b{color:var(--dim);font-weight:650}
+
+.row4{max-width:1400px;margin:0 auto;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.cap h2{font-size:14px;margin:0 0 2px;font-weight:700}
+.cap p{margin:0 0 12px;color:var(--faint);font-size:12.5px;max-width:300px;min-height:36px}
+
+/* desktop: Settings › Phone */
+.desk{width:420px;height:600px;border-radius:14px;box-shadow:0 0 0 1px var(--line2);background:var(--bg);display:flex;overflow:hidden}
+.dnav{width:120px;border-right:1px solid var(--line);padding:14px 8px;font-size:12.5px;color:var(--dim)}
+.dnav div{padding:6px 9px;border-radius:7px}.dnav .on{background:var(--surface2);color:var(--text);font-weight:650}
+.dnav hr{border:0;border-top:1px solid var(--line);margin:8px 4px}
+.dbody{flex:1;padding:20px 22px;font-size:12.5px}
+.dbody h3{margin:0 0 14px;font-size:15px}
+.tgl{display:flex;align-items:center;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.tgl b{font-weight:650}.tgl small{display:block;color:var(--faint);font-weight:500;margin-top:2px}
+.sw{margin-left:auto;width:30px;height:17px;border-radius:9px;background:var(--go);position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:2px;left:15px;right:auto;width:13px;height:13px;border-radius:50%;background:#fff}
+.qr{display:flex;gap:16px;align-items:center;padding:18px 0;border-bottom:1px solid var(--line)}
+.qr canvas{width:116px;height:116px;border-radius:10px;background:#fff;padding:8px;flex:none}
+.qr .t b{display:block;font-size:13px;margin-bottom:4px}.qr .t span{color:var(--faint);line-height:1.5}
+.qr code{display:block;margin-top:8px;font-size:11px;color:var(--dim)}
+.dev{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.dev small{color:var(--faint);display:block;margin-top:1px}.dev .gap{flex:1}
+.dev button{font-size:11.5px;color:var(--faint);padding:3px 8px;border-radius:6px;box-shadow:inset 0 0 0 1px var(--line2)}
+.lab{color:var(--faint);font-size:11px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;margin:16px 0 2px}
+.live{width:7px;height:7px;border-radius:50%;background:var(--go);box-shadow:0 0 0 0 var(--go);animation:pulse 2s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 6px transparent}}
+
+/* phone */
+.ph{box-sizing:border-box;width:288px;height:600px;border-radius:38px;padding:10px;background:#0b0b0d;box-shadow:0 0 0 1px var(--line2),0 20px 50px rgba(0,0,0,.35)}
+.scr{height:100%;border-radius:30px;background:var(--bg);overflow:hidden;display:flex;flex-direction:column;position:relative}
+.sbar{height:26px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;font-weight:700;color:var(--dim)}
+.ah{display:flex;align-items:center;gap:8px;padding:8px 14px 10px;flex:none}
+.ah h4{margin:0;font-size:17px;font-weight:750}.ah .gap{flex:1}
+.ah .ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;color:var(--dim)}
+.ic svg,.bk svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.lst{flex:1;overflow:hidden;padding:0 8px}
+.xgrp{font-size:11px;color:var(--faint);font-weight:650;padding:10px 8px 4px}
+.xs{display:flex;gap:10px;align-items:center;padding:10px 8px;border-radius:12px}
+.xs.on{background:var(--surface)}
+.xs .xm{flex:1;min-width:0}.xs b{display:block;font-size:13.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xs small{display:block;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.xs .w{color:var(--warn,#e0a73a)}
+.xs .xd{width:8px;height:8px;border-radius:50%;flex:none}
+.xd.run{background:var(--accent);animation:pulse 2s infinite;box-shadow:0 0 0 0 var(--accent)}.xd.wait{background:var(--warn,#e0a73a)}.xd.new{background:var(--text)}.xd.idle{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line2)}
+.home{position:absolute;bottom:6px;left:50%;width:100px;height:4px;margin-left:-50px;border-radius:2px;background:var(--line2)}
+
+.bk{width:30px;height:30px;display:grid;place-items:center;color:var(--dim);margin-left:-6px}
+.ah .tt{min-width:0;flex:1}.ah .tt b{display:block;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ah .tt small{color:var(--faint);font-size:11px}
+.xchip{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:650;padding:4px 8px;border-radius:8px;background:var(--surface);color:var(--dim)}
+.xchip svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8}
+.th{flex:1;overflow:hidden;padding:4px 14px;display:flex;flex-direction:column;justify-content:flex-end;font-size:13px;line-height:1.6}
+.th .me{max-width:86%;font-size:13px;margin-bottom:14px}
+.th p{margin:0 0 10px}
+.xmini{font-size:11.5px;color:var(--faint);display:flex;align-items:center;gap:6px;margin:0 0 10px}
+.xmini svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2}
+.xask{border-radius:14px;box-shadow:0 0 0 1px var(--line2);background:var(--surface);padding:12px;margin:0 0 6px}
+.xask .q{font-size:12px;color:var(--dim);margin-bottom:4px}.xask code{font-size:11.5px;display:block;padding:6px 8px;border-radius:7px;background:var(--bg);margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xask .bb{display:flex;gap:8px}.xask button{flex:1;height:36px;border-radius:10px;font-weight:650;font-size:13px;box-shadow:inset 0 0 0 1px var(--line2)}
+.xask button.y{background:var(--text);color:var(--bg);box-shadow:none}
+.cp{padding:8px 10px 22px;flex:none}
+.cbox{display:flex;align-items:flex-end;gap:6px;background:var(--surface);border:1px solid var(--line2);border-radius:20px;padding:6px 6px 6px 14px}
+.cbox span{flex:1;font-size:13px;color:var(--faint);padding:6px 0}
+.cbox .r{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:var(--dim)}
+.cbox .r.s{background:var(--text);color:var(--bg)}
+.cbox svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cm{display:flex;gap:6px;padding:6px 4px 0;font-size:11px;color:var(--faint)}.cm .gap{flex:1}
+
+/* preview sheet */
+.xdim{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.sheet{position:absolute;left:0;right:0;bottom:0;top:70px;background:var(--bg);border-radius:20px 20px 0 0;box-shadow:0 -1px 0 var(--line2);display:flex;flex-direction:column;animation:up .5s ease-out}
+@keyframes up{from{transform:translateY(40px);opacity:.4}}
+.grab{width:36px;height:4px;border-radius:2px;background:var(--line2);margin:8px auto 4px}
+.shh{display:flex;align-items:center;gap:8px;padding:4px 14px 10px;font-size:12.5px}.shh b{flex:1;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabs{display:flex;gap:6px;padding:0 14px 10px;overflow:hidden}.tabs span{font-size:11.5px;padding:4px 9px;border-radius:7px;background:var(--surface);color:var(--dim);white-space:nowrap}.tabs .on{background:var(--text);color:var(--bg);font-weight:650}
+.pg{flex:1;margin:0 10px 22px;border-radius:12px;background:#f6f4ef;color:#222;padding:16px;overflow:hidden;font-size:11px}
+.pg h5{margin:0 0 8px;font-size:15px}.pg .bar{height:8px;border-radius:4px;background:#ddd8cc;margin:6px 0}.pg .bar.s{width:60%}
+.pg .card{height:90px;border-radius:10px;background:#e6e0d2;margin:12px 0}
+
+.row4+.row4{margin-top:40px}
+/* bottom tabs */
+.tbar{flex:none;display:flex;justify-content:space-around;padding:6px 10px 22px;border-top:1px solid var(--line)}
+.tbar span{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;color:var(--faint);font-weight:600;position:relative}
+.tbar span.on{color:var(--text)}
+.tbar svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tbar u{position:absolute;top:-2px;right:-6px;min-width:15px;height:15px;border-radius:8px;background:var(--warn);color:#1a1406;font-size:9.5px;font-weight:800;text-decoration:none;display:grid;place-items:center;padding:0 3px}
+/* home */
+.hm{flex:1;overflow:hidden;padding:0 12px}
+.xsl{font-size:11px;color:var(--faint);font-weight:650;margin:12px 2px 6px;display:flex}.xsl .gap{flex:1}
+.wcard{border-radius:14px;background:var(--warn-soft);box-shadow:inset 0 0 0 1px var(--warn-line);padding:11px 12px}
+.wcard b{font-size:13px;font-weight:650;display:block}.wcard small{color:var(--warn);font-size:11.5px}
+.wcard code{display:block;margin:8px 0;font-size:11.5px;padding:6px 8px;border-radius:7px;background:var(--bg)}
+.wcard .bb{display:flex;gap:8px}.wcard button{flex:1;height:32px;border-radius:9px;font-weight:650;font-size:12.5px;box-shadow:inset 0 0 0 1px var(--line2)}
+.wcard button.y{background:var(--text);color:var(--bg);box-shadow:none}
+.xlo{display:flex;gap:8px;overflow:hidden}
+.xlc{flex:none;width:150px;border-radius:12px;background:var(--surface);padding:10px}
+.xlc b{display:block;font-size:12.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xlc p{margin:4px 0 6px;font-size:11.5px;color:var(--dim);line-height:1.4;height:32px;overflow:hidden}
+.xlc small{font-size:10.5px;color:var(--faint)}
+.xus{border-radius:12px;background:var(--surface);padding:10px 12px}
+.xus .h{display:flex;font-size:12.5px;font-weight:650;margin-bottom:6px}.xus .h small{margin-left:auto;color:var(--faint);font-weight:500}
+.xur{display:flex;align-items:center;gap:8px;font-size:11.5px;margin:5px 0}
+.xur .k{width:18px;color:var(--faint);font-weight:650}.xur .v{width:30px;text-align:right;font-weight:700}
+.xur .b{flex:1;height:6px;border-radius:3px;background:var(--line2);overflow:hidden}.xur .b i{display:block;height:100%;background:var(--go);border-radius:3px}
+.xur.mid .v{color:var(--warn)}.xur.mid .b i{background:var(--warn)}
+.xur .r{width:44px;text-align:right;color:var(--faint);font-size:10.5px}
+/* new session sheet */
+.xnf{padding:2px 16px;flex:1;display:flex;flex-direction:column}
+.xnf .lab2{font-size:11px;color:var(--faint);font-weight:650;margin:8px 0 6px}
+.xpj{display:flex;flex-wrap:wrap;gap:6px}
+.xpj span{font-size:12px;padding:6px 10px;border-radius:9px;background:var(--surface);color:var(--dim)}.xpj .on{background:var(--text);color:var(--bg);font-weight:650}
+.xop{display:flex;gap:6px}.xop span{font-size:12px;padding:6px 10px;border-radius:9px;box-shadow:inset 0 0 0 1px var(--line2);color:var(--dim)}
+.nbox{margin-top:14px;flex:1;max-height:150px;border-radius:16px;background:var(--surface);border:1px solid var(--line2);padding:12px;font-size:13px;line-height:1.5;display:flex;flex-direction:column}
+.nbox .cur{display:inline-block;width:1.5px;height:15px;background:var(--accent);vertical-align:-3px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.nbox .ft{margin-top:auto;display:flex;align-items:center;gap:6px}.nbox .ft .gap{flex:1}
+.nbox .r{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:var(--dim)}.nbox .r.s{background:var(--text);color:var(--bg)}
+.nbox svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* lock screen */
+.lock{background:radial-gradient(120% 80% at 30% 10%,#3a3550,#14131a 60%,#0b0b0e)!important;color:#fff}
+.lock .sbar{color:#ddd}
+.lt{text-align:center;margin-top:30px}.lt small{font-size:12px;opacity:.75;font-weight:600}.lt div{font-size:62px;font-weight:300;letter-spacing:-.02em;line-height:1.05}
+.nt{margin:10px 10px 0;border-radius:18px;background:rgba(255,255,255,.14);backdrop-filter:blur(14px);padding:10px 12px;display:flex;gap:10px;font-size:12px;line-height:1.35}
+.nt:first-of-type{margin-top:150px}
+.nt .ap{width:30px;height:30px;border-radius:8px;background:#f6f4ef;flex:none;display:grid;place-items:center;color:#1b1b1b;font-weight:800;font-size:13px}
+.nt .tx{flex:1;min-width:0}.nt .xhd{display:flex;font-size:11px;opacity:.7}.nt .xhd span{margin-left:auto}
+.nt b{display:block;font-weight:650}.nt .bd{opacity:.9}
+.nt.lift{box-shadow:0 0 0 1.5px var(--warn)}
+/* phone settings */
+.ps{flex:1;padding:0 12px;overflow:hidden}
+.grp2{border-radius:14px;background:var(--surface);margin-bottom:14px}
+.xit{display:flex;align-items:center;gap:10px;padding:11px 12px;font-size:13px;border-bottom:1px solid var(--line)}.xit:last-child{border-bottom:0}
+.xit small{display:block;color:var(--faint);font-size:11px;margin-top:1px}.xit .gap{flex:1}.xit .vv{color:var(--faint);font-size:12px}
+.xit .sw.off{background:var(--line2)}.xit .sw.off::after{left:2px}
+.xit.red{color:var(--hot);justify-content:center;font-weight:650}
+.gl{font-size:11px;color:var(--faint);font-weight:650;margin:6px 4px 6px}
+/* desktop setup */
+.desk.w{width:560px;height:600px}
+.stp{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.stp .n{width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:11px;font-weight:750;box-shadow:inset 0 0 0 1.5px var(--line2);color:var(--faint)}
+.stp.done .n{background:var(--go);color:#062a1e;box-shadow:none}.stp.now .n{box-shadow:inset 0 0 0 1.5px var(--text);color:var(--text)}
+.stp .n svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:3}
+.stp .c{flex:1}.stp b{font-weight:650;display:block}.stp .c>small{color:var(--faint);display:block;margin-top:2px;line-height:1.5}
+.stp.done b{color:var(--dim)}
+.stp .xact{display:flex;gap:8px;align-items:center;margin-top:9px}
+.stp .xact button{font-size:12px;padding:5px 10px;border-radius:8px;box-shadow:inset 0 0 0 1px var(--line2);color:var(--dim)}
+.stp .xact button.y{background:var(--text);color:var(--bg);box-shadow:none;font-weight:650}
+.stp .xact canvas{width:64px;height:64px;border-radius:6px;background:#fff;padding:4px}
+.stp .xact .hint{font-size:11.5px;color:var(--faint);line-height:1.5}
+.wt{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--faint);margin-top:9px}.wt .spin2{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--line2);border-top-color:var(--text);animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.tgl.dis{opacity:.45}.tgl.dis .sw{background:var(--line2)}.tgl.dis .sw::after{left:2px}
+.uh,.oq{max-width:1400px;margin:34px auto 0;font-size:12.5px;color:var(--dim)}.uh summary{cursor:pointer;color:var(--faint);font-weight:650}
+.oq h3{font-size:14px;margin:0 0 6px;color:var(--text)}.uh li,.oq li{margin:4px 0;line-height:1.55;max-width:860px}
+.xpair{display:flex;gap:16px;align-items:center;padding:16px 0;border-bottom:1px solid var(--line)}
+.xpair canvas{width:112px;height:112px;border-radius:10px;background:#fff;padding:8px;flex:none}
+.xpair b{display:block;font-size:13px;margin-bottom:4px}.xpair span{color:var(--faint);line-height:1.5}
+.xurl{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;color:var(--dim);font-family:ui-monospace,monospace}
+.xnote{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:11.5px;color:var(--faint)}
+.xnote svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;flex:none}
+/* phone setup page */
+.xsu{flex:1;padding:6px 16px 0;overflow:hidden}
+.xsu h5{margin:6px 0 2px;font-size:19px;font-weight:750}.xsu>p{margin:0 0 12px;font-size:12px;color:var(--faint);line-height:1.5}
+.xsu .stp{padding:11px 0;font-size:12.5px}.xsu .stp .c>small{font-size:11.5px}
+.xsu .xact button{font-size:12.5px;padding:7px 12px;border-radius:10px}
+.xpath{display:block;margin-top:6px;font-size:11px;color:var(--dim);background:var(--surface);border-radius:7px;padding:5px 8px;line-height:1.5}
+.xbad{margin:6px 10px 0;border-radius:14px;background:var(--surface);padding:12px;display:flex;gap:10px;align-items:flex-start;font-size:12px}
+.xbad svg{width:18px;height:18px;fill:none;stroke:var(--warn);stroke-width:1.8;stroke-linecap:round;flex:none;margin-top:1px}
+.xbad b{display:block;font-weight:650;font-size:13px;margin-bottom:2px}.xbad small{color:var(--faint);line-height:1.5;display:block}
+.xbad button{margin-top:8px;font-size:12px;padding:5px 10px;border-radius:8px;box-shadow:inset 0 0 0 1px var(--line2);color:var(--dim)}
+.xfade{opacity:.35}
+<body>
+/* round 77 */
+.kch{flex:none;display:flex;align-items:center;gap:8px;padding:4px 10px 8px;font-size:11px;color:var(--faint)}
+.kch .url{flex:1;background:var(--surface);border-radius:14px;padding:5px 10px;white-space:nowrap;overflow:hidden}
+.kch .dots{width:18px;text-align:center;font-weight:800;color:var(--dim);position:relative}
+.kch .dots.hot::after{content:"";position:absolute;inset:-5px -3px;border-radius:8px;box-shadow:0 0 0 2px var(--accent);animation:pulse2 1.6s infinite}
+@keyframes pulse2{50%{opacity:.25}}
+.ksf{flex:none;display:flex;justify-content:space-around;align-items:center;padding:8px 18px 20px;border-top:1px solid var(--line);color:var(--dim);position:relative}
+.ksf svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ksf .hot{color:var(--accent);position:relative;display:grid}.ksf .hot::after{content:"";position:absolute;inset:-6px;border-radius:9px;box-shadow:0 0 0 2px var(--accent);animation:pulse2 1.6s infinite}
+.kdim{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.ksh{position:absolute;left:0;right:0;bottom:0;background:var(--bg);border-radius:22px 22px 0 0;padding:10px 18px 26px;box-shadow:0 -8px 30px rgba(0,0,0,.3)}
+.ksh.above{bottom:64px;left:8px;right:8px;border-radius:20px;padding-top:16px}
+.ksh .grab{width:34px;height:4px;border-radius:2px;background:var(--line2);margin:0 auto 14px}
+.ksh .ka{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.ksh .ka img{width:46px;height:46px;border-radius:12px}
+.ksh h5{margin:0;font-size:16px;font-weight:750}.ksh .ka small{display:block;color:var(--faint);font-size:11.5px;margin-top:1px}
+.ksh p{margin:0 0 14px;font-size:12px;color:var(--dim);line-height:1.5}
+.ksh .khow{font-size:12px;color:var(--dim);background:var(--surface);border-radius:10px;padding:8px 10px;margin-bottom:14px;line-height:1.6}
+.ksh .khow b{color:var(--text)}
+.kbt{display:flex;gap:8px}
+.kbt button{flex:1;font-size:13px;font-weight:650;padding:9px 0;border-radius:11px;box-shadow:inset 0 0 0 1px var(--line2);color:var(--dim)}
+.kbt button.y{background:var(--text);color:var(--bg);box-shadow:none}
+.kst{margin:2px 12px 8px;display:flex;align-items:center;gap:10px;padding:9px 10px 9px 12px;border-radius:12px;background:var(--surface);font-size:12px}
+.kst img{width:22px;height:22px;border-radius:6px}.kst span{flex:1}.kst span small{display:block;color:var(--faint);font-size:11px}
+.kst button{font-size:12px;font-weight:650;padding:5px 11px;border-radius:9px;background:var(--text);color:var(--bg)}
+.kst i{color:var(--faint);font-style:normal;padding:0 2px}
+.khi{padding:26px 18px 0;font-size:19px;font-weight:750}
+.kgh{margin:12px 12px 0;height:54px;border-radius:14px;box-shadow:inset 0 0 0 1px var(--line2)}
+.kok{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 28px}
+.kok img{width:64px;height:64px;border-radius:16px;margin-bottom:14px}
+.kok h5{margin:0 0 6px;font-size:17px;font-weight:750}.kok p{margin:0;color:var(--faint);font-size:12.5px;line-height:1.5}
+.kok button{margin-top:16px;font-size:12px;color:var(--faint);padding:6px 12px;border-radius:9px;box-shadow:inset 0 0 0 1px var(--line2)}
+</style></head><body>
+<div class="top"><h1>Phone: add to Home Screen where you land</h1><span>round 77 · mockup · round 69's step 2 only lived in the phone's Settings</span><button class="tg" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Light / dark</button></div>
+<div class="lede">After the certificate, <b>Open Workwood</b> lands in a browser tab, and installing was only offered in Settings. Now the app asks the first time it opens in a browser, and keeps a quiet strip on Home until it's installed.</div>
+
+<div class="row4">
+  <div class="cap"><h2>1 · Android, Chrome offers to install</h2><p>Opens on its own the first time. Add brings up Chrome's own install box.</p>
+    <div class="ph"><div class="scr"><div class="sbar"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="kch"><span class="url">desktop-ax.local</span><span class="dots">⋮</span></div>
+      <div class="khi">What are we working on?</div><div class="kgh"></div><div class="kgh"></div>
+      <div class="kdim"></div>
+      <div class="ksh"><div class="grab"></div>
+        <div class="ka"><img src="../ui/icon-192.png" alt=""><div><h5>Add Workwood</h5><small>to your Home Screen</small></div></div>
+        <p>Opens full screen like an app, and can tell you when a session needs you.</p>
+        <div class="kbt"><button>Not now</button><button class="y">Add</button></div></div>
+      <div class="home"></div></div></div></div>
+
+  <div class="cap"><h2>2 · Android, no offer yet</h2><p>Chrome holds its offer back at first. The sheet points at the menu, and swaps in Add when the offer comes.</p>
+    <div class="ph"><div class="scr"><div class="sbar"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="kch"><span class="url">desktop-ax.local</span><span class="dots hot">⋮</span></div>
+      <div class="khi">What are we working on?</div><div class="kgh"></div><div class="kgh"></div>
+      <div class="kdim"></div>
+      <div class="ksh"><div class="grab"></div>
+        <div class="ka"><img src="../ui/icon-192.png" alt=""><div><h5>Add Workwood</h5><small>to your Home Screen</small></div></div>
+        <div class="khow">Tap <b>⋮</b> at the top › <b>Add to Home screen</b> › Install</div>
+        <div class="kbt"><button>Not now</button></div></div>
+      <div class="home"></div></div></div></div>
+
+  <div class="cap"><h2>3 · iPhone, Safari</h2><p>Safari has no install button for pages, so the sheet points at Share.</p>
+    <div class="ph"><div class="scr"><div class="sbar"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="khi" style="padding-top:16px">What are we working on?</div><div class="kgh"></div><div class="kgh"></div><div style="flex:1"></div>
+      <div class="kdim"></div>
+      <div class="ksh above">
+        <div class="ka"><img src="../ui/icon-192.png" alt=""><div><h5>Add Workwood</h5><small>to your Home Screen</small></div></div>
+        <div class="khow">Tap <b>Share</b> below › <b>Add to Home Screen</b>, then open Workwood from there. Notifications need it.</div>
+        <div class="kbt"><button>Not now</button></div></div>
+      <div class="ksf"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg><span class="hot"><svg viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4M6 11v9h12v-9"/></svg></span><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/></svg></div>
+      <div class="home"></div></div></div></div>
+</div>
+
+<div class="row4" style="margin-top:28px">
+  <div class="cap"><h2>4 · After Not now</h2><p>A quiet strip on Home, in the browser only. × hides it for a week.</p>
+    <div class="ph"><div class="scr"><div class="sbar"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="kch"><span class="url">desktop-ax.local</span><span class="dots">⋮</span></div>
+      <div class="ah"><h4>Workwood</h4></div>
+      <div class="kst"><img src="../ui/icon-192.png" alt=""><span>Add to Home Screen<small>Full screen, with notifications</small></span><button>Add</button><i>×</i></div>
+      <div class="lst"><div class="xgrp">Needs you</div>
+        <div class="xs"><span class="xd wait"></span><div class="xm"><b>Phone remote mode</b><small class="w">Asks to run npm test</small></div></div>
+        <div class="xgrp">Today</div>
+        <div class="xs"><span class="xd idle"></span><div class="xm"><b>Read-aloud voices</b><small>Turn ended</small></div></div></div>
+      <div class="tbar"><span class="on"><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/></svg>Home</span><span><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg>Sessions</span><span><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New</span><span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>Settings</span></div>
+      <div class="home"></div></div></div></div>
+
+  <div class="cap"><h2>5 · Installed, still in the tab</h2><p>Chrome leaves the tab open after installing. It says where to go next.</p>
+    <div class="ph"><div class="scr"><div class="sbar"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="kch"><span class="url">desktop-ax.local</span><span class="dots">⋮</span></div>
+      <div class="kok"><img src="../ui/icon-192.png" alt=""><h5>Workwood is on your Home Screen</h5><p>Open it from there. You can close this tab.</p><button>Keep using the browser</button></div>
+      <div class="home"></div></div></div></div>
+</div>
+
+<details class="uh"><summary>Under the hood</summary><ul>
+<li>Shown only on the phone, only in a browser tab (not <code>display-mode: standalone</code>). The sheet once per phone; the strip until installed or hidden.</li>
+<li>Android: Chrome's <code>beforeinstallprompt</code> is kept and Add calls it. Chrome fires it only after some use, so until then the sheet shows the menu path and swaps in Add when the offer arrives.</li>
+<li><code>appinstalled</code> switches the tab to screen 5. Settings › Finish setting up stays as it is.</li>
+</ul></details>
+
+<div class="oq"><h3>Open questions</h3><ol>
+<li>Should the sheet come back each time the app opens in a browser (until installed), or only once, with the strip after?</li>
+<li>Screen 5: cover the tab like this, or just a toast so the browser stays usable?</li>
+</ol></div>
+</body></html>

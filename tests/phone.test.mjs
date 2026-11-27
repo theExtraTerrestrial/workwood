@@ -323,6 +323,10 @@ test('on the phone: tabs, a session full screen with the pill and its drawer, a 
     };
     await page.goto(`https://127.0.0.1:${INNER}/?pair=${code}`);
     await page.waitForSelector('html.ph[data-pt=home]');
+    await page.click('#phAdd [data-padd-no]');   // Add to Home Screen: its own test below
+    // a visit again: at the bare address, since one that names a session reopens it when Workwood's state comes in,
+    // which can be after a tap on a tab (and hide the tabs under it)
+    const fresh = async () => { await page.goto(page.url().split('#')[0]); await page.waitForSelector('html.ph[data-pt=home]'); };
     assert.deepEqual(await page.locator('#ptabs button span').allTextContents(), ['Home', 'Sessions', 'New', 'Settings']);
     assert.equal(await page.locator('.composer').isVisible(), false, 'Home has no message box');
     await page.waitForSelector('#dash .hs-lim');
@@ -380,13 +384,13 @@ test('on the phone: tabs, a session full screen with the pill and its drawer, a 
     await page.waitForFunction(f => document.querySelector('#pName').textContent !== f, second);
     assert.equal(await page.locator('#pName').textContent(), first, 'and back from the left edge');
     // Fit is remembered: the next visit opens the preview fitted
-    await page.reload(); await page.waitForSelector('html.ph'); await page.click('[data-pt=sessions]'); await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`); await page.waitForSelector('html[data-pt=session]'); await page.waitForFunction(() => !V.loading && V.items.length);
+    await fresh(); await page.click('[data-pt=sessions]'); await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`); await page.waitForSelector('html[data-pt=session]'); await page.waitForFunction(() => !V.loading && V.items.length);
     await page.evaluate(p => { addWork([{ path: p, name: 'wide.html', kind: 'page', v: 1 }]); showWork(p); }, wide);
     await page.waitForSelector('#pvw.fit iframe.pvf');
     assert.equal(await page.frameLocator('#stage iframe').locator('body').evaluate(b => innerWidth), 980);
     await page.click('#bExt');
     assert.equal(await page.frameLocator('#stage iframe').locator('body').evaluate(b => innerWidth) < 500, true, 'and back to the phone\'s width');
-    await page.reload(); await page.waitForSelector('html.ph'); await page.click('[data-pt=sessions]'); await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`); await page.waitForSelector('html[data-pt=session]'); await page.waitForFunction(() => !V.loading && V.items.length);
+    await fresh(); await page.click('[data-pt=sessions]'); await page.click(`.sess[data-id="${sb.sessions.alphaLive}"]`); await page.waitForSelector('html[data-pt=session]'); await page.waitForFunction(() => !V.loading && V.items.length);
     await page.evaluate(p => { addWork([{ path: p, name: 'wide.html', kind: 'page', v: 1 }]); showWork(p); }, wide);
     await page.waitForSelector('#pvw:not(.fit) iframe.pvf');
     // the phone's Back closes the preview and stays in the session; closed by its ×, Back is not spent on it
@@ -424,7 +428,7 @@ test('on the phone: tabs, a session full screen with the pill and its drawer, a 
     await swipe(rb.x + rb.width - 20, rb.y + rb.height / 2, rb.y + rb.height / 2, 10, rb.x + 20);
     await page.waitForSelector(row, { state: 'detached' });
     assert.ok(await page.locator('html[data-pt=sessions]').count(), 'the swipe is not a tap that opens it');
-    await page.reload(); await page.waitForSelector('html.ph'); await page.click('[data-pt=sessions]');
+    await fresh(); await page.click('[data-pt=sessions]');
     await page.waitForSelector(`.sess[data-id="${sb.sessions.alphaLive}"]`);
     assert.equal(await page.locator(row).count(), 0);
     // and from inside a session, in its drawer; it goes back to the list
@@ -456,6 +460,68 @@ test('on the phone: tabs, a session full screen with the pill and its drawer, a 
     await desk.waitForSelector('#list .sess');
     assert.equal(await desk.evaluate(() => document.documentElement.classList.contains('ph')), false);
     assert.equal(await desk.locator('#ptabs').count(), 0);
+  } finally { await browser.close(); }
+});
+
+// In a browser tab the phone is asked to add Workwood to its Home Screen where it lands, each visit, until it is added.
+test('on the phone in a browser: add to Home Screen where it lands, a strip on Home, and where it went once added', { skip: chrome ? false : 'no Chromium found' }, async () => {
+  const { chromium } = await import('playwright-core');
+  const browser = await chromium.launch({ executablePath: chrome, args: ['--no-sandbox'] });
+  try {
+    const open = async (opts = {}, init) => {
+      const code = new URL((await svc.call('phone')).body.url).searchParams.get('pair');
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ignoreHTTPSErrors: true, ...opts });
+      if (init) await ctx.addInitScript(init);
+      const page = await ctx.newPage(); page.setDefaultTimeout(8000);
+      await page.goto(`https://127.0.0.1:${INNER}/?pair=${code}`); await page.waitForSelector('html.ph[data-pt=home]');
+      return page;
+    };
+    // Android before Chrome offers to install: the sheet says where Chrome's menu has it
+    const page = await open();
+    await page.waitForSelector('#phAdd.phdim:not([hidden]) .pahow');
+    assert.match(await page.locator('#phAdd .pahow').textContent(), /⋮.*Add to Home screen/);
+    assert.equal(await page.locator('#phAdd [data-padd-go]').count(), 0);
+    if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT + '-add-menu.png' });
+    // Chrome offers: Add appears, and opens Chrome's own box
+    await page.evaluate(() => { const e = new Event('beforeinstallprompt', { cancelable: true }); e.prompt = () => { window.prompted = true; }; e.userChoice = Promise.resolve({ outcome: 'dismissed' }); dispatchEvent(e); });
+    await page.click('#phAdd [data-padd-go]');
+    await page.waitForFunction(() => window.prompted);
+    // turned down: no sheet, a strip on Home instead, which stays across a reload in this tab
+    await page.waitForSelector('#phAdd[hidden]', { state: 'attached' });
+    await page.waitForSelector('#phStrip:not([hidden])');
+    await page.reload(); await page.waitForSelector('html.ph[data-pt=home]'); await page.waitForSelector('#phStrip:not([hidden])');
+    assert.equal(await page.locator('#phAdd').isHidden(), true, 'asked once per visit, not on every reload');
+    await page.click('[data-pt=sessions]'); assert.equal(await page.locator('#phStrip').isVisible(), false, 'the strip is on Home only');
+    await page.click('[data-pt=home]');
+    if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT + '-add-strip.png' });
+    // its Add, with no offer from Chrome, brings back how
+    await page.click('#phStrip [data-padd-strip]');
+    await page.waitForSelector('#phAdd.phdim:not([hidden]) .pahow');
+    await page.click('#phAdd [data-padd-no]');
+    // × puts it off for a week
+    await page.click('#phStrip [data-padd-later]');
+    await page.waitForSelector('#phStrip[hidden]', { state: 'attached' });
+    await page.reload(); await page.waitForSelector('html.ph[data-pt=home]'); await page.waitForTimeout(200);
+    assert.equal(await page.locator('#phStrip').isHidden(), true);
+    assert.ok(Number(await page.evaluate(() => localStorage.getItem('ww.addLater'))) > Date.now() + 6 * 864e5);
+    // added: the tab says where Workwood went, and can be kept
+    await page.evaluate(() => dispatchEvent(new Event('appinstalled')));
+    await page.waitForSelector('#phAdd.phok:not([hidden])');
+    assert.match(await page.locator('#phAdd h2').textContent(), /on your Home Screen/);
+    if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT + '-added.png' });
+    await page.click('#phAdd [data-padd-keep]');
+    await page.waitForSelector('#phAdd[hidden]', { state: 'attached' });
+    await page.click('[data-pt=settings]');
+    assert.match(await page.locator('#phSet').textContent(), /Added\. Open it from your Home Screen/);
+    // iPhone: Share › Add to Home Screen
+    const ios = await open({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
+    await ios.waitForSelector('#phAdd.phdim:not([hidden]) .pahow');
+    assert.match(await ios.locator('#phAdd .pahow').textContent(), /Share.*Add to Home Screen/);
+    if (process.env.SHOT) await ios.screenshot({ path: process.env.SHOT + '-add.png' });
+    // opened from the Home Screen: neither
+    const app = await open({}, () => { Object.defineProperty(navigator, 'standalone', { value: true }); });
+    await app.waitForSelector('#dash .hs-lim'); await app.waitForTimeout(200);
+    assert.equal(await app.locator('#phAdd').isHidden(), true); assert.equal(await app.locator('#phStrip').isHidden(), true);
   } finally { await browser.close(); }
 });
 

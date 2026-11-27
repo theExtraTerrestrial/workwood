@@ -1922,6 +1922,22 @@ html.ph .phdim:not([hidden]){display:block;position:fixed;inset:0;background:rgb
 .pitm.red{justify-content:center;color:var(--hot);font-weight:650}
 .pval{color:var(--faint);font-size:13.5px}
 .pitm .sin{width:150px;font-size:15px}
+/* Add to Home Screen: the sheet where the phone lands, the strip on Home, and the tab once it is added */
+.phadd{padding-bottom:calc(22px + env(safe-area-inset-bottom))}
+.phadd .pah{display:flex;align-items:center;gap:12px;margin:6px 4px 12px}.phadd .pah img{width:48px;height:48px;border-radius:12px}
+.phadd .pah b{display:block;font-size:17px;font-weight:750}.phadd .pah small{display:block;color:var(--faint);font-size:12.5px}
+.phadd p{margin:0 4px 16px;font-size:14px;color:var(--dim);line-height:1.5}
+.pahow{margin:0 0 16px;font-size:14px;color:var(--dim);background:var(--surface);border-radius:12px;padding:10px 12px;line-height:1.6}.pahow b{color:var(--text);font-weight:650}
+.pabt{display:flex;gap:8px}.pabt button{flex:1;height:44px;border-radius:12px;font-size:15px;font-weight:650;color:var(--dim);box-shadow:inset 0 0 0 1px var(--line2)}
+.pabt .y,.phstrip .y{background:var(--text);color:var(--bg);box-shadow:none}
+.phstrip{display:none}
+html.ph[data-pt=home] .phstrip:not([hidden]){display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:8px 6px 8px 12px;border-radius:14px;background:var(--surface);font-size:14px}
+.phstrip img{width:28px;height:28px;border-radius:7px}.phstrip span{flex:1;min-width:0}.phstrip small{display:block;color:var(--faint);font-size:12px}
+.phstrip .y{height:32px;padding:0 14px;border-radius:10px;font-size:13.5px;font-weight:650}.phstrip .ib{width:32px;height:32px;color:var(--faint)}
+.phok{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 36px}
+.phok[hidden]{display:none}
+.phok img{width:76px;height:76px;border-radius:18px;margin-bottom:16px}.phok h2{margin:0 0 6px;font-size:20px;font-weight:750}.phok p{margin:0;color:var(--faint);font-size:14.5px;line-height:1.5}
+.phok button{margin-top:20px;font-size:14px;color:var(--faint);padding:9px 16px;border-radius:11px;box-shadow:inset 0 0 0 1px var(--line2)}
 .pn2{width:24px;height:24px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:12px;font-weight:750;box-shadow:inset 0 0 0 1.5px var(--line2);color:var(--faint)}
 .pn2.ok{background:var(--go);color:#062a1e;box-shadow:none}.pn2 svg{width:12px;height:12px;stroke-width:3}
 .phgone{padding:60px 24px;font:16px/1.5 system-ui,sans-serif}.phgone h1{font-size:21px;margin:0 0 8px}.phgone p{color:var(--faint);margin:0}

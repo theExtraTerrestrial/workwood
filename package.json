@@ -1,6 +1,6 @@
 {
   "name": "workwood",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "description": "Run and oversee several Claude Code sessions at once, grouped by Claudius profile.",
   "type": "module",

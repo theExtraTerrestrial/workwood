@@ -426,7 +426,7 @@
   .hsv.go:hover{background:color-mix(in srgb,var(--k-sv) 20%,transparent);color:var(--k-sv)}
   .hsv .dot{width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 22%,transparent)}
   .hsv .pt{font:11px "Cascadia Code",ui-monospace,monospace;opacity:.85}.hsv .hsvn{opacity:.7;font-size:11px}
-  .hmenu{width:236px}.hmenu button.cur{color:var(--text);font-weight:600}
+  .hmenu{width:max-content;min-width:236px;max-width:calc(100vw - 12px)}.hmenu button.cur{color:var(--text);font-weight:600}   /* sized to its longest row, so a pin never spills out */
   .hmenu .k{margin-left:auto;color:var(--faint);font-size:11px}
   .hmenu .pin{margin-left:auto;width:22px;height:22px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:var(--faint);opacity:0;margin-right:-4px}
   .hmenu .k+.pin{margin-left:6px}
